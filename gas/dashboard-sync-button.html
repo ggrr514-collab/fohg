@@ -8,6 +8,11 @@
 
   サーバー側の関数 manualSyncEventFromR8() は gas/R8EventSync.gs に
   追加済みです。index.html 側に以下3箇所を追記してください。
+
+  ⚠️ 重要: ②③はどちらも、index.html内の「1つの大きな<script>〜</script>」の
+  “内側”に貼り付けるコードです。<script>タグを新しく増やさないでください。
+  下のコードブロックに<script>タグを書いていないのはそのためです。
+  そのままコピーして、既存のJavaScriptの間にペーストしてください。
   ============================================================
 -->
 
@@ -20,20 +25,26 @@
 <button id="syncR8Btn" onclick="syncR8EventMaster()" style="display:none;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:6px;">🔄 行事予定を反映</button>
 
 
-<!-- ② JavaScript: handleNippoLoaded() 関数内、次の行のすぐ後ろに追加する -->
 <!--
+  ==========================================================================
+  ② JavaScript（<script>タグは付けない。既存の<script>の中に貼り付けること）
+  ==========================================================================
   探す場所（<script>内、handleNippoLoaded関数の中）:
     document.getElementById('adminBtn').style.display = data.user.isAdmin ? '' : 'none';
-  この直後に次を追加:
--->
-<script>
+  この直後に、次の2行だけを追加する（<script>タグは書かない）:
+
 var syncR8BtnEl = document.getElementById('syncR8Btn');
 if (syncR8BtnEl) syncR8BtnEl.style.display = data.user.isAdmin ? '' : 'none';
-</script>
+-->
 
 
-<!-- ③ JavaScript: 管理画面まわりの関数群（例: openAdmin関数の近く）に新規追加する -->
-<script>
+<!--
+  ==========================================================================
+  ③ JavaScript（<script>タグは付けない。既存の<script>の中に貼り付けること）
+  ==========================================================================
+  管理画面まわりの関数群（例: openAdmin関数の直後、openShuchoMaster関数の前）に
+  次の関数だけを追加する（<script>タグは書かない）:
+
 function syncR8EventMaster() {
   if (!confirm('R8_行事予定Ver 2 の最新内容をダッシュボードに反映します。よろしいですか？')) return;
   var btn = document.getElementById('syncR8Btn');
@@ -59,4 +70,4 @@ function syncR8EventMaster() {
     })
     .manualSyncEventFromR8();
 }
-</script>
+-->
