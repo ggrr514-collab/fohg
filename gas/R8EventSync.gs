@@ -179,6 +179,23 @@ function r8CleanValue_(v) {
 }
 
 /**
+ * ダッシュボードの「🔄 行事予定を反映」ボタン（管理者用）から呼ばれる。
+ * 1時間おきの自動同期を待たずに、R8_行事予定Ver 2 の最新内容を即時反映する。
+ * 使い方: gas/dashboard-sync-button.html を参照し、index.html にボタンを追加する。
+ */
+function manualSyncEventFromR8() {
+  const user = getCurrentUser();
+  if (!user.ok) return { ok: false, error: user.reason };
+  if (!user.isAdmin) return { ok: false, error: '管理者のみ実行できます' };
+  try {
+    const result = syncEventImportFromR8();
+    return { ok: true, count: result.count };
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) };
+  }
+}
+
+/**
  * 1時間おきにR8同期を自動実行するトリガーを設定する（初回1回だけ実行）
  */
 function setupR8EventSyncTrigger() {

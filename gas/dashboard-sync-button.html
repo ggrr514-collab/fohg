@@ -1,0 +1,62 @@
+<!--
+  ============================================================
+  「🔄 行事予定を反映」ボタンの追加手順（index.html への手動パッチ）
+  ============================================================
+  R8_行事予定Ver 2 は1時間おきに自動同期されますが（gas/R8EventSync.gs の
+  setupR8EventSyncTrigger）、編集直後にすぐダッシュボードへ反映したい場合の
+  ためのボタンです。管理者にのみ表示され、押すと即座に再同期→画面再読込します。
+
+  サーバー側の関数 manualSyncEventFromR8() は gas/R8EventSync.gs に
+  追加済みです。index.html 側に以下3箇所を追記してください。
+  ============================================================
+-->
+
+<!-- ① HTML: 既存の #adminBtn ボタンのすぐ後ろに追加する -->
+<!--
+  探す場所（index.html内）:
+    <button id="adminBtn" onclick="openAdmin()" ...>⚙️ 管理</button>
+  この直後に次を追加:
+-->
+<button id="syncR8Btn" onclick="syncR8EventMaster()" style="display:none;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:6px;">🔄 行事予定を反映</button>
+
+
+<!-- ② JavaScript: handleNippoLoaded() 関数内、次の行のすぐ後ろに追加する -->
+<!--
+  探す場所（<script>内、handleNippoLoaded関数の中）:
+    document.getElementById('adminBtn').style.display = data.user.isAdmin ? '' : 'none';
+  この直後に次を追加:
+-->
+<script>
+var syncR8BtnEl = document.getElementById('syncR8Btn');
+if (syncR8BtnEl) syncR8BtnEl.style.display = data.user.isAdmin ? '' : 'none';
+</script>
+
+
+<!-- ③ JavaScript: 管理画面まわりの関数群（例: openAdmin関数の近く）に新規追加する -->
+<script>
+function syncR8EventMaster() {
+  if (!confirm('R8_行事予定Ver 2 の最新内容をダッシュボードに反映します。よろしいですか？')) return;
+  var btn = document.getElementById('syncR8Btn');
+  var originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '反映中...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+      if (res && res.ok) {
+        alert('行事予定を反映しました（' + res.count + '件）');
+        loadNippo();
+      } else {
+        alert('エラー: ' + (res && res.error ? res.error : '不明なエラー'));
+      }
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+      alert('通信エラー: ' + (err && err.message ? err.message : String(err)));
+    })
+    .manualSyncEventFromR8();
+}
+</script>
