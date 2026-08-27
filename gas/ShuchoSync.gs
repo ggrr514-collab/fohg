@@ -14,6 +14,8 @@
  * これを「出張取込」シートの7列フォーマット
  *   A=年度  B=月  C=日  D=氏名  E=用務  F=時間  G=場所
  * にマッピングします（D=人数, E=番号 は使わずスキップ）。
+ * ※ A列「年」が令和年数（例:8）で入っている場合は西暦（2026）に自動変換します
+ *   （shuchoNormalizeYear_）。西暦がそのまま入っている場合は変換しません。
  *
  * 【導入手順】
  * 1. このファイルの中身をまるごとコピーして、Apps Scriptエディタで
@@ -44,12 +46,14 @@ const SHUCHO_SRC_COL = {
  * 手動実行 / 時間主導トリガーの両方から呼ばれる想定
  */
 function syncShuchoFromMaster() {
+  console.log('出張同期: 開始');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const settings = getSettings_(ss);
   const masterId = settings['出張マスターID'];
   if (!masterId) {
     throw new Error('設定シートに「出張マスターID」が設定されていません');
   }
+  console.log('出張同期: 設定取得完了。マスターID=' + masterId);
 
   let masterSs;
   try {
@@ -57,6 +61,7 @@ function syncShuchoFromMaster() {
   } catch (e) {
     throw new Error('出張マスターを開けませんでした（IDまたは共有設定を確認してください）: ' + (e.message || e));
   }
+  console.log('出張同期: マスターを開けました');
 
   const sh = masterSs.getSheetByName(SHUCHO_SOURCE_SHEET_NAME);
   if (!sh) {
@@ -67,6 +72,7 @@ function syncShuchoFromMaster() {
   if (lastRow < 2) {
     throw new Error('出張マスターにデータがありません');
   }
+  console.log('出張同期: マスター取得完了。データ行数=' + (lastRow - 1));
 
   // 1行目は見出しなので2行目から読み込む
   const data = sh.getRange(2, 1, lastRow - 1, 9).getValues();
@@ -78,7 +84,7 @@ function syncShuchoFromMaster() {
     if (!year || !month || !day) return;  // 空行・不正な行はスキップ
 
     rows.push([
-      shuchoCleanValue_(year),
+      shuchoNormalizeYear_(year),
       shuchoCleanValue_(month),
       shuchoCleanValue_(day),
       shuchoCleanValue_(row[SHUCHO_SRC_COL.NAME - 1]),
@@ -87,6 +93,7 @@ function syncShuchoFromMaster() {
       shuchoCleanValue_(row[SHUCHO_SRC_COL.PLACE - 1])
     ]);
   });
+  console.log('出張同期: データ整形完了。件数=' + rows.length);
 
   if (!rows.length) {
     throw new Error('出張マスターから1件もデータを取得できませんでした。シート名・列構成を確認してください。');
@@ -106,8 +113,13 @@ function syncShuchoFromMaster() {
 
   const clearLastRow = Math.max(importSh.getLastRow(), rows.length + 2);
   if (clearLastRow >= 3) {
-    importSh.getRange(3, 1, clearLastRow - 2, 7).clearContent();
+    try {
+      importSh.getRange(3, 1, clearLastRow - 2, 7).clearContent();
+    } catch (e) {
+      throw new Error('「出張取込」シートの3行目以降をクリアできませんでした。A3セルに古いQUERY/IMPORTRANGE数式が残っていないか確認してください: ' + (e.message || e));
+    }
   }
+  console.log('出張同期: 「出張取込」クリア完了。書き込み開始');
   importSh.getRange(3, 1, rows.length, 7).setValues(rows);
 
   console.log('出張同期完了: ' + rows.length + '件のデータを「出張取込」に書き込みました');
@@ -122,6 +134,18 @@ function shuchoCleanValue_(v) {
   if (typeof v === 'string' && v.indexOf('#') === 0) return '';  // #N/A, #REF! など
   if (typeof v === 'number') return v;
   return String(v).trim();
+}
+
+/**
+ * 出張マスターの「年」列は、令和の年数（例: 8）で入っていることがある。
+ * ダッシュボード側は西暦（例: 2026）で日付を照合するため、
+ * 100未満の小さい数値は「令和のX年」とみなして西暦に変換する。
+ * すでに西暦（1900以上）で入っている場合はそのまま使う。
+ */
+function shuchoNormalizeYear_(rawYear) {
+  const n = Number(rawYear);
+  if (!n || isNaN(n)) return '';
+  return (n < 100) ? (n + 2018) : n;
 }
 
 /**
