@@ -1,0 +1,168 @@
+<!--
+  ============================================================
+  「アレルギー対応」セクションの追加手順（index.html への手動パッチ）
+  ============================================================
+  出張欄のすぐ下に、新しく「アレルギー対応」セクションを追加します。
+  サーバー側のコード（同期・取得・URL取得）は gas/AllergySync.gs に
+  すべて入っています。ここでは index.html 側の追加箇所をまとめます。
+
+  ⚠️ 重要: JavaScriptの追加箇所（③④⑤⑥）はどれも、index.html内の
+  「1つの大きな<script>〜</script>」の“内側”に貼り付けるコードです。
+  <script>タグを新しく増やさないでください。下のコードブロックに
+  <script>タグを書いていないのはそのためです。そのままコピーして、
+  既存のJavaScriptの間にペーストしてください
+  （<script>タグを二重にすると「形式が正しくないHTMLコンテンツ」エラーに
+  なります）。
+  ============================================================
+-->
+
+<!-- ① CSS: 既存の <style> 内、.deadline-section や .class-change-section の
+     近くに追加する（場所はどこでもOK、<style>の閉じタグ</style>より前） -->
+<style>
+.allergy-section { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); }
+.allergy-list { display: flex; flex-direction: column; gap: 6px; }
+.allergy-empty { text-align: center; padding: 16px; color: var(--ink-faint); font-size: 12px; }
+.allergy-item { background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--danger); border-radius: 4px; padding: 6px 10px; font-size: 13px; line-height: 1.5; }
+</style>
+
+
+<!-- ② HTML: 「出張」セクション（id="sec-shucho"）の閉じタグ </div> の直後、
+     「研究部・授業づくり」セクション（id="sec-library"）の手前に追加する -->
+<!--
+  探す場所（index.html内）:
+    <div class="section collapsible" id="sec-shucho">
+      ...
+    </div>
+  この </div> の直後、次のセクションを丸ごと追加:
+-->
+<div class="section allergy-section collapsible" id="sec-allergy">
+  <div class="section-title" onclick="onSectionTitleClick(event, 'sec-allergy')">
+    <div><span class="section-collapse-arrow">▼</span>⚠️ アレルギー対応 <span class="badge-count" id="allergyCount">0</span></div>
+    <button class="section-mgmt-btn" onclick="event.stopPropagation();openAllergyMaster()">⚙️ アレルギー対応マスター</button>
+  </div>
+  <div class="section-content">
+    <div class="allergy-list" id="allergyList"></div>
+  </div>
+</div>
+
+
+<!-- ③ HTML: トップバーの既存ボタン列（#syncShuchoBtn の直後）に追加する -->
+<!--
+  探す場所（index.html内）:
+    <button id="syncShuchoBtn" onclick="syncShuchoMaster()" ...>🔄 出張を反映</button>
+  この直後に次を追加:
+-->
+<button id="syncAllergyBtn" onclick="syncAllergyMaster()" style="display:none;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:6px;">🔄 アレルギーを反映</button>
+
+
+<!--
+  ==========================================================================
+  ④ JavaScript（<script>タグは付けない。既存の<script>の中に貼り付けること）
+  ==========================================================================
+  探す場所（<script>内、handleNippoLoaded関数の中）:
+    if (syncShuchoBtnEl) syncShuchoBtnEl.style.display = data.user.isAdmin ? '' : 'none';
+  この直後に、次の2行を追加する（<script>タグは書かない）:
+
+var syncAllergyBtnEl = document.getElementById('syncAllergyBtn');
+if (syncAllergyBtnEl) syncAllergyBtnEl.style.display = data.user.isAdmin ? '' : 'none';
+
+  さらに同じ handleNippoLoaded 関数の中、次の行:
+    renderDeadlines(data.deadlines);
+  の直後に、次の1行を追加する:
+
+renderAllergy(data.allergy);
+-->
+
+
+<!--
+  ==========================================================================
+  ⑤ JavaScript（<script>タグは付けない。既存の<script>の中に貼り付けること）
+  ==========================================================================
+  探す場所（<script>内、updateSectionCollapseState関数の中）:
+    setSectionCollapsed('sec-shucho', getShuchoCount() === 0);
+  この直後に次の1行を追加する:
+
+setSectionCollapsed('sec-allergy', getAllergyCount() === 0);
+
+  そして getShuchoCount 関数の定義のすぐ後ろに、次の関数を追加する:
+
+function getAllergyCount() {
+  var list = document.getElementById('allergyList');
+  if (!list) return 0;
+  return list.querySelectorAll('.allergy-item').length;
+}
+-->
+
+
+<!--
+  ==========================================================================
+  ⑥ JavaScript（<script>タグは付けない。既存の<script>の中に貼り付けること）
+  ==========================================================================
+  以下の関数群を、renderShucho関数や openShuchoMaster関数の近くに
+  まとめて追加する（<script>タグは書かない）:
+
+function renderAllergy(list) {
+  list = list || [];
+  var countEl = document.getElementById('allergyCount');
+  if (countEl) countEl.textContent = list.length;
+  var container = document.getElementById('allergyList');
+  if (!list.length) {
+    container.innerHTML = '<div class="allergy-empty">本日のアレルギー対応情報はありません</div>';
+    return;
+  }
+  var html = '';
+  list.forEach(function(text) {
+    html += '<div class="allergy-item">' + escapeAndLinkify(text) + '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function openAllergyMaster() {
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.ok) {
+        alert('エラー: ' + (res && res.error ? res.error : '不明'));
+        return;
+      }
+      if (!res.allergyMasterUrl) {
+        alert('アレルギー対応マスターのIDが設定されていません。\n設定シートの「アレルギー対応マスターID」を確認してください。');
+        return;
+      }
+      showMasterLinksModal({
+        title: '⚠️ アレルギー対応マスター',
+        description: 'アレルギー対応情報の取込元シートです。',
+        links: [
+          { label: '⚠️ アレルギー対応マスターを開く', desc: '内容の追加・編集はこちらから', url: res.allergyMasterUrl }
+        ]
+      });
+    })
+    .withFailureHandler(function(err) { alert('通信エラー: ' + (err.message || err)); })
+    .getAllergyMasterUrl();
+}
+
+function syncAllergyMaster() {
+  if (!confirm('アレルギー対応マスターの最新内容をダッシュボードに反映します。よろしいですか？')) return;
+  var btn = document.getElementById('syncAllergyBtn');
+  var originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '反映中...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+      if (res && res.ok) {
+        alert('アレルギー対応情報を反映しました（' + res.count + '件）');
+        loadNippo();
+      } else {
+        alert('エラー: ' + (res && res.error ? res.error : '不明なエラー'));
+      }
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+      alert('通信エラー: ' + (err && err.message ? err.message : String(err)));
+    })
+    .manualSyncAllergyFromMaster();
+}
+-->
