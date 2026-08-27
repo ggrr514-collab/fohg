@@ -6,34 +6,51 @@
   サーバー側のコード（同期・取得・URL取得）は gas/AllergySync.gs に
   すべて入っています。ここでは index.html 側の追加箇所をまとめます。
 
-  ⚠️ 重要: JavaScriptの追加箇所（③④⑤⑥）はどれも、index.html内の
+  ⚠️ 重要①: JavaScriptの追加箇所（④⑤⑥）はどれも、index.html内の
   「1つの大きな<script>〜</script>」の“内側”に貼り付けるコードです。
   <script>タグを新しく増やさないでください。下のコードブロックに
   <script>タグを書いていないのはそのためです。そのままコピーして、
   既存のJavaScriptの間にペーストしてください
   （<script>タグを二重にすると「形式が正しくないHTMLコンテンツ」エラーに
   なります）。
+
+  ⚠️ 重要②: ①のCSSも同様に、index.html内の「1つの大きな<style>〜</style>」の
+  “内側”に貼り付けるコードです。<style>タグを新しく増やさないでください。
+  下のCSSに<style>タグを書いていないのはそのためです。
+
+  ⚠️ 重要③: ②のHTMLセクションは、「出張」セクション（id="sec-shucho"）の
+  “外側”、つまりその一番外側の閉じタグ </div> より後ろに、独立した
+  兄弟要素として追加してください。「出張」セクションの中（section-titleの
+  直後やsection-contentの前）に入れ子にしてしまうと、レイアウトが崩れます。
   ============================================================
 -->
 
 <!-- ① CSS: 既存の <style> 内、.deadline-section や .class-change-section の
-     近くに追加する（場所はどこでもOK、<style>の閉じタグ</style>より前） -->
-<style>
+     近くに、次の4行“だけ”を追加する（<style>タグは書かない） -->
 .allergy-section { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); }
 .allergy-list { display: flex; flex-direction: column; gap: 6px; }
 .allergy-empty { text-align: center; padding: 16px; color: var(--ink-faint); font-size: 12px; }
 .allergy-item { background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--danger); border-radius: 4px; padding: 6px 10px; font-size: 13px; line-height: 1.5; }
-</style>
 
 
-<!-- ② HTML: 「出張」セクション（id="sec-shucho"）の閉じタグ </div> の直後、
-     「研究部・授業づくり」セクション（id="sec-library"）の手前に追加する -->
-<!--
-  探す場所（index.html内）:
+<!-- ② HTML: 「出張」セクション（id="sec-shucho"）の一番外側の閉じタグ </div>
+     より後ろ（＝出張セクションと同じ階層の次の要素として）、
+     「研究部・授業づくり」セクション（id="sec-library"）の手前に追加する。
+
+  正しい配置イメージ（出張セクションの中には絶対に入れない）:
+
     <div class="section collapsible" id="sec-shucho">
+      <div class="section-title">...出張...</div>
+      <div class="section-content">
+        <div class="shucho-list" id="shuchoList"></div>
+      </div>
+    </div>                                 ← 出張セクションはここで完全に閉じる
+
+    <div class="section allergy-section collapsible" id="sec-allergy">   ← ここから追加開始
       ...
     </div>
-  この </div> の直後、次のセクションを丸ごと追加:
+
+    <div class="section library-section collapsible" id="sec-library">  ← 既存の研究部セクション
 -->
 <div class="section allergy-section collapsible" id="sec-allergy">
   <div class="section-title" onclick="onSectionTitleClick(event, 'sec-allergy')">
