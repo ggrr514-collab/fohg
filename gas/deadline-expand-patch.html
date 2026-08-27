@@ -1,0 +1,73 @@
+<!--
+  ============================================================
+  「提出物・締切一覧」を折りたたみ＋「もっと見る」展開表示にする
+  ============================================================
+  現状: renderDeadlines() が d.content を substring(0, 60) で
+  問答無用に切り捨てているうえ、CSS側も white-space:nowrap で
+  1行に強制しているため、文の途中で切れて全文が見えません。
+
+  連絡事項（renrakuカード）で既に使っている「もっと見る」展開の仕組み
+  （.rk-body-short / .rk-body-full / .rk-toggle-btn / toggleRenrakuBody()）
+  をそのまま流用し、60文字を超えたときだけ折りたたみ、クリックで
+  全文表示できるようにします。新しい関数は増やしません。
+
+  変更は2箇所だけです。
+  ============================================================
+-->
+
+<!-- ① CSS: 既存の .deadline-content の1行を置き換える -->
+<!--
+  探す（<style>内）:
+    .deadline-content { font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  これに置き換える:
+-->
+.deadline-content { font-size: 11.5px; color: var(--ink-soft); line-height: 1.5; word-break: break-word; }
+
+
+<!--
+  ==========================================================================
+  ② JavaScript（<script>タグは付けない。既存の<script>の中で関数を置き換える）
+  ==========================================================================
+  探す（<script>内）: renderDeadlines 関数をまるごと、
+  次の内容に置き換える（<script>タグは書かない）:
+-->
+function renderDeadlines(list) {
+  list = list || [];
+  var countEl = document.getElementById('deadlineCount');
+  if (countEl) countEl.textContent = list.length;
+
+  var container = document.getElementById('deadlineList');
+  if (!list.length) {
+    container.innerHTML = '<div class="deadline-empty">締切のある提出物はありません</div>';
+    return;
+  }
+
+  var DEADLINE_TRUNCATE = 60;  // 60文字を超えると折りたたみ（連絡事項と同じ仕組み）
+  var html = '';
+  list.forEach(function(d) {
+    var dateDisplay = d.calendarDate.replace(/^\d{4}-(\d{1,2})-(\d{1,2})$/, function(_, m, day) {
+      return parseInt(m) + '/' + parseInt(day);
+    });
+    var groupBadge = d.group ? '<span class="deadline-group-badge">' + escapeHtml(d.group) + '</span>' : '';
+
+    var content = String(d.content || '');
+    var contentHtml;
+    if (content.length > DEADLINE_TRUNCATE) {
+      var shortContent = content.substring(0, DEADLINE_TRUNCATE);
+      contentHtml = '<span class="rk-body-short">' + escapeAndLinkify(shortContent) + '<span class="rk-body-ellipsis">…</span></span>' +
+        '<span class="rk-body-full" style="display:none;">' + escapeAndLinkify(content) + '</span>' +
+        '<button class="rk-toggle-btn" onclick="toggleRenrakuBody(this)">もっと見る</button>';
+    } else {
+      contentHtml = escapeAndLinkify(content);
+    }
+
+    html += '<div class="deadline-item' + (d.isOverdue ? ' overdue' : '') + '">' +
+      '<div class="deadline-date' + (d.isOverdue ? ' overdue-text' : '') + '">' + (d.isOverdue ? '⚠️ ' : '') + escapeHtml(dateDisplay) + '</div>' +
+      '<div class="deadline-body">' +
+        '<div class="deadline-name">' + escapeHtml(d.name || '') + groupBadge + '</div>' +
+        '<div class="deadline-content">' + contentHtml + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  container.innerHTML = html;
+}
