@@ -1,0 +1,73 @@
+<!--
+  ============================================================
+  「🔄 出張を反映」ボタンの追加手順（index.html への手動パッチ）
+  ============================================================
+  行事予定の「🔄 行事予定を反映」ボタン（syncR8Btn）と同じ考え方で、
+  出張データも管理者がワンクリックで即時反映できるようにするボタンです。
+
+  サーバー側の関数 manualSyncShuchoFromMaster() は gas/ShuchoSync.gs に
+  追加済みです。index.html 側に以下3箇所を追記してください。
+
+  ⚠️ 重要: ②③はどちらも、index.html内の「1つの大きな<script>〜</script>」の
+  “内側”に貼り付けるコードです。<script>タグを新しく増やさないでください。
+  下のコードブロックに<script>タグを書いていないのはそのためです。
+  そのままコピーして、既存のJavaScriptの間にペーストしてください
+  （<script>タグを二重にすると「形式が正しくないHTMLコンテンツ」エラーになります）。
+  ============================================================
+-->
+
+<!-- ① HTML: 既存の #syncR8Btn ボタンのすぐ後ろに追加する（無ければ #adminBtn の後ろでもOK） -->
+<!--
+  探す場所（index.html内）:
+    <button id="syncR8Btn" onclick="syncR8EventMaster()" ...>🔄 行事予定を反映</button>
+  この直後に次を追加:
+-->
+<button id="syncShuchoBtn" onclick="syncShuchoMaster()" style="display:none;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:6px;">🔄 出張を反映</button>
+
+
+<!--
+  ==========================================================================
+  ② JavaScript（<script>タグは付けない。既存の<script>の中に貼り付けること）
+  ==========================================================================
+  探す場所（<script>内、handleNippoLoaded関数の中）:
+    if (syncR8BtnEl) syncR8BtnEl.style.display = data.user.isAdmin ? '' : 'none';
+  この直後に、次の2行だけを追加する（<script>タグは書かない）:
+
+var syncShuchoBtnEl = document.getElementById('syncShuchoBtn');
+if (syncShuchoBtnEl) syncShuchoBtnEl.style.display = data.user.isAdmin ? '' : 'none';
+-->
+
+
+<!--
+  ==========================================================================
+  ③ JavaScript（<script>タグは付けない。既存の<script>の中に貼り付けること）
+  ==========================================================================
+  管理画面まわりの関数群（例: syncR8EventMaster関数の直後）に
+  次の関数だけを追加する（<script>タグは書かない）:
+
+function syncShuchoMaster() {
+  if (!confirm('出張マスターの最新内容をダッシュボードに反映します。よろしいですか？')) return;
+  var btn = document.getElementById('syncShuchoBtn');
+  var originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '反映中...';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+      if (res && res.ok) {
+        alert('出張データを反映しました（' + res.count + '件）');
+        loadNippo();
+      } else {
+        alert('エラー: ' + (res && res.error ? res.error : '不明なエラー'));
+      }
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+      alert('通信エラー: ' + (err && err.message ? err.message : String(err)));
+    })
+    .manualSyncShuchoFromMaster();
+}
+-->
