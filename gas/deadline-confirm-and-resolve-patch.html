@@ -1,0 +1,326 @@
+<!--
+  ============================================================
+  提出物・締切一覧に「確認しました」「済にする」を追加
+  ============================================================
+  現状: 締切のある連絡は一度作られると、期限切れ後3日経つまで
+  ずっと一覧に残り続け、どんどん伸びていってしまう。
+
+  追加する仕組み（連絡事項で既に使っているものをそのまま流用）:
+  ① 「確認しました」: 押した本人の画面からだけ、その項目が消える。
+     他の先生の画面には引き続き表示される（連絡事項の確認スタンプと
+     同じ confirmRenraku / unconfirmRenraku をそのまま使う）。
+     一覧上部の「確認済みを隠す」チェックを外せば、いつでも見返せる。
+  ② 「済にする」: 投稿者本人 or 管理者だけに表示されるボタン。
+     押すと、全員の一覧から消える（連絡事項の toggleRenrakuResolved を
+     そのまま使う。締切一覧はもともと「済」フラグが立った行を除外
+     しているので、追加のフィルタ処理は不要）。
+
+  変更は3箇所です。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① Code.gs: getDeadlineList_ 関数をまるごと置き換える
+  ==========================================================================
+  探す: getDeadlineList_ 関数（function getDeadlineList_(ss) { ... } 全体）
+
+  これに置き換える（元のロジックはそのまま、確認スタンプの情報を
+  各項目に追加しただけです）:
+-->
+function getDeadlineList_(ss) {
+  const list = [];
+  const sh = ss.getSheetByName(SHEET_NAMES.RENRAKU_LOG);
+  if (!sh || sh.getLastRow() < 2) return list;
+
+  let currentUserName = '', currentUserEmail = '', myGroups = [], isAdmin = false;
+  try {
+    const u = getCurrentUser();
+    if (u && u.ok) {
+      currentUserName = u.name || '';
+      currentUserEmail = u.email || '';
+      const teachers = getTeachersList_(ss);
+      const me = teachers.find(t => t.email === currentUserEmail);
+      if (me) { myGroups = me.groups || []; isAdmin = !!me.isAdmin; }
+    }
+  } catch (e) {}
+
+  // 確認スタンプ（T4）: 連絡事項と同じ仕組みをそのまま流用する
+  let confirmMap = {};
+  try { confirmMap = getConfirmationsMap_(); } catch (e) { console.log('締切一覧: 確認スタンプ取得エラー: ' + (e.message || e)); }
+
+  const lastCol = Math.max(19, sh.getLastColumn());
+  const data = sh.getRange(2, 1, sh.getLastRow() - 1, lastCol).getValues();
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const overdueLimit = new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000);
+
+  data.forEach(row => {
+    if (!row[0]) return;
+    if (row[12] === true) return;  // 削除済み
+
+    const calendarDateRaw = row[14];
+    if (!(calendarDateRaw instanceof Date)) return;
+    const dueDay = new Date(calendarDateRaw);
+    dueDay.setHours(0, 0, 0, 0);
+    if (dueDay < overdueLimit) return;  // 古すぎる期限切れは一覧から外す
+    if (row[18] === true) return;  // 済（「済にする」を押すと全員の一覧から消える）
+
+    const groupName = row[17] ? String(row[17]).trim() : '';
+    if (groupName) {
+      // グループ連絡: 自分の所属グループ or 管理者のみ
+      if (!isAdmin && myGroups.indexOf(groupName) === -1) return;
+    } else {
+      // 通常連絡: 宛先未指定なら全員に表示、指定があれば全員宛/自分宛のみ
+      const recArr = row[13] ? String(row[13]).split(',').map(s => s.trim()).filter(Boolean) : [];
+      if (recArr.length) {
+        const isForAll = recArr.indexOf('全員') !== -1;
+        const isAddressedToMe = recArr.indexOf(currentUserName) !== -1;
+        if (!isForAll && !isAddressedToMe) return;
+      }
+    }
+
+    const renrakuId = String(row[0]);
+    const confirmations = confirmMap[renrakuId] || [];
+
+    list.push({
+      id: renrakuId,
+      name: row[2] || '',
+      content: row[3] || '',
+      important: row[4] === true,
+      calendarDate: Utilities.formatDate(dueDay, 'JST', 'yyyy-MM-dd'),
+      group: groupName,
+      isOverdue: dueDay < today,
+      createdByEmail: row[6] || '',
+      confirmedCount: confirmations.length,
+      confirmedByMe: confirmations.some(c => c.email === currentUserEmail),
+      confirmedNames: confirmations.map(c => c.name).filter(Boolean)
+    });
+  });
+
+  list.sort((a, b) => a.calendarDate < b.calendarDate ? -1 : (a.calendarDate > b.calendarDate ? 1 : 0));
+  return list;
+}
+
+
+<!--
+  ==========================================================================
+  ② index.html: 「提出物・締切一覧」の見出しに、隠す/表示のチェックを追加
+  ==========================================================================
+  探す（index.html内、HTML）:
+
+      <div class="section deadline-section collapsible" id="sec-deadlines">
+        <div class="section-title" onclick="onSectionTitleClick(event, 'sec-deadlines')">
+          <div><span class="section-collapse-arrow">▼</span>📋 提出物・締切一覧 <span class="badge-count" id="deadlineCount">0</span></div>
+        </div>
+
+  これに置き換える（<div>を1つ追加しただけです）:
+-->
+      <div class="section deadline-section collapsible" id="sec-deadlines">
+        <div class="section-title" onclick="onSectionTitleClick(event, 'sec-deadlines')">
+          <div><span class="section-collapse-arrow">▼</span>📋 提出物・締切一覧 <span class="badge-count" id="deadlineCount">0</span></div>
+          <label style="font-size:11px;color:var(--ink-soft);font-weight:400;cursor:pointer;display:flex;align-items:center;gap:4px;" onclick="event.stopPropagation();">
+            <input type="checkbox" id="hideConfirmedDeadlinesToggle" onchange="toggleHideConfirmedDeadlines(this.checked)"> 確認済みを隠す
+          </label>
+        </div>
+
+
+<!--
+  ==========================================================================
+  ③ index.html: JavaScript（<script>タグは付けない。既存の<script>の中で
+     renderDeadlines関数を置き換え、onToggleResolved・onToggleConfirmに
+     1行ずつ追加し、新しい関数を追加する）
+  ==========================================================================
+
+  (a) 探す（<script>内）: renderDeadlines 関数をまるごと、
+      次の内容に置き換える:
+-->
+function renderDeadlines(list) {
+  list = list || [];
+  var hideConfirmed = getHideConfirmedDeadlinesPref();
+  var checkboxEl = document.getElementById('hideConfirmedDeadlinesToggle');
+  if (checkboxEl) checkboxEl.checked = hideConfirmed;
+
+  var visibleList = hideConfirmed ? list.filter(function(d) { return !d.confirmedByMe; }) : list;
+  var hiddenCount = list.length - visibleList.length;
+
+  var countEl = document.getElementById('deadlineCount');
+  if (countEl) countEl.textContent = visibleList.length;
+
+  var container = document.getElementById('deadlineList');
+  if (!list.length) {
+    container.innerHTML = '<div class="deadline-empty">締切のある提出物はありません</div>';
+    return;
+  }
+  if (!visibleList.length) {
+    container.innerHTML = '<div class="deadline-empty">すべて確認済みです（' + hiddenCount + '件を非表示中。上の「確認済みを隠す」を外すと見られます）</div>';
+    return;
+  }
+
+  var DEADLINE_TRUNCATE = 60;  // 60文字を超えると折りたたみ（連絡事項と同じ仕組み）
+  var html = '';
+  visibleList.forEach(function(d) {
+    var dateDisplay = d.calendarDate.replace(/^\d{4}-(\d{1,2})-(\d{1,2})$/, function(_, m, day) {
+      return parseInt(m) + '/' + parseInt(day);
+    });
+    var groupBadge = d.group ? '<span class="deadline-group-badge">' + escapeHtml(d.group) + '</span>' : '';
+
+    var content = String(d.content || '');
+    var contentHtml;
+    if (content.length > DEADLINE_TRUNCATE) {
+      var shortContent = content.substring(0, DEADLINE_TRUNCATE);
+      contentHtml = '<span class="rk-body-short">' + escapeAndLinkify(shortContent) + '<span class="rk-body-ellipsis">…</span></span>' +
+        '<span class="rk-body-full" style="display:none;">' + escapeAndLinkify(content) + '</span>' +
+        '<button class="rk-toggle-btn" onclick="toggleRenrakuBody(this)">もっと見る</button>';
+    } else {
+      contentHtml = escapeAndLinkify(content);
+    }
+
+    var canEdit = currentUser && (d.createdByEmail === currentUser.email || currentUser.isAdmin);
+    var confirmBtn = d.confirmedByMe
+      ? '<button class="rk-confirm-btn rk-confirm-active" onclick="onToggleConfirm(' + jsArg(d.id) + ', true)" title="確認を取り消す">✓確認済み</button>'
+      : '<button class="rk-confirm-btn" onclick="onToggleConfirm(' + jsArg(d.id) + ', false)" title="確認すると、一覧の「確認済みを隠す」がONの間は自分の画面から消えます">確認しました</button>';
+    var confirmCountHtml = '';
+    if (d.confirmedCount > 0) {
+      var namesTitle = (d.confirmedNames || []).join('、');
+      confirmCountHtml = '<span class="rk-confirm-count" title="確認済み: ' + escapeHtml(namesTitle) + '">👀 ' + d.confirmedCount + '人確認済み</span>';
+    }
+    var resolveBtn = canEdit
+      ? '<button class="mini-btn" style="margin-left:6px;" onclick="onToggleResolved(' + jsArg(d.id) + ')" title="全員の一覧から削除します">済にする</button>'
+      : '';
+
+    html += '<div class="deadline-item' + (d.isOverdue ? ' overdue' : '') + '">' +
+      '<div class="deadline-date' + (d.isOverdue ? ' overdue-text' : '') + '">' + (d.isOverdue ? '⚠️ ' : '') + escapeHtml(dateDisplay) + '</div>' +
+      '<div class="deadline-body">' +
+        '<div class="deadline-name">' + escapeHtml(d.name || '') + groupBadge + '</div>' +
+        '<div class="deadline-content">' + contentHtml + '</div>' +
+        '<div class="rk-confirm-row">' + confirmBtn + confirmCountHtml + resolveBtn + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  if (hiddenCount > 0) {
+    html += '<div style="text-align:center;padding:6px;color:var(--ink-faint);font-size:11px;">確認済みを' + hiddenCount + '件非表示にしています（上の「確認済みを隠す」を外すと見られます）</div>';
+  }
+  container.innerHTML = html;
+}
+
+<!--
+  (b) 探す（<script>内、onToggleResolved 関数の中）:
+
+function onToggleResolved(id) {
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.ok) {
+        alert('操作に失敗しました: ' + (res && res.error ? res.error : '不明なエラー'));
+        return;
+      }
+      refreshRenrakuOnly();
+      loadGroupRenraku();
+    })
+
+  この「refreshRenrakuOnly(); loadGroupRenraku();」の直後に、
+  次の1行を追加する（締切一覧も一緒に更新するため）:
+
+      refreshDeadlinesOnly();
+
+  つまり、その部分は次のようになります:
+-->
+function onToggleResolved(id) {
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.ok) {
+        alert('操作に失敗しました: ' + (res && res.error ? res.error : '不明なエラー'));
+        return;
+      }
+      refreshRenrakuOnly();
+      loadGroupRenraku();
+      refreshDeadlinesOnly();
+    })
+    .withFailureHandler(function(err) {
+      alert('通信エラー: ' + (err && err.message ? err.message : String(err)));
+    })
+    .toggleRenrakuResolved(id);
+}
+
+<!--
+  (c) 探す（<script>内、onToggleConfirm 関数の中）: 同様に
+      「refreshRenrakuOnly(); loadGroupRenraku();」の直後に
+      「refreshDeadlinesOnly();」を1行追加する。
+      つまり onToggleConfirm 関数全体は次のようになります:
+-->
+function onToggleConfirm(id, isConfirmed) {
+  var fn = isConfirmed ? 'unconfirmRenraku' : 'confirmRenraku';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.ok) {
+        alert('操作に失敗しました: ' + (res && res.error ? res.error : '不明なエラー'));
+        return;
+      }
+      refreshRenrakuOnly();
+      loadGroupRenraku();
+      refreshDeadlinesOnly();
+    })
+    .withFailureHandler(function(err) {
+      alert('通信エラー: ' + (err && err.message ? err.message : String(err)));
+    })
+    [fn](id);
+}
+
+<!--
+  (d) 新しい関数を追加する。renderDeadlines関数の近くに、
+      次の関数群をまとめて追加する:
+-->
+var HIDE_CONFIRMED_DEADLINES_KEY = 'nishiharaDashboardHideConfirmedDeadlines';
+
+function getHideConfirmedDeadlinesPref() {
+  try {
+    var v = localStorage.getItem(HIDE_CONFIRMED_DEADLINES_KEY);
+    return v === null ? true : (v === '1');  // 初期値はON（確認済みを隠す）
+  } catch (e) {
+    return true;
+  }
+}
+
+function setHideConfirmedDeadlinesPref(v) {
+  try { localStorage.setItem(HIDE_CONFIRMED_DEADLINES_KEY, v ? '1' : '0'); } catch (e) {}
+}
+
+function toggleHideConfirmedDeadlines(checked) {
+  setHideConfirmedDeadlinesPref(checked);
+  if (nippoData && nippoData.deadlines) renderDeadlines(nippoData.deadlines);
+}
+
+function refreshDeadlinesOnly() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      if (!data || !data.user || !data.user.ok) return;
+      if (nippoData) nippoData.deadlines = data.deadlines || [];
+      renderDeadlines(data.deadlines || []);
+      updateSectionCollapseState();
+    })
+    .withFailureHandler(function(err) {
+      console.log('refreshDeadlinesOnly failed: ' + (err.message || err));
+    })
+    .getNippo(currentDate);
+}
+
+<!--
+  ============================================================
+  補足
+  ============================================================
+  ・「確認しました」ボタンと人数表示（👀◯人確認済み）、
+    「済にする」ボタンの見た目は、連絡事項カードで使っている
+    既存のCSSクラス（.rk-confirm-btn, .rk-confirm-count,
+    .rk-confirm-row, .mini-btn）をそのまま使うので、CSSの
+    追加は不要です。
+  ・「済にする」は投稿者本人か管理者にしか表示されません
+    （connectしている先生自身の締切連絡、または管理者権限がある場合）。
+  ・「確認しました」を押しても、他の先生の画面からは消えません。
+    自分の画面で「確認済みを隠す」のチェックが入っている間だけ、
+    自分の一覧から見えなくなります。チェックを外せばいつでも
+    確認済みの項目も含めて見られます（設定はブラウザに保存され、
+    次回開いたときも引き継がれます）。
+  ============================================================
+-->
