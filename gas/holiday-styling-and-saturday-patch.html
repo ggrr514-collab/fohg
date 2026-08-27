@@ -1,0 +1,188 @@
+<!--
+  ============================================================
+  ① 本日・明日の予定欄: 学校が休みの日を暗く表示する
+  ② 週報: 土曜授業がある週は土曜まで表示する
+  ============================================================
+  どちらも「その日に授業(校時)が1つでも入っているか、給食が出るか」を
+  行事取込データから判定する共通ロジック（rowHasClasses_）を使います。
+  土曜授業がある日は「授業がある日」と判定されるので、①では暗くならず、
+  ②では自動的に土曜まで表示されます。
+
+  ⚠️ 重要: このファイル自体はGitHub上で読む説明書きです。
+  以下のコードブロックは、Code.gs用（プレーンなApps Script）と
+  index.html用（既存の<style>/<script>の“内側”に貼るコード）が
+  混ざっています。タグの類は一切付けていないので、コードの中身だけを
+  そのままコピーしてください。<pre>や<style>や<script>などのタグを
+  絶対に新しく追加しないでください（追加するとエラーになります）。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  Code.gs ① 新しいヘルパー関数を追加する
+  ==========================================================================
+  isSameDay_ 関数や getWeekdayJp_ 関数の近くに、次の関数だけを追加する:
+
+function rowHasClasses_(row) {
+  if (!row) return false;
+  const lunchCols = [EVENT_COL.LUNCH1, EVENT_COL.LUNCH2, EVENT_COL.LUNCH3];
+  for (let i = 0; i < lunchCols.length; i++) {
+    const v = String(row[lunchCols[i] - 1] || '').trim();
+    if (v === '○' || v === '◯') return true;
+  }
+  const periodCols = [].concat(EVENT_COL.G1_PERIODS, EVENT_COL.G2_PERIODS, EVENT_COL.G3_PERIODS);
+  for (let i = 0; i < periodCols.length; i++) {
+    const v = row[periodCols[i] - 1];
+    if (v !== null && v !== undefined && String(v).trim() !== '') return true;
+  }
+  return false;
+}
+-->
+
+
+<!--
+  ==========================================================================
+  Code.gs ② getSchedule_ 関数を修正する（本日・明日が休みかどうかを判定）
+  ==========================================================================
+  探す（getSchedule_関数の冒頭、3行）:
+
+function getSchedule_(ss, date) {
+  const today = [];
+  const tomorrow = [];
+  const nextDate = new Date(date.getTime() + 24 * 60 * 60 * 1000);
+
+  これに置き換える（2行追加。functionの1行目とconst 3行はそのまま）:
+
+function getSchedule_(ss, date) {
+  const today = [];
+  const tomorrow = [];
+  const nextDate = new Date(date.getTime() + 24 * 60 * 60 * 1000);
+  let todayIsSchoolDay = true;
+  let tomorrowIsSchoolDay = true;
+
+
+  次に、探す（同じ関数の中、「行事取込からマスター予定を取得」の箇所）:
+
+    const sh = ss.getSheetByName(SHEET_NAMES.EVENT_IMPORT);
+    if (sh && sh.getLastRow() >= 3) {
+      const data = sh.getRange(3, 1, sh.getLastRow() - 2, 4).getValues();
+      data.forEach((row, idx) => {
+        try {
+          if (!row[0]) return;
+          const eventDate = row[0] instanceof Date ? row[0] : new Date(row[0]);
+          if (isNaN(eventDate.getTime())) return;
+          const eventName = String(row[3] || '').trim();
+          if (!eventName) return;
+
+  これに置き換える（列数を4→32に、休み判定を2行追加）:
+
+    const sh = ss.getSheetByName(SHEET_NAMES.EVENT_IMPORT);
+    if (sh && sh.getLastRow() >= 3) {
+      const data = sh.getRange(3, 1, sh.getLastRow() - 2, 32).getValues();
+      data.forEach((row, idx) => {
+        try {
+          if (!row[0]) return;
+          const eventDate = row[0] instanceof Date ? row[0] : new Date(row[0]);
+          if (isNaN(eventDate.getTime())) return;
+          if (isSameDay_(eventDate, date)) todayIsSchoolDay = rowHasClasses_(row);
+          if (isSameDay_(eventDate, nextDate)) tomorrowIsSchoolDay = rowHasClasses_(row);
+          const eventName = String(row[3] || '').trim();
+          if (!eventName) return;
+
+
+  最後に、getSchedule_関数の一番最後、探す（1行）:
+
+  return { today: today, tomorrow: tomorrow };
+
+  これに置き換える:
+
+  return { today: today, tomorrow: tomorrow, todayIsSchoolDay: todayIsSchoolDay, tomorrowIsSchoolDay: tomorrowIsSchoolDay };
+-->
+
+
+<!--
+  ==========================================================================
+  Code.gs ③ getWeeklyReport 関数を修正する（土曜授業があれば土曜まで表示）
+  ==========================================================================
+  探す（getWeeklyReport関数の中、6行）:
+
+  const monday = getMonday_(baseDate);
+  const friday = new Date(monday.getTime() + 4 * 24 * 60 * 60 * 1000);
+  result.mondayDate = Utilities.formatDate(monday, 'JST', 'yyyy-MM-dd');
+  result.rangeDisplay = Utilities.formatDate(monday, 'JST', 'M/d') + '〜' + Utilities.formatDate(friday, 'JST', 'M/d');
+
+  const days = [];
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(monday.getTime() + i * 24 * 60 * 60 * 1000);
+
+  これに置き換える:
+
+  const monday = getMonday_(baseDate);
+  const saturday = new Date(monday.getTime() + 5 * 24 * 60 * 60 * 1000);
+
+  let satRow = null;
+  try { satRow = findEventRow_(ss, saturday); } catch (e) { console.log('週報: 土曜判定エラー: ' + (e.message || e)); }
+  const includeSaturday = rowHasClasses_(satRow);
+  const numDays = includeSaturday ? 6 : 5;
+  const lastDay = new Date(monday.getTime() + (numDays - 1) * 24 * 60 * 60 * 1000);
+
+  result.mondayDate = Utilities.formatDate(monday, 'JST', 'yyyy-MM-dd');
+  result.rangeDisplay = Utilities.formatDate(monday, 'JST', 'M/d') + '〜' + Utilities.formatDate(lastDay, 'JST', 'M/d');
+
+  const days = [];
+  for (let i = 0; i < numDays; i++) {
+    const d = new Date(monday.getTime() + i * 24 * 60 * 60 * 1000);
+
+  この下（dayObjの組み立て〜daysへのpush）はそのまま変更不要です。
+  index.html側の週報テーブルは days配列の件数(5件/6件)に応じて自動で
+  行数が増減するので、テーブル部分の変更は不要です。
+-->
+
+
+<!--
+  ==========================================================================
+  ④ CSS（<style>タグは付けない。既存の<style>の中に貼り付けること）
+  ==========================================================================
+  .schedule-box の定義の近くに、次の3行“だけ”を追加する:
+
+.schedule-box.day-off { background: #e2e2dc; }
+.schedule-box.day-off ul li { opacity: 0.65; }
+.day-off-badge { color: var(--ink-faint); font-weight: 400; font-size: 10px; }
+-->
+
+
+<!--
+  ==========================================================================
+  ⑤ JavaScript（<script>タグは付けない。既存の<script>の中で関数を置き換える）
+  ==========================================================================
+  renderSchedule 関数をまるごと、次の内容に置き換える:
+
+function renderSchedule(sch) {
+  sch = sch || { today: [], tomorrow: [] };
+  renderScheduleList(sch.today || [], 'scheduleToday', 'today');
+  renderScheduleList(sch.tomorrow || [], 'scheduleTomorrow', 'tomorrow');
+  setScheduleDayOff('scheduleToday', sch.todayIsSchoolDay === false);
+  setScheduleDayOff('scheduleTomorrow', sch.tomorrowIsSchoolDay === false);
+}
+
+function setScheduleDayOff(listId, isDayOff) {
+  var ul = document.getElementById(listId);
+  if (!ul) return;
+  var box = ul.closest('.schedule-box');
+  if (!box) return;
+  box.classList.toggle('day-off', !!isDayOff);
+  var label = box.querySelector('.label');
+  if (!label) return;
+  var badge = label.querySelector('.day-off-badge');
+  if (isDayOff) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'day-off-badge';
+      badge.textContent = ' 🌙 休業日';
+      label.appendChild(badge);
+    }
+  } else if (badge) {
+    badge.remove();
+  }
+}
+-->
