@@ -1,0 +1,122 @@
+<!--
+  ============================================================
+  週報の印刷で、無駄な白紙1枚目が出てしまう不具合の修正
+  ============================================================
+  原因:
+  週報の印刷用CSSで「表がページの余白いっぱいを埋めるように」と
+  html/body/.container/.weekly-print-area に height:100% を指定し、
+  flexboxで表を縦方向に引き伸ばす仕組みにしていました。
+  このやり方はChromeの印刷時のページ計算とかみ合わないことがあり、
+  実際の中身（タイトル・表）が本来の1ページ目の途中〜下側に
+  押しやられ、結果として先頭に空白のページができてしまいます。
+
+  対策:
+  「表がページの余白を埋める」ための height:100% / flexの引き伸ばしを
+  やめて、表をそのまま自然な高さで上から印字するようにします。
+  （表の内容が少ない日でも、下に余白が残るだけで、白紙ページは
+  出なくなります）
+
+  ⚠️ 重要: 下のコードは index.html内の「1つの大きな<style>」の
+  “内側”に貼るCSSです。<style>タグは書かないでください。
+  ============================================================
+-->
+
+<!--
+  探す（<style>内、週報印刷用のブロック）:
+
+@media print {
+  #weeklyScreen { page: weeklyPage; }
+  @page weeklyPage { size: A4 landscape; margin: 8mm; }
+
+  html, body { height: 100%; }
+  .container { height: 100%; }
+
+  /* タイトル＋表を縦に並べ、表側だけが余った高さを埋めるようにする */
+  .weekly-print-area { display: flex !important; flex-direction: column; height: 100%; }
+
+  #weeklyScreen .no-print { display: none !important; }
+  #weeklyScreen .weekly-table-wrap {
+    border: none !important; overflow: visible !important;
+    flex: 1 1 auto; min-height: 0; display: flex;
+  }
+  #weeklyScreen .weekly-table {
+    min-width: 0 !important;
+    font-size: 10pt !important;
+    width: 100% !important;
+    height: 100% !important;
+    flex: 1 1 auto;
+  }
+  #weeklyScreen .weekly-table th,
+  #weeklyScreen .weekly-table td {
+    border: 1px solid #000 !important;
+    padding: 2px 4px !important;
+    color: #000 !important;
+  }
+  #weeklyScreen .weekly-table th { background: #fff !important; }
+  #weeklyScreen .weekly-table td.wk-grade-label { background: #fff !important; }
+  #weeklyScreen .weekly-table td.wk-event, #weeklyScreen .weekly-table td.wk-shucho { font-size: 9pt !important; }
+  /* 日付の境目は太線、それ以外は細線（画面表示と同じ使い分け） */
+  #weeklyScreen .weekly-table tbody tr.wk-day-first td { border-top: 2px solid #000 !important; }
+
+  .weekly-print-header {
+    display: flex !important;
+    flex: 0 0 auto;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4mm;
+    color: #000 !important;
+  }
+  .weekly-print-title { font-size: 14pt; font-weight: 700; }
+  .weekly-print-sub { font-size: 11pt; }
+}
+
+  これに置き換える（height:100%とflexの引き伸ばしを削除しただけです。
+  他のスタイル（枠線・文字色・フォントサイズなど）はそのまま）:
+-->
+
+@media print {
+  #weeklyScreen { page: weeklyPage; }
+  @page weeklyPage { size: A4 landscape; margin: 8mm; }
+
+  #weeklyScreen .no-print { display: none !important; }
+  #weeklyScreen .weekly-table-wrap {
+    border: none !important; overflow: visible !important;
+  }
+  #weeklyScreen .weekly-table {
+    min-width: 0 !important;
+    font-size: 10pt !important;
+    width: 100% !important;
+  }
+  #weeklyScreen .weekly-table th,
+  #weeklyScreen .weekly-table td {
+    border: 1px solid #000 !important;
+    padding: 2px 4px !important;
+    color: #000 !important;
+  }
+  #weeklyScreen .weekly-table th { background: #fff !important; }
+  #weeklyScreen .weekly-table td.wk-grade-label { background: #fff !important; }
+  #weeklyScreen .weekly-table td.wk-event, #weeklyScreen .weekly-table td.wk-shucho { font-size: 9pt !important; }
+  /* 日付の境目は太線、それ以外は細線（画面表示と同じ使い分け） */
+  #weeklyScreen .weekly-table tbody tr.wk-day-first td { border-top: 2px solid #000 !important; }
+
+  .weekly-print-header {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4mm;
+    color: #000 !important;
+  }
+  .weekly-print-title { font-size: 14pt; font-weight: 700; }
+  .weekly-print-sub { font-size: 11pt; }
+}
+
+<!--
+  補足:
+  ・この変更により、表は「ページいっぱいに引き伸ばす」のをやめて、
+    本来の行数ぶんの高さでそのまま印字されます。日数が少ない週は
+    下側に余白が残りますが、白紙の1ページ目は出なくなるはずです。
+  ・もし置き換え後も白紙ページが出る場合は、表の行数が多く
+    A4横1枚に収まりきらず2ページ目に自然にあふれている可能性が
+    あります（これは元々「白紙」ではなく「あふれ」なので、
+    別の対処＝文字をもう少し小さくする、などが必要になります）。
+-->
