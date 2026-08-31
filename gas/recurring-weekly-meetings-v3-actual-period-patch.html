@@ -1,0 +1,246 @@
+<!--
+  ============================================================
+  定例会議名の「○h」を、振替後の実際の時限番号にする（v3）
+  ============================================================
+  ※ このパッチは v2（gas/recurring-weekly-meetings-v2-with-furikae-patch.html）
+    を置き換えるものです。v2をまだ適用していなければ、このv3だけを
+    適用すればOKです（v1・v2は無視してください）。
+
+  【今回の修正点】
+  「月曜3限」が振替で「火曜5限」の内容になっている日、会議名は
+  「研究部会5h」ではなく「研究部会3h」（＝実際に開かれる時限の番号）に
+  なるべき、とのご指摘を反映しました。
+
+  つまり「○h」は会議の“本来の”時限（火5＝研究部会の定義上の位置）
+  ではなく、“その日実際にその時限が組まれている位置”を表す番号です。
+  そのため、判定ロジックを「決まった時限の枠だけを見る」のではなく
+  「その日の1〜6時限すべてを見て、目的の曜日・時限のラベルが
+  どこにあるかを探す」方式に変更します。
+
+  ⚠️ 重要: このファイルはCode.gs用のプレーンなApps Scriptです。
+  タグは付けていないので、コードの中身だけをそのままコピーして
+  ください。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① RECURRING_WEEKLY_MEETINGS 定数を書き換える
+  ==========================================================================
+  探す（v2で追加した内容）:
+
+const RECURRING_WEEKLY_MEETINGS = [
+  { weekday: '月', period: 3, name: '運営委員会3h' },
+  { weekday: '火', period: 5, name: '研究部会5h' },
+  { weekday: '水', period: 3, name: '教育相談部会3h' },
+  { weekday: '金', period: 3, name: '生徒指導委員会3h' }
+];
+
+  これに置き換える（name（固定の"○h"付き）→ baseName（"○h"を含まない
+  会議名だけ）に変更。weekday・periodは「本来の位置」の定義として
+  そのまま使う）:
+-->
+// 曜日・時限固定の定例会議（行事取込には無いもの）。
+// 本日・明日の予定・週報に自動表示する。行事取込の学年別校時列にある
+// 「A火5」のような表記（週+曜日+時限）を見て、実際にその時限が
+// 開かれている校時番号を探し、会議名の末尾（○h）はその実際の番号にする
+// （振替で月曜3限が火曜5限の内容になっていれば「研究部会3h」と表示）。
+// 会議を追加・変更したい場合は、この配列を直接書き換えてください。
+// weekday/period は「本来（振替が無い場合）の曜日・時限」を指定する
+const RECURRING_WEEKLY_MEETINGS = [
+  { weekday: '月', period: 3, baseName: '運営委員会' },
+  { weekday: '火', period: 5, baseName: '研究部会' },
+  { weekday: '水', period: 3, baseName: '教育相談部会' },
+  { weekday: '金', period: 3, baseName: '生徒指導委員会' }
+];
+
+
+<!--
+  ==========================================================================
+  ② ヘルパー関数を書き換える
+  ==========================================================================
+  parsePeriodLabel_関数はそのままでOKです（変更不要）。
+
+  探す（v2で追加した rowHasMeetingAtPeriod_ 関数。これを削除して
+  下のfindMeetingActualPeriod_関数に置き換える）:
+
+function rowHasMeetingAtPeriod_(row, weekday, period) {
+  if (!row) return false;
+  const periodCols = [
+    EVENT_COL.G1_PERIODS[period - 1],
+    EVENT_COL.G2_PERIODS[period - 1],
+    EVENT_COL.G3_PERIODS[period - 1]
+  ];
+  for (let i = 0; i < periodCols.length; i++) {
+    const colIdx = periodCols[i];
+    if (!colIdx) continue;
+    const label = parsePeriodLabel_(row[colIdx - 1]);
+    if (label && label.weekday === weekday && label.period === period) return true;
+  }
+  return false;
+}
+
+  これに置き換える:
+-->
+// 行事取込の1行（32列）の中から、指定の曜日・時限（会議の本来の位置）の
+// ラベルが「実際に」何時限目にあるかを探す。振替が無ければ通常は
+// その曜日・時限と同じ番号が返る。見つからなければ null。
+// 1〜3年のいずれかの学年で最初に見つかったものを採用する。
+function findMeetingActualPeriod_(row, weekday, period) {
+  if (!row) return null;
+  const gradeColSets = [EVENT_COL.G1_PERIODS, EVENT_COL.G2_PERIODS, EVENT_COL.G3_PERIODS];
+  for (let p = 1; p <= 6; p++) {
+    for (let g = 0; g < gradeColSets.length; g++) {
+      const colIdx = gradeColSets[g][p - 1];
+      if (!colIdx) continue;
+      const label = parsePeriodLabel_(row[colIdx - 1]);
+      if (label && label.weekday === weekday && label.period === period) {
+        return p;
+      }
+    }
+  }
+  return null;
+}
+
+
+<!--
+  ==========================================================================
+  ③ getSchedule_関数内のブロックを書き換える
+  ==========================================================================
+  探す（v2で追加したブロック）:
+
+  // 曜日・時限固定の定例会議を本日・明日の予定に追加
+  // 行事取込の校時表記（振替も含む）を見て判定し、
+  // 行事マスター由来の予定と同じ上書き/非表示の仕組み（overrides）をそのまま使う
+  try {
+    const todayRow = findEventRow_(ss, date);
+    const tomorrowRow = findEventRow_(ss, nextDate);
+    RECURRING_WEEKLY_MEETINGS.forEach(meeting => {
+      try {
+        const contexts = [
+          { row: todayRow, target: today, targetDate: date },
+          { row: tomorrowRow, target: tomorrow, targetDate: nextDate }
+        ];
+        contexts.forEach(ctx => {
+          if (!rowHasMeetingAtPeriod_(ctx.row, meeting.weekday, meeting.period)) return;
+
+          const name = meeting.name;
+          const keyDateStr = Utilities.formatDate(ctx.targetDate, 'JST', 'yyyy-MM-dd');
+          const newKey = keyDateStr + '||' + name;
+          const oldKubun = (ctx.target === today) ? 'today' : 'tomorrow';
+          const oldKey = keyDateStr + '|' + oldKubun + '|' + name;
+          const override = overrides[newKey] || overrides[oldKey];
+          if (override && override.hide) return;
+
+          ctx.target.push({
+            time: override ? (override.time || '') : '',
+            name: override ? override.name : name,
+            source: 'master',
+            origName: name,
+            isOverridden: !!override,
+            overrideId: override ? override.id : null,
+            overriddenBy: override ? (override.author || '') : '',
+            overriddenAt: override ? (override.at || '') : ''
+          });
+        });
+      } catch (e) {
+        console.log('定例会議「' + meeting.name + '」の処理でエラー: ' + (e.message || e));
+      }
+    });
+  } catch (e) {
+    console.log('定例会議の処理全体でエラー: ' + (e.message || e));
+  }
+
+  これに置き換える（会議名を実際の時限番号から組み立てるように変更。
+  ログ用のラベルは meeting.baseName を使う）:
+-->
+  // 曜日・時限固定の定例会議を本日・明日の予定に追加
+  // 行事取込の校時表記から「実際に開かれる時限」を探し、その番号で
+  // 会議名（○h）を組み立てる。行事マスター由来の予定と同じ
+  // 上書き/非表示の仕組み（overrides）をそのまま使う
+  try {
+    const todayRow = findEventRow_(ss, date);
+    const tomorrowRow = findEventRow_(ss, nextDate);
+    RECURRING_WEEKLY_MEETINGS.forEach(meeting => {
+      try {
+        const contexts = [
+          { row: todayRow, target: today, targetDate: date },
+          { row: tomorrowRow, target: tomorrow, targetDate: nextDate }
+        ];
+        contexts.forEach(ctx => {
+          const actualPeriod = findMeetingActualPeriod_(ctx.row, meeting.weekday, meeting.period);
+          if (!actualPeriod) return;
+
+          const name = meeting.baseName + actualPeriod + 'h';
+          const keyDateStr = Utilities.formatDate(ctx.targetDate, 'JST', 'yyyy-MM-dd');
+          const newKey = keyDateStr + '||' + name;
+          const oldKubun = (ctx.target === today) ? 'today' : 'tomorrow';
+          const oldKey = keyDateStr + '|' + oldKubun + '|' + name;
+          const override = overrides[newKey] || overrides[oldKey];
+          if (override && override.hide) return;
+
+          ctx.target.push({
+            time: override ? (override.time || '') : '',
+            name: override ? override.name : name,
+            source: 'master',
+            origName: name,
+            isOverridden: !!override,
+            overrideId: override ? override.id : null,
+            overriddenBy: override ? (override.author || '') : '',
+            overriddenAt: override ? (override.at || '') : ''
+          });
+        });
+      } catch (e) {
+        console.log('定例会議「' + meeting.baseName + '」の処理でエラー: ' + (e.message || e));
+      }
+    });
+  } catch (e) {
+    console.log('定例会議の処理全体でエラー: ' + (e.message || e));
+  }
+
+
+<!--
+  ==========================================================================
+  ④ 週報（buildWeeklyDay_関数）側のブロックも書き換える
+  ==========================================================================
+  週報に表示させていない場合はこの④はスキップして構いません。
+
+  探す（v2で追加した内容）:
+
+  let weeklyEventText = row ? String(row[EVENT_COL.EVENT - 1] || '').trim() : '';
+  const weeklyRecurringNames = RECURRING_WEEKLY_MEETINGS
+    .filter(m => rowHasMeetingAtPeriod_(row, m.weekday, m.period))
+    .map(m => m.name);
+  if (weeklyRecurringNames.length) {
+    weeklyEventText = weeklyEventText ? weeklyEventText + '・' + weeklyRecurringNames.join('・') : weeklyRecurringNames.join('・');
+  }
+
+  これに置き換える:
+-->
+  let weeklyEventText = row ? String(row[EVENT_COL.EVENT - 1] || '').trim() : '';
+  const weeklyRecurringNames = RECURRING_WEEKLY_MEETINGS
+    .map(m => {
+      const actualPeriod = findMeetingActualPeriod_(row, m.weekday, m.period);
+      return actualPeriod ? (m.baseName + actualPeriod + 'h') : null;
+    })
+    .filter(Boolean);
+  if (weeklyRecurringNames.length) {
+    weeklyEventText = weeklyEventText ? weeklyEventText + '・' + weeklyRecurringNames.join('・') : weeklyRecurringNames.join('・');
+  }
+
+<!--
+  そのあとの return { ... } 内の event: の行は、以前と同じく
+  event: weeklyEventText のままでOKです（変更不要）。
+-->
+
+<!--
+  ============================================================
+  補足（動作確認例）
+  ============================================================
+  ・通常の火曜日（振替なし）: 5限の欄に「A火5」→ findMeetingActualPeriod_は
+    5を返す → 表示名「研究部会5h」（従来通り）
+  ・月曜3限が振替で火5相当になっている日: 3限の欄に「B火5」など →
+    findMeetingActualPeriod_は3を返す → 表示名「研究部会3h」
+    （ご指摘の動きになります）
+  ============================================================
+-->
