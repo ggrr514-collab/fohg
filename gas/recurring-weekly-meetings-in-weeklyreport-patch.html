@@ -1,0 +1,82 @@
+<!--
+  ============================================================
+  週報の「行事予定等」欄にも、曜日固定の定例会議を表示する
+  ============================================================
+  ※ このパッチは gas/recurring-weekly-meetings-patch.html を
+    先に適用済みであることが前提です（RECURRING_WEEKLY_MEETINGS
+    定数と①の追加が必要です）。まだの場合は先にそちらを適用してください。
+
+  週報画面（📋週報ボタン）の「行事予定等」列は、行事取込の行事名を
+  そのまま表示しているだけで、曜日固定の定例会議（RECURRING_WEEKLY_
+  MEETINGS）は反映されません。buildWeeklyDay_関数を修正して、
+  その日の曜日に該当する定例会議名を「行事予定等」に追記します。
+
+  ⚠️ 重要: このファイルはCode.gs用のプレーンなApps Scriptです。
+  タグは付けていないので、コードの中身だけをそのままコピーして
+  ください。
+  ============================================================
+-->
+
+<!--
+  探す（buildWeeklyDay_関数の中）:
+
+  return {
+    date: Utilities.formatDate(date, 'JST', 'yyyy-MM-dd'),
+    dateDisplay: Utilities.formatDate(date, 'JST', 'M/d'),
+    weekday: getWeekdayJp_(date),
+    week: row ? String(row[EVENT_COL.WEEK - 1] || '').trim() : '',
+    nikka: headerOverrides.nikka ? headerOverrides.nikka.value : (row ? String(row[EVENT_COL.NIKKA - 1] || '').trim() : ''),
+    nicchoku: headerOverrides.nicchoku ? headerOverrides.nicchoku.value : (row ? String(row[EVENT_COL.NICCHOKU - 1] || '').trim() : ''),
+    seiso: headerOverrides.seiso ? headerOverrides.seiso.value : (row ? formatYesNo_(row[EVENT_COL.SEISO - 1]) : ''),
+    bukatsu: headerOverrides.bukatsu ? headerOverrides.bukatsu.value : (row ? formatYesNo_(row[EVENT_COL.BUKATSU - 1]) : ''),
+    lunch: lunchDisplay,
+    event: row ? String(row[EVENT_COL.EVENT - 1] || '').trim() : '',
+    grades: [
+      gradePeriods(EVENT_COL.G1_PERIODS),
+      gradePeriods(EVENT_COL.G2_PERIODS),
+      gradePeriods(EVENT_COL.G3_PERIODS)
+    ],
+    shucho: shucho
+  };
+
+  これに置き換える（event行の直前に3行追加し、event行だけ書き換える）:
+-->
+  let weeklyEventText = row ? String(row[EVENT_COL.EVENT - 1] || '').trim() : '';
+  const weeklyRecurringNames = RECURRING_WEEKLY_MEETINGS.filter(m => m.weekday === date.getDay()).map(m => m.name);
+  if (weeklyRecurringNames.length) {
+    weeklyEventText = weeklyEventText ? weeklyEventText + '・' + weeklyRecurringNames.join('・') : weeklyRecurringNames.join('・');
+  }
+
+  return {
+    date: Utilities.formatDate(date, 'JST', 'yyyy-MM-dd'),
+    dateDisplay: Utilities.formatDate(date, 'JST', 'M/d'),
+    weekday: getWeekdayJp_(date),
+    week: row ? String(row[EVENT_COL.WEEK - 1] || '').trim() : '',
+    nikka: headerOverrides.nikka ? headerOverrides.nikka.value : (row ? String(row[EVENT_COL.NIKKA - 1] || '').trim() : ''),
+    nicchoku: headerOverrides.nicchoku ? headerOverrides.nicchoku.value : (row ? String(row[EVENT_COL.NICCHOKU - 1] || '').trim() : ''),
+    seiso: headerOverrides.seiso ? headerOverrides.seiso.value : (row ? formatYesNo_(row[EVENT_COL.SEISO - 1]) : ''),
+    bukatsu: headerOverrides.bukatsu ? headerOverrides.bukatsu.value : (row ? formatYesNo_(row[EVENT_COL.BUKATSU - 1]) : ''),
+    lunch: lunchDisplay,
+    event: weeklyEventText,
+    grades: [
+      gradePeriods(EVENT_COL.G1_PERIODS),
+      gradePeriods(EVENT_COL.G2_PERIODS),
+      gradePeriods(EVENT_COL.G3_PERIODS)
+    ],
+    shucho: shucho
+  };
+
+<!--
+  ============================================================
+  補足
+  ============================================================
+  ・行事取込にその日の行事が無くても（row が null でも）、
+    weeklyEventText は '' から始まるので、定例会議名だけが
+    正しく表示されます。
+  ・ダッシュボード（日報）側で「✕非表示」にした定例会議があっても、
+    週報側の表示には影響しません（週報は行事マスターと同じ「その週の
+    予定一覧」という位置づけのため、個人のダッシュボード操作とは
+    独立させています）。もし週報側にも非表示を反映させたい場合は
+    別途対応が必要なので教えてください。
+  ============================================================
+-->
