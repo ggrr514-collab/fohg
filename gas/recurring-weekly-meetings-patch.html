@@ -1,0 +1,115 @@
+<!--
+  ============================================================
+  決まった曜日・時間にある会議を、本日・明日の予定に自動表示する
+  ============================================================
+  ご指定の会議:
+    月曜3限: 運営委員会3h
+    火曜5限: 研究部会5h
+    水曜3限: 教育相談部会3h
+    金曜3限: 生徒指導委員会3h
+
+  行事取込（行事マスター）には無い、曜日固定の定例会議なので、
+  Code.gs側に「曜日→会議名」の対応表を追加し、getSchedule_関数の中で
+  対象の曜日と一致したら本日・明日の予定に差し込みます。
+
+  ポイント: 行事マスター由来の予定と全く同じ仕組み（✏️編集・✕非表示・
+  ↺リセット）を使うので、index.html側の変更は一切不要です。
+  「非表示」にすればその日だけ消せますし、「編集」すれば内容を
+  その日だけ書き換えられます（行事マスター本体と同じ操作性）。
+
+  ⚠️ 重要: このファイルはCode.gs用のプレーンなApps Scriptです。
+  タグの類は付けていないので、コードの中身だけをそのままコピーして
+  ください。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① 新しい定数を追加する
+  ==========================================================================
+  Code.gs内、getSchedule_関数の少し手前（EVENT_COLの定義の下あたりでOK）に、
+  次の定数を追加する:
+
+  weekday: 0=日, 1=月, 2=火, 3=水, 4=木, 5=金, 6=土 （JavaScriptのgetDay()と同じ）
+-->
+// 曜日固定の定例会議（行事取込には無いもの）。本日・明日の予定に自動表示する。
+// 会議を追加・変更したい場合は、この配列を直接書き換えてください。
+const RECURRING_WEEKLY_MEETINGS = [
+  { weekday: 1, name: '運営委員会3h' },     // 月曜3限
+  { weekday: 2, name: '研究部会5h' },       // 火曜5限
+  { weekday: 3, name: '教育相談部会3h' },   // 水曜3限
+  { weekday: 5, name: '生徒指導委員会3h' }  // 金曜3限
+];
+
+
+<!--
+  ==========================================================================
+  ② getSchedule_関数の中に、定例会議を差し込む処理を追加する
+  ==========================================================================
+  探す（getSchedule_関数の中、次の2つのブロックの間）:
+
+  } catch (e) {
+    console.log('行事取込シート全体の読込でエラー: ' + (e.message || e));
+  }
+
+  // 手動追加分を反映（新方式：日付ベース）
+
+  この2つの間に、次のブロックをまるごと追加する:
+-->
+  // 曜日固定の定例会議を本日・明日の予定に追加
+  // 行事マスター由来の予定と同じ上書き/非表示の仕組み（overrides）をそのまま使う
+  try {
+    RECURRING_WEEKLY_MEETINGS.forEach(meeting => {
+      try {
+        let target = null;
+        let targetDate = null;
+        if (date.getDay() === meeting.weekday) { target = today; targetDate = date; }
+        else if (nextDate.getDay() === meeting.weekday) { target = tomorrow; targetDate = nextDate; }
+        if (!target) return;
+
+        const name = meeting.name;
+        const keyDateStr = Utilities.formatDate(targetDate, 'JST', 'yyyy-MM-dd');
+        const newKey = keyDateStr + '||' + name;
+        const oldKubun = (target === today) ? 'today' : 'tomorrow';
+        const oldKey = keyDateStr + '|' + oldKubun + '|' + name;
+        const override = overrides[newKey] || overrides[oldKey];
+        if (override && override.hide) return;
+
+        target.push({
+          time: override ? (override.time || '') : '',
+          name: override ? override.name : name,
+          source: 'master',
+          origName: name,
+          isOverridden: !!override,
+          overrideId: override ? override.id : null,
+          overriddenBy: override ? (override.author || '') : '',
+          overriddenAt: override ? (override.at || '') : ''
+        });
+      } catch (e) {
+        console.log('定例会議「' + meeting.name + '」の処理でエラー: ' + (e.message || e));
+      }
+    });
+  } catch (e) {
+    console.log('定例会議の処理全体でエラー: ' + (e.message || e));
+  }
+
+<!--
+  ============================================================
+  補足
+  ============================================================
+  ・上記のブロックは、必ず「行事取込シート全体の読込でエラー」の
+    catch}の直後、「手動追加分を反映」のコメントより前に入れてください
+    （today/tomorrow/overrides/date/nextDate変数がその時点で
+    定義済みである必要があるためです）。
+  ・表示された会議は行事マスター由来の予定と同じ見た目・操作になります。
+    ✏️で内容や時刻をその日だけ書き換えたり、✕でその日だけ非表示に
+    したりできます（行事マスター本体や、他の日のRECURRING_WEEKLY_MEETINGSの
+    定義には影響しません）。
+  ・会議を追加・変更・削除したくなったら、①で追加した
+    RECURRING_WEEKLY_MEETINGS配列を直接編集してください
+    （曜日番号: 0=日,1=月,2=火,3=水,4=木,5=金,6=土）。
+  ・週報（📋週報ボタンの画面）には、この定例会議は表示されません。
+    週報の「行事予定等」欄にも表示したい場合は教えてください
+    （buildWeeklyDay_関数への追加対応が必要です）。
+  ============================================================
+-->
