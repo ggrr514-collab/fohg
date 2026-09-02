@@ -23,6 +23,8 @@
     --duty-bg: #E8F3E4;
     --committee: #8656A6;
     --committee-bg: #F1E7F7;
+    --exec: #2E8C86;
+    --exec-bg: #E0F2F0;
     --homeroom: #C97A2E;
     --homeroom-bg: #FBEEDC;
     --warn: #C6912A;
@@ -206,6 +208,7 @@
   .chip.subject { color: var(--subject); background: var(--subject-bg); }
   .chip.duty { color: var(--duty); background: var(--duty-bg); }
   .chip.committee { color: var(--committee); background: var(--committee-bg); }
+  .chip.exec { color: var(--exec); background: var(--exec-bg); }
   .chip.homeroom { color: var(--homeroom); background: var(--homeroom-bg); }
 
   /* ---- task list ---- */
@@ -365,8 +368,17 @@
     subject: {chip:"subject", name:"教科", icon:"📘"},
     duty: {chip:"duty", name:"係", icon:"🧹"},
     committee: {chip:"committee", name:"委員会", icon:"🗳️"},
+    exec: {chip:"exec", name:"実行委員", icon:"🎌"},
     homeroom: {chip:"homeroom", name:"学級・担任", icon:"🏠"}
   };
+
+  // 委員会の選択肢（学校統一）。サーバー側の一覧が正で、こちらは接続前の予備
+  function committeeList(){
+    return (state.ctx && state.ctx.committees) || [
+      "学級委員会","体育委員会","給食委員会","保健委員会",
+      "環境委員会","図書委員会","放送委員会","選挙管理委員会"
+    ];
+  }
 
   var TASK_FILTERS = [
     {key:"soon", label:"締切が近い"},
@@ -776,7 +788,12 @@
       editableSubjects = set;
     }
     function canEditPeriod(subject){
-      return editableSubjects === "all" || !!(editableSubjects && editableSubjects[subject]);
+      if (editableSubjects === "all") return true;
+      if (!editableSubjects || !subject) return false;
+      // 「技術家庭」係のように複数教科をまとめた係名にも対応（係名に教科名が含まれればOK）
+      return Object.keys(editableSubjects).some(function(label){
+        return label === subject || label.indexOf(subject) >= 0;
+      });
     }
 
     var isTeacher = state.ctx.role === "teacher";
@@ -1403,7 +1420,7 @@
     if (state.announceFilter !== "all") list = list.filter(function(a){ return a.category === state.announceFilter; });
 
     var html = '<div class="filter-row">';
-    var filters = [["all","すべて"],["homeroom","学級・担任"],["subject","教科"],["duty","係"],["committee","委員会"]];
+    var filters = [["all","すべて"],["homeroom","学級・担任"],["subject","教科"],["duty","係"],["committee","委員会"],["exec","実行委員"]];
     filters.forEach(function(f){
       html += '<button class="filter-btn '+(state.announceFilter===f[0]?"active":"")+'" data-filter="'+f[0]+'">'+f[1]+'</button>';
     });
@@ -1428,7 +1445,8 @@
   var ROLE_GROUPS = [
     ["subject", "📘 教科係"],
     ["duty", "🧹 係"],
-    ["committee", "🗳️ 委員会"]
+    ["committee", "🗳️ 委員会"],
+    ["exec", "🎌 実行委員"]
   ];
 
   async function renderRoles(seq){
@@ -1454,10 +1472,12 @@
         html += '<div class="empty">まだ登録されていません。</div>';
       }
       items.forEach(function(a, idx){
+        // 教員は全員分、生徒は自分の係・委員会・実行委員だけ削除できる
+        var canDel = isTeacher || (a.email === state.ctx.email && a.category !== "subject");
         html += '<div class="role-row">' +
           chipHtml(a.category, a.label) +
           '<span class="role-name">'+escapeHtml(a.name || a.email)+'</span>' +
-          (isTeacher ? '<button class="role-del" data-del-cat="'+escapeHtml(a.category)+'" data-del-label="'+escapeHtml(a.label)+'" data-del-email="'+escapeHtml(a.email)+'" title="この担当を削除">✕</button>' : '') +
+          (canDel ? '<button class="role-del" data-del-cat="'+escapeHtml(a.category)+'" data-del-label="'+escapeHtml(a.label)+'" data-del-email="'+escapeHtml(a.email)+'" title="この担当を削除">✕</button>' : '') +
           '</div>';
       });
       html += '</div>';
@@ -1465,98 +1485,123 @@
 
     if (isTeacher) {
       html += '<div style="font-size:12.5px;color:var(--ink-faint);margin-top:10px">' +
-        '※担当にできるのは、このクラスで初回登録を済ませた生徒です。担当を変更すると、その生徒が投稿・入力できる範囲もすぐに変わります。</div>';
+        '※担当にできるのは、このクラスで初回登録を済ませた生徒です。担当を変更すると、その生徒が投稿・入力できる範囲もすぐに変わります。<br>' +
+        '※係・委員会・実行委員は、生徒が自分で登録・削除することもできます（教科係は先生のみ）。</div>';
+    } else {
+      html += '<div style="font-size:12.5px;color:var(--ink-faint);margin-top:10px">' +
+        '※自分の係・委員会・実行委員は、下のボタンから自分で登録できます。複数担当する場合は1つずつ追加してください。<br>' +
+        '※教科係は先生が設定します。</div>';
     }
 
     document.getElementById("mainContent").innerHTML = html;
 
-    if (isTeacher) {
-      Array.prototype.forEach.call(document.querySelectorAll("[data-del-email]"), function(btn){
-        btn.onclick = async function(){
-          if (btn.getAttribute("data-armed") !== "1") {
-            btn.setAttribute("data-armed", "1");
-            btn.textContent = "削除する？";
-            setTimeout(function(){ btn.setAttribute("data-armed",""); btn.textContent = "✕"; }, 3000);
-            return;
-          }
-          btn.disabled = true;
-          try {
-            await gsRun("api_deleteAssignment", {
-              cls: cls, category: btn.getAttribute("data-del-cat"),
-              label: btn.getAttribute("data-del-label"), email: btn.getAttribute("data-del-email")
-            });
-            state.permsCache = {};
-            showToast("削除しました");
-            renderTab();
-          } catch (err) {
-            btn.disabled = false;
-            showToast(errorMessage(err));
-          }
-        };
-      });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-del-email]"), function(btn){
+      btn.onclick = async function(){
+        if (btn.getAttribute("data-armed") !== "1") {
+          btn.setAttribute("data-armed", "1");
+          btn.textContent = "削除する？";
+          setTimeout(function(){ btn.setAttribute("data-armed",""); btn.textContent = "✕"; }, 3000);
+          return;
+        }
+        btn.disabled = true;
+        try {
+          await gsRun("api_deleteAssignment", {
+            cls: cls, category: btn.getAttribute("data-del-cat"),
+            label: btn.getAttribute("data-del-label"), email: btn.getAttribute("data-del-email")
+          });
+          state.permsCache = {};
+          showToast("削除しました");
+          renderTab();
+        } catch (err) {
+          btn.disabled = false;
+          showToast(errorMessage(err));
+        }
+      };
+    });
 
-      var wrap = document.getElementById("mainContent");
-      var fabWrap = document.createElement("div");
-      fabWrap.className = "fab-wrap";
-      fabWrap.innerHTML = '<button class="fab" id="openRoleAdd">＋ 担当を追加</button>';
-      wrap.appendChild(fabWrap);
-      document.getElementById("openRoleAdd").onclick = function(){ openAssignmentModal(); };
-    }
+    var wrap = document.getElementById("mainContent");
+    var fabWrap = document.createElement("div");
+    fabWrap.className = "fab-wrap";
+    fabWrap.innerHTML = '<button class="fab" id="openRoleAdd">'
+      + (isTeacher ? '＋ 担当を追加' : '＋ 自分の係・委員会を登録') + '</button>';
+    wrap.appendChild(fabWrap);
+    document.getElementById("openRoleAdd").onclick = function(){ openAssignmentModal(); };
   }
 
   async function openAssignmentModal(){
     var cls = state.viewClass;
+    var isTeacher = state.ctx.role === "teacher";
     var root = document.getElementById("modalRoot");
-    root.innerHTML = '<div class="modal-backdrop"><div class="modal"><div class="skeleton">生徒一覧を読み込み中…</div></div></div>';
 
-    var students;
-    try {
-      students = await gsRun("api_getClassStudents", cls);
-    } catch (err) {
-      root.innerHTML = "";
-      showToast(errorMessage(err));
-      return;
+    // 教員は担当する生徒を選ぶ（生徒は常に自分なので一覧は不要）
+    var students = [];
+    if (isTeacher) {
+      root.innerHTML = '<div class="modal-backdrop"><div class="modal"><div class="skeleton">生徒一覧を読み込み中…</div></div></div>';
+      try {
+        students = await gsRun("api_getClassStudents", cls);
+      } catch (err) {
+        root.innerHTML = "";
+        showToast(errorMessage(err));
+        return;
+      }
     }
 
     var studentOptions = students.map(function(s){
       return '<option value="'+escapeHtml(s.email)+'">'+escapeHtml(s.name)+'</option>';
     }).join("");
-
-    var subjectOptions = SUBJECTS.map(function(s){
-      return '<option value="'+s+'">'+s+'</option>';
+    var subjectDatalist = '<datalist id="roleSubjectList">'+SUBJECTS.map(function(s){
+      return '<option value="'+s+'">';
+    }).join("")+'</datalist>';
+    var committeeOptions = committeeList().map(function(c){
+      return '<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+'</option>';
     }).join("");
 
+    // 種類ごとの入力欄：教科係=自由入力＋候補（技術家庭のようなまとめ係も可）、
+    // 係・実行委員=自由入力、委員会=学校統一の一覧から選択
+    function labelFieldHtml(cat){
+      if (cat === "subject") {
+        return '<label>教科係の名前</label><input type="text" id="fRoleLabel" list="roleSubjectList" placeholder="例：国語／技術家庭">'+subjectDatalist
+          + '<div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px">「技術家庭」のように複数教科をまとめた係名でも、該当教科の連絡を入力できます。</div>';
+      }
+      if (cat === "committee") {
+        return '<label>委員会</label><select id="fRoleLabel">'+committeeOptions+'</select>';
+      }
+      if (cat === "exec") {
+        return '<label>実行委員の名前</label><input type="text" id="fRoleLabel" placeholder="例：合唱祭実行委員">';
+      }
+      return '<label>係の名前</label><input type="text" id="fRoleLabel" placeholder="例：図書係・庶務係">';
+    }
+
+    var catOptions = (isTeacher ? [["subject","教科係"]] : []).concat([
+      ["duty","係"], ["committee","委員会"], ["exec","実行委員"]
+    ]).map(function(c){ return '<option value="'+c[0]+'">'+c[1]+'</option>'; }).join("");
+    var firstCat = isTeacher ? "subject" : "duty";
+
+    var canSubmit = !isTeacher || students.length > 0;
+
     var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
-    html += '<h3>担当を追加</h3>';
-    html += '<div class="modal-sub">対象クラス：'+escapeHtml(cls)+'</div>';
-    html += '<div class="field"><label>種類</label><select id="fRoleCat">'
-      + '<option value="subject">教科係</option>'
-      + '<option value="duty">係</option>'
-      + '<option value="committee">委員会</option>'
-      + '</select></div>';
-    html += '<div class="field" id="roleLabelField"><label>教科</label><select id="fRoleLabel">'+subjectOptions+'</select></div>';
-    if (students.length > 0) {
-      html += '<div class="field"><label>担当する生徒</label><select id="fRoleStudent">'+studentOptions+'</select></div>';
+    html += '<h3>'+(isTeacher ? '担当を追加' : '自分の係・委員会を登録')+'</h3>';
+    html += '<div class="modal-sub">'+(isTeacher ? '対象クラス：'+escapeHtml(cls) : escapeHtml(cls)+' ・ '+escapeHtml(state.ctx.name))+'</div>';
+    html += '<div class="field"><label>種類</label><select id="fRoleCat">'+catOptions+'</select></div>';
+    html += '<div class="field" id="roleLabelField">'+labelFieldHtml(firstCat)+'</div>';
+    if (isTeacher) {
+      if (students.length > 0) {
+        html += '<div class="field"><label>担当する生徒</label><select id="fRoleStudent">'+studentOptions+'</select></div>';
+      } else {
+        html += '<div class="empty">このクラスで初回登録を済ませた生徒がまだいません。<br>生徒が一度「クラスまど」を開いて登録すると選べるようになります。</div>';
+      }
     } else {
-      html += '<div class="empty">このクラスで初回登録を済ませた生徒がまだいません。<br>生徒が一度「クラスまど」を開いて登録すると選べるようになります。</div>';
+      html += '<div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:12px">複数の係・委員会を担当する場合は、1つずつ追加してください。</div>';
     }
     html += '<div class="field-error" id="fRoleError" style="display:none"></div>';
     html += '<div class="modal-actions"><button class="btn-secondary" id="cancelBtn">キャンセル</button>'
-      + (students.length > 0 ? '<button class="btn-primary" id="submitBtn">追加する</button>' : '')
+      + (canSubmit ? '<button class="btn-primary" id="submitBtn">追加する</button>' : '')
       + '</div>';
     html += '</div></div>';
     root.innerHTML = html;
 
-    // 種類に応じて「教科プルダウン」か「名前の自由入力」を切り替える
     document.getElementById("fRoleCat").onchange = function(){
-      var cat = this.value;
-      var field = document.getElementById("roleLabelField");
-      if (cat === "subject") {
-        field.innerHTML = '<label>教科</label><select id="fRoleLabel">'+subjectOptions+'</select>';
-      } else {
-        var ph = cat === "duty" ? "例：図書係" : "例：保健委員会";
-        field.innerHTML = '<label>'+(cat === "duty" ? "係の名前" : "委員会の名前")+'</label><input type="text" id="fRoleLabel" placeholder="'+ph+'">';
-      }
+      document.getElementById("roleLabelField").innerHTML = labelFieldHtml(this.value);
     };
 
     document.getElementById("cancelBtn").onclick = function(){ root.innerHTML = ""; };
@@ -1570,15 +1615,17 @@
         var label = document.getElementById("fRoleLabel").value.trim();
         if (!label) { errBox.textContent = "名前を入力してください"; errBox.style.display = "block"; return; }
 
+        var payload = {
+          cls: cls,
+          category: document.getElementById("fRoleCat").value,
+          label: label
+        };
+        if (isTeacher) payload.email = document.getElementById("fRoleStudent").value;
+
         submitBtn.disabled = true;
         submitBtn.textContent = "追加中…";
         try {
-          await gsRun("api_addAssignment", {
-            cls: cls,
-            category: document.getElementById("fRoleCat").value,
-            label: label,
-            email: document.getElementById("fRoleStudent").value
-          });
+          await gsRun("api_addAssignment", payload);
           root.innerHTML = "";
           state.permsCache = {};
           showToast("追加しました");

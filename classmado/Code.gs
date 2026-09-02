@@ -38,10 +38,17 @@ var SHEET = {
 
 var SUBJECTS = ["国語", "数学", "英語", "理科", "社会", "音楽", "美術", "保健", "技術", "家庭"];
 
+// 委員会は学校で統一（この一覧から選択する）
+var COMMITTEES = [
+  '学級委員会', '体育委員会', '給食委員会', '保健委員会',
+  '環境委員会', '図書委員会', '放送委員会', '選挙管理委員会'
+];
+
 var CATEGORY_NAME = {
   subject: '教科',
   duty: '係',
   committee: '委員会',
+  exec: '実行委員',
   homeroom: '学級・担任'
 };
 
@@ -235,7 +242,7 @@ function getPostPermissions_(ctx, cls, kind) {
     perms.push({ category: 'homeroom', label: '学級・担任' });
     SUBJECTS.forEach(function (s) { perms.push({ category: 'subject', label: s }); });
     assignments
-      .filter(function (a) { return a['カテゴリ'] === 'duty' || a['カテゴリ'] === 'committee'; })
+      .filter(function (a) { return ['duty', 'committee', 'exec'].indexOf(a['カテゴリ']) >= 0; })
       .forEach(function (a) { perms.push({ category: a['カテゴリ'], label: a['表示名'] }); });
   } else {
     assignments
@@ -283,7 +290,8 @@ function api_getContext() {
     currentWeek: autoWeek || getSetting_('今週の週区分', 'A'),
     currentWeekAuto: !!autoWeek,
     eventSyncTime: getSetting_('行事取込日時', ''),
-    secondTermStart: getSecondTermStart_()
+    secondTermStart: getSecondTermStart_(),
+    committees: COMMITTEES
   };
 }
 
@@ -765,10 +773,12 @@ function api_getClassStudents(cls) {
     .map(function (u) { return { email: u['メールアドレス'], name: u['氏名'] || u['メールアドレス'] }; });
 }
 
-// 担当を追加する（教員のみ）。「担当割当」シートに1行追加される。
+// 担当を追加する。「担当割当」シートに1行追加される。
+// 教員は全カテゴリ・全生徒を設定できる。
+// 生徒は自分の 係（自由入力）・委員会（学校統一の一覧から選択）・実行委員（自由入力）を
+// 自分で登録できる（1人で複数の係を担当する場合は1つずつ追加する）。教科係は教員のみ。
 function api_addAssignment(payload) {
   var ctx = getContext_();
-  if (ctx.role !== 'teacher') throw new Error('担当の設定は教員のみ行えます。');
 
   var cls = payload && payload.cls;
   var category = payload && payload.category;
@@ -776,10 +786,16 @@ function api_addAssignment(payload) {
   var email = payload && payload.email ? String(payload.email).trim() : '';
 
   if (!cls) throw new Error('クラスが指定されていません。');
-  if (['subject', 'duty', 'committee'].indexOf(category) < 0) throw new Error('カテゴリの指定が正しくありません。');
-  if (!label) throw new Error('係・委員会の名前を入力してください。');
-  if (category === 'subject' && SUBJECTS.indexOf(label) < 0) {
-    throw new Error('教科係の教科名は ' + SUBJECTS.join('・') + ' のいずれかにしてください。');
+  if (['subject', 'duty', 'committee', 'exec'].indexOf(category) < 0) throw new Error('カテゴリの指定が正しくありません。');
+  if (!label) throw new Error('係・委員会などの名前を入力してください。');
+
+  if (ctx.role !== 'teacher') {
+    if (ctx.myClass !== cls) throw new Error('自分のクラスにのみ登録できます。');
+    if (['duty', 'committee', 'exec'].indexOf(category) < 0) throw new Error('教科係は先生が設定します。');
+    email = ctx.email;  // 生徒は自分の分のみ
+  }
+  if (category === 'committee' && COMMITTEES.indexOf(label) < 0) {
+    throw new Error('委員会は ' + COMMITTEES.join('・') + ' から選んでください。');
   }
   if (!email) throw new Error('担当する生徒を選択してください。');
 
@@ -799,16 +815,21 @@ function api_addAssignment(payload) {
   return { ok: true };
 }
 
-// 担当を削除する（教員のみ）。「担当割当」シートから該当行を削除する。
+// 担当を削除する。「担当割当」シートから該当行を削除する。
+// 教員は全員分、生徒は自分の係・委員会・実行委員のみ削除できる。
 function api_deleteAssignment(payload) {
   var ctx = getContext_();
-  if (ctx.role !== 'teacher') throw new Error('担当の設定は教員のみ行えます。');
 
   var cls = payload && payload.cls;
   var category = payload && payload.category;
   var label = payload && payload.label;
   var email = payload && payload.email;
   if (!cls || !category || !label || !email) throw new Error('削除する担当が指定されていません。');
+
+  if (ctx.role !== 'teacher') {
+    if (ctx.myClass !== cls || email !== ctx.email) throw new Error('自分の担当のみ削除できます。');
+    if (['duty', 'committee', 'exec'].indexOf(category) < 0) throw new Error('教科係は先生が設定します。');
+  }
 
   var sheet = getSheet_(SHEET.ASSIGNMENTS);
   var headerRow = findHeaderRow_(sheet);
@@ -1120,9 +1141,12 @@ function api_setDailyNote(payload) {
 
   if (ctx.role !== 'teacher') {
     if (ctx.myClass !== cls) throw new Error('このクラスの連絡は入力できません。');
+    // 教科係の名前は「技術家庭」のように複数教科をまとめている場合があるため、
+    // 完全一致だけでなく「係の名前に教科名が含まれるか」でも判定する
     var isRep = readSheet_(SHEET.ASSIGNMENTS).some(function (a) {
-      return a['クラス'] === cls && a['カテゴリ'] === 'subject'
-        && a['表示名'] === subject && a['担当者メール'] === ctx.email;
+      if (a['クラス'] !== cls || a['カテゴリ'] !== 'subject' || a['担当者メール'] !== ctx.email) return false;
+      var repLabel = String(a['表示名'] || '');
+      return repLabel === subject || (subject && repLabel.indexOf(subject) >= 0);
     });
     if (!isRep) throw new Error('「' + subject + '」の教科係に登録されている生徒のみ入力できます。');
   }
