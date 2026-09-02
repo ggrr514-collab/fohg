@@ -502,7 +502,7 @@
     var today = new Date(); today.setHours(0,0,0,0);
     var d = parseDateLocal_(due); d.setHours(0,0,0,0);
     var diffDays = Math.round((d - today) / 86400000);
-    var label = (d.getMonth()+1) + "/" + d.getDate() + "締切";
+    var label = (d.getMonth()+1) + "/" + d.getDate() + "（" + DAY_KEYS_BY_JSDAY[d.getDay()] + "）締切";
     if (diffDays < 0) return {cls:"overdue", text:"期限切れ"};
     if (diffDays <= 2) return {cls:"soon", text:label};
     return {cls:"normal", text:label};
@@ -662,8 +662,7 @@
       switchWrap.style.display = "none";
     }
 
-    document.getElementById("greeting").textContent =
-      "自分のペースで大丈夫。今日の時間割・提出物・連絡をここでまとめてチェックできます。";
+    document.getElementById("greeting").textContent = "";
   }
 
   /* ============== データ読み込み ============== */
@@ -1164,8 +1163,7 @@
         if (per) {
           var cellSubj = secondTermNow ? subjectForDate(per, localDateStr(new Date())) : per.subject;
           var icon = SUBJECT_ICON[cellSubj] || "📘";
-          html += '<div style="font-size:13px;font-weight:600">'+icon+' '+escapeHtml(cellSubj)+
-            (usesWeeks && per.week ? ' <span style="font-size:10px;color:var(--ink-faint)">'+per.week+'</span>' : '')+'</div>';
+          html += '<div style="font-size:13px;font-weight:600">'+icon+' '+escapeHtml(cellSubj)+'</div>';
           if (per.belongings) {
             html += '<div style="font-size:10.5px;color:var(--ink-faint)">🎒 '+escapeHtml(per.belongings)+'</div>';
           }
@@ -1401,7 +1399,7 @@
 
     html += '<div class="grid-2">';
     html += renderTaskSection("教科の提出物", "📘", "subject", state.taskFilter);
-    html += renderTaskSection("担任に出す提出物", "🏠", "homeroom", state.taskFilter);
+    html += renderTaskSection("クラスの提出物", "🏠", "homeroom", state.taskFilter);
     html += '</div>';
 
     document.getElementById("mainContent").innerHTML = html;
