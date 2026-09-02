@@ -706,34 +706,39 @@
     });
   }
 
-  // 学校全体のその日の予定を上書きするモーダル（教員のみ・急な予定変更用）
+  // 学校全体のその日の予定・日課を上書きするモーダル（教員のみ・急な予定変更用）
   function openSchoolEventModal(sd){
     var root = document.getElementById("modalRoot");
     var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
     html += '<h3>学校予定の編集</h3>';
     html += '<div class="modal-sub">' + escapeHtml(sd.label) + ' ' + escapeHtml(sd.md) + '（' + escapeHtml(sd.you) + '曜）・全クラスに表示されます</div>';
     html += '<div class="field"><label>この日の学校予定</label>'
-      + '<textarea id="fSchoolEvent">' + escapeHtml(sd.text || "") + '</textarea>'
-      + '<div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px">急な予定変更のときに書き換えてください。空欄で保存すると、行事予定ファイルの取込内容の表示に戻ります。</div></div>';
+      + '<textarea id="fSchoolEvent">' + escapeHtml(sd.text || "") + '</textarea></div>';
+    html += '<div class="field"><label>日課</label>'
+      + '<input type="text" id="fSchoolNikka" value="' + escapeHtml(sd.nikka || "") + '" placeholder="例：通・短・特短・行・試" style="max-width:12em">'
+      + '<div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px">急な予定変更のときに書き換えてください。取込時の内容（'
+      + (sd.baseText ? escapeHtml(sd.baseText) : '予定なし') + (sd.baseNikka ? '／日課：' + escapeHtml(sd.baseNikka) : '')
+      + '）と同じにすると、変更が取り消されます。</div></div>';
     html += '<div class="field-error" id="fError" style="display:none"></div>';
-    html += '<div class="modal-actions"><button class="btn-secondary" id="cancelBtn">キャンセル</button><button class="btn-primary" id="submitBtn">保存する</button></div>';
+    html += '<div class="modal-actions">'
+      + (sd.edited ? '<button class="btn-secondary" id="schoolResetBtn" style="margin-right:auto;color:var(--overdue);border-color:var(--overdue)">取込内容に戻す</button>' : '')
+      + '<button class="btn-secondary" id="cancelBtn">キャンセル</button><button class="btn-primary" id="submitBtn">保存する</button></div>';
     html += '</div></div>';
     root.innerHTML = html;
 
     document.getElementById("cancelBtn").onclick = function(){ root.innerHTML = ""; };
     document.getElementById("backdrop").onclick = function(e){ if (e.target.id === "backdrop") root.innerHTML = ""; };
 
-    document.getElementById("submitBtn").onclick = async function(){
+    async function saveSchool(text, nikka){
       var errBox = document.getElementById("fError");
       errBox.style.display = "none";
-      var text = document.getElementById("fSchoolEvent").value.trim();
-      var btn = document.getElementById("submitBtn");
-      btn.disabled = true;
-      btn.textContent = "保存中…";
+      // 取込時の内容と同じなら、上書きの取り消しとして扱う
+      if (text === (sd.baseText || "")) text = "";
+      if (nikka === (sd.baseNikka || "")) nikka = "";
       try {
-        await gsRun("api_setSchoolEvent", { date: sd.date, text: text });
+        await gsRun("api_setSchoolEvent", { date: sd.date, text: text, nikka: nikka });
         root.innerHTML = "";
-        showToast(text === "" ? "取込内容の表示に戻しました" : "学校予定を更新しました");
+        showToast(text === "" && nikka === "" ? "取込内容の表示に戻しました" : "学校予定を更新しました");
         // ヘッダー・パネル・カレンダーに反映するため取り直す
         state.calCache = {};
         try {
@@ -745,10 +750,30 @@
       } catch (err) {
         errBox.textContent = errorMessage(err);
         errBox.style.display = "block";
-        btn.disabled = false;
-        btn.textContent = "保存する";
+        var sbtn = document.getElementById("submitBtn");
+        if (sbtn) { sbtn.disabled = false; sbtn.textContent = "保存する"; }
+        var rbtn = document.getElementById("schoolResetBtn");
+        if (rbtn) { rbtn.disabled = false; rbtn.textContent = "取込内容に戻す"; }
       }
+    }
+
+    document.getElementById("submitBtn").onclick = function(){
+      this.disabled = true;
+      this.textContent = "保存中…";
+      saveSchool(
+        document.getElementById("fSchoolEvent").value.trim(),
+        document.getElementById("fSchoolNikka").value.trim()
+      );
     };
+
+    var schoolResetBtn = document.getElementById("schoolResetBtn");
+    if (schoolResetBtn) {
+      schoolResetBtn.onclick = function(){
+        this.disabled = true;
+        this.textContent = "戻しています…";
+        saveSchool("", "");
+      };
+    }
   }
 
   function renderChrome(){
@@ -1073,18 +1098,18 @@
     html += '</div>';
 
     html += '<div>';
+    html += '<div class="panel"><div class="panel-head"><div class="panel-title">新着連絡</div></div>';
+    var recent = state.data.posts.slice(0,3);
+    if (recent.length === 0) { html += '<div class="empty">連絡はありません。</div>'; }
+    recent.forEach(function(a){ html += renderPost(a, false); });  // 本文も表示する
+    html += '</div>';
+
     html += '<div class="panel"><div class="panel-head"><div class="panel-title">締切が近い課題</div><div class="panel-meta">2日以内 or 期限切れ</div></div>';
     if (todaysTasks.length === 0) {
       html += '<div class="empty">今のところ、締切が近い課題はありません。</div>';
     } else {
       todaysTasks.forEach(function(t){ html += renderTaskItem(t); });
     }
-    html += '</div>';
-
-    html += '<div class="panel"><div class="panel-head"><div class="panel-title">新着連絡</div></div>';
-    var recent = state.data.posts.slice(0,3);
-    if (recent.length === 0) { html += '<div class="empty">連絡はありません。</div>'; }
-    recent.forEach(function(a){ html += renderPost(a, false); });  // 本文も表示する
     html += '</div>';
     html += '</div>';
 

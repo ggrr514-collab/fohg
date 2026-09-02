@@ -54,6 +54,31 @@ var COMMITTEES = [
   '環境委員会', '図書委員会', '放送委員会', '選挙管理委員会'
 ];
 
+// 生徒に表示しない行事のキーワード（既定値）。行事のうち、これらの語を含む項目は
+// 生徒の画面から取り除かれる（教員には全て表示される。取込データ自体は変更しない）。
+// 「設定」シートに キー「非表示ワード」・値「素点交換、成績交換、…」の行を作れば変更できる。
+var HIDDEN_EVENT_WORDS_DEFAULT = ['素点交換', '成績交換', '学校評価', '通知表', '分掌会'];
+
+function getHiddenEventWords_() {
+  var raw = getSetting_('非表示ワード', '');
+  if (!raw) return HIDDEN_EVENT_WORDS_DEFAULT;
+  var list = String(raw).split(/[、,・]+/)
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s; });
+  return list.length > 0 ? list : HIDDEN_EVENT_WORDS_DEFAULT;
+}
+
+// 行事テキストから、生徒に見せない項目を取り除く。
+// 行事は「素点交換　職員会議　尿検査」のように空白区切りの項目連結なので、
+// 非表示ワードを含む項目だけを除いて残りをつなぎ直す。
+function filterEventTextForStudents_(text, words) {
+  if (!text) return text;
+  var kept = String(text).split(/[\s　]+/).filter(function (part) {
+    return part !== '' && !words.some(function (w) { return part.indexOf(w) >= 0; });
+  });
+  return kept.join('　');
+}
+
 var CATEGORY_NAME = {
   subject: '教科',
   duty: '係',
@@ -324,13 +349,17 @@ function api_getContext() {
   function schoolDayEntry(d, label) {
     var s = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
     var row = rowByDate[s];
+    var ov = evOverrides[s];
     return {
       date: s, label: label,
       md: (d.getMonth() + 1) + '/' + d.getDate(),
       you: YOUBI_CHARS_[d.getDay()],
-      text: evOverrides[s] || (row ? row.title : ''),
-      edited: !!evOverrides[s],
-      nikka: row ? row.nikka : ''
+      text: (ov && ov.text) || (row ? row.title : ''),
+      // 取込時点の元の内容（クライアントが「元に戻したか」を判定するのに使う）
+      baseText: row ? row.title : '',
+      baseNikka: row ? row.nikka : '',
+      edited: !!ov,
+      nikka: (ov && ov.nikka) || (row ? row.nikka : '')
     };
   }
   var todayD = new Date();
@@ -345,6 +374,14 @@ function api_getContext() {
     schoolDayEntry(todayD, '今日'),
     schoolDayEntry(nextD, literallyTomorrow ? '明日' : '次の登校日')
   ];
+  // 生徒には、素点交換など非表示ワードを含む項目を見せない
+  if (ctx.role === 'student') {
+    var hiddenWords = getHiddenEventWords_();
+    schoolDays.forEach(function (sd) {
+      sd.text = filterEventTextForStudents_(sd.text, hiddenWords);
+      sd.baseText = filterEventTextForStudents_(sd.baseText, hiddenWords);
+    });
+  }
 
   return {
     schoolDays: schoolDays,
@@ -555,9 +592,18 @@ function api_getEvents(cls) {
   assertCanView_(ctx, cls);
   // 年間分を取り込むと過去の行事も大量に含まれるため、今日以降だけ返す
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  return readEvents_()
+  var events = readEvents_()
     .filter(function (r) { return (r.cls === cls || r.cls === '全校') && r.date >= today; })
     .sort(function (a, b) { return a.date.localeCompare(b.date); });
+  // 生徒には、素点交換など非表示ワードを含む項目を見せない
+  if (ctx.role === 'student') {
+    var words = getHiddenEventWords_();
+    events = events.map(function (e) {
+      e.title = filterEventTextForStudents_(e.title, words);
+      return e;
+    }).filter(function (e) { return e.title; });
+  }
+  return events;
 }
 
 // カレンダー表示用に、指定月（yyyy-MM）の行事を日付ごとにまとめて返す（過去の日も含む）。
@@ -581,7 +627,7 @@ function api_getCalendar(cls, ym) {
     var isImported = e.you !== undefined;  // 行事取込由来の行かどうか
     var en = entry(e.date);
     if (e.week) en.week = e.week;
-    if (isImported && overrides[e.date]) return;  // 上書きされた日は取込の行事を出さない
+    if (isImported && overrides[e.date] && overrides[e.date].text) return;  // 上書きされた日は取込の行事を出さない
     if (e.title) en.titles.push(e.title);
   });
   // 行事がない日にもA/B週の表示が出るよう、取込データの週を補完する
@@ -592,9 +638,20 @@ function api_getCalendar(cls, ym) {
     });
   } catch (e) {}
   Object.keys(overrides).forEach(function (d) {
-    if (d.indexOf(ym) !== 0) return;
-    entry(d).titles.unshift(overrides[d]);
+    if (d.indexOf(ym) !== 0 || !overrides[d].text) return;
+    entry(d).titles.unshift(overrides[d].text);
   });
+
+  // 生徒には、素点交換など非表示ワードを含む項目を見せない
+  if (ctx.role === 'student') {
+    var words = getHiddenEventWords_();
+    Object.keys(byDate).forEach(function (d) {
+      byDate[d].titles = byDate[d].titles
+        .map(function (t) { return filterEventTextForStudents_(t, words); })
+        .filter(function (t) { return t; });
+    });
+  }
+
   return Object.keys(byDate).map(function (d) { return byDate[d]; });
 }
 
@@ -837,7 +894,7 @@ function getWeekFromImport_() {
 
 /* ---------- 学校予定の手動上書き（急な予定変更用） ---------- */
 
-// 「行事変更」シートを読み、日付→上書き内容 の表を返す（シートがなければ空）
+// 「行事変更」シートを読み、日付→{text:上書き内容, nikka:上書き日課} の表を返す
 function readSchoolEventOverrides_() {
   var ss = getSS_();
   if (!ss.getSheetByName(SHEET.SCHOOL_EVENT_CHANGES)) return {};
@@ -845,7 +902,8 @@ function readSchoolEventOverrides_() {
   readSheet_(SHEET.SCHOOL_EVENT_CHANGES).forEach(function (r) {
     var date = toDateStr_(r['日付']);
     var text = String(r['内容'] == null ? '' : r['内容']).trim();
-    if (date && text) map[date] = text;
+    var nikka = String(r['日課'] == null ? '' : r['日課']).trim();
+    if (date && (text || nikka)) map[date] = { text: text, nikka: nikka };
   });
   return map;
 }
@@ -855,21 +913,31 @@ function getOrCreateSchoolEventSheet_() {
   var sheet = ss.getSheetByName(SHEET.SCHOOL_EVENT_CHANGES);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET.SCHOOL_EVENT_CHANGES);
-    sheet.getRange(1, 1, 2, 4).setValues([
-      ['※ 急な予定変更などで、その日の学校予定（行事）の表示を上書きしたいときに使います（教員が画面から入力します）。行を消すと取込内容の表示に戻ります。', '', '', ''],
-      ['日付', '内容', '入力者メール', '更新日時']
+    sheet.getRange(1, 1, 2, 5).setValues([
+      ['※ 急な予定変更などで、その日の学校予定（行事・日課）の表示を上書きしたいときに使います（教員が画面から入力します）。行を消すと取込内容の表示に戻ります。', '', '', '', ''],
+      ['日付', '内容', '日課', '入力者メール', '更新日時']
     ]);
+    return sheet;
+  }
+  // 旧バージョンで作られたシートに「日課」列がなければ末尾に追加する
+  var headerRow = findHeaderRow_(sheet);
+  if (headerRow) {
+    var headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (headers.indexOf('日課') < 0) {
+      sheet.getRange(headerRow, sheet.getLastColumn() + 1).setValue('日課');
+    }
   }
   return sheet;
 }
 
-// その日の学校予定（行事の表示）を上書きする（教員のみ・空欄で取込内容に戻す）
+// その日の学校予定（行事・日課の表示）を上書きする（教員のみ・両方空欄で取込内容に戻す）
 function api_setSchoolEvent(payload) {
   var ctx = getContext_();
   if (ctx.role !== 'teacher') throw new Error('学校予定の編集は教員のみ行えます。');
 
   var date = payload && payload.date ? String(payload.date).trim() : '';
   var text = payload && payload.text != null ? String(payload.text).trim() : '';
+  var nikka = payload && payload.nikka != null ? String(payload.nikka).trim() : '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('日付の形式が正しくありません。');
 
   var sheet = getOrCreateSchoolEventSheet_();
@@ -881,15 +949,17 @@ function api_setSchoolEvent(payload) {
     var headers = values[0];
     var dateIdx = headers.indexOf('日付');
     var textIdx = headers.indexOf('内容');
+    var nikkaIdx = headers.indexOf('日課');
     var emailIdx = headers.indexOf('入力者メール');
     var timeIdx = headers.indexOf('更新日時');
     for (var i = 1; i < values.length; i++) {
       if (toDateStr_(values[i][dateIdx]) === date) {
         var rowNum = headerRow + i;
-        if (text === '') {
+        if (text === '' && nikka === '') {
           sheet.deleteRow(rowNum);
         } else {
           sheet.getRange(rowNum, textIdx + 1).setValue(text);
+          if (nikkaIdx >= 0) sheet.getRange(rowNum, nikkaIdx + 1).setValue(nikka);
           sheet.getRange(rowNum, emailIdx + 1).setValue(ctx.email);
           sheet.getRange(rowNum, timeIdx + 1).setValue(new Date());
         }
@@ -897,9 +967,9 @@ function api_setSchoolEvent(payload) {
       }
     }
   }
-  if (text === '') return { ok: true };
+  if (text === '' && nikka === '') return { ok: true };
   appendRow_(SHEET.SCHOOL_EVENT_CHANGES, {
-    '日付': date, '内容': text, '入力者メール': ctx.email, '更新日時': new Date()
+    '日付': date, '内容': text, '日課': nikka, '入力者メール': ctx.email, '更新日時': new Date()
   });
   return { ok: true };
 }
@@ -1184,6 +1254,7 @@ function api_getDayInfo(cls, baseDate) {
     var dow = d.getDay();
     var isWeekday = dow >= 1 && dow <= 5;
     var row = rowByDate[dateStr];
+    var ov = evOverrides[dateStr];
     return {
       date: dateStr,
       label: label,
@@ -1192,8 +1263,8 @@ function api_getDayInfo(cls, baseDate) {
       // この日の校時（時限ごとの「A水3」「授」「学活」など）。行事予定にない日は null
       plan: planFor(dateStr),
       // 学校全体のこの日の予定（教員の上書き＞行事予定ファイル由来の行事）と日課
-      schoolEvents: evOverrides[dateStr] || (row ? row.title : ''),
-      nikka: row ? row.nikka : ''
+      schoolEvents: (ov && ov.text) || (row ? row.title : ''),
+      nikka: (ov && ov.nikka) || (row ? row.nikka : '')
     };
   }
 
@@ -1255,6 +1326,14 @@ function api_getDayInfo(cls, baseDate) {
       var date = toDateStr_(r['日付']);
       if (r['クラス'] !== cls || !wantDates[date]) return;
       overrides.push({ date: date, period: Number(r['時限']), subject: String(r['教科'] || '').trim() });
+    });
+  }
+
+  // 生徒には、素点交換など非表示ワードを含む項目を見せない
+  if (ctx.role === 'student') {
+    var hiddenWords = getHiddenEventWords_();
+    days.forEach(function (d) {
+      d.schoolEvents = filterEventTextForStudents_(d.schoolEvents, hiddenWords);
     });
   }
 
