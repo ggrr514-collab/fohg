@@ -22,6 +22,7 @@ var SHEET = {
   USERS: '利用者情報',
   ASSIGNMENTS: '担当割当',
   SCHEDULE: '時間割',
+  DAILY_NOTES: '日別連絡',
   EVENTS: '予定',
   EVENT_IMPORT: '行事取込',
   TASKS: '課題',
@@ -346,6 +347,7 @@ function api_getSchedule(cls) {
 
 // 時間割の1コマを設定する（教員のみ）。
 // week: '' = A週・B週共通 / 'A' / 'B'。subject を空にするとそのコマを削除する。
+// belongings（毎回の持ち物）は指定されたときだけ書き換える。
 function api_setScheduleCell(payload) {
   var ctx = getContext_();
   if (ctx.role !== 'teacher') throw new Error('時間割の編集は教員のみ行えます。');
@@ -355,6 +357,7 @@ function api_setScheduleCell(payload) {
   var day = payload && payload.day;
   var period = payload && Number(payload.period);
   var subject = payload && payload.subject != null ? String(payload.subject).trim() : '';
+  var belongings = payload && payload.belongings != null ? String(payload.belongings).trim() : null;
   if (!cls || !day || !period) throw new Error('対象のコマが指定されていません。');
   if (week !== '' && week !== 'A' && week !== 'B') throw new Error('週の指定が正しくありません。');
 
@@ -380,6 +383,10 @@ function api_setScheduleCell(payload) {
           sheet.deleteRow(headerRow + 1 + i);
         } else {
           sheet.getRange(headerRow + 1 + i, subjectIdx + 1).setValue(subject);
+          var belongingsIdx = headers.indexOf('持ち物');
+          if (belongings !== null && belongingsIdx >= 0) {
+            sheet.getRange(headerRow + 1 + i, belongingsIdx + 1).setValue(belongings);
+          }
         }
         return { ok: true };
       }
@@ -387,7 +394,7 @@ function api_setScheduleCell(payload) {
   }
 
   if (subject === '') return { ok: true };  // 削除対象がなければ何もしない
-  var newRow = { 'クラス': cls, '曜日': day, '時限': period, '教科': subject, '持ち物': '' };
+  var newRow = { 'クラス': cls, '曜日': day, '時限': period, '教科': subject, '持ち物': belongings !== null ? belongings : '' };
   if (weekIdx >= 0) newRow['週'] = week;
   appendRow_(SHEET.SCHEDULE, newRow);
   return { ok: true };
@@ -600,29 +607,39 @@ function readImportedEvents_() {
   }).filter(function (e) { return e.date; });
 }
 
-// 取り込んだ行事予定のA/B週から「今週の週区分」を自動判定する。
-// 今日の行に週があればそれを、なければ今週の月〜金で最初に見つかった週を返す。
-// 判定できなければ null（従来どおり「設定」シートの値を使う）。
-function getWeekFromImport_() {
-  var imported = readImportedEvents_();
-  if (imported.length === 0) return null;
+// 取り込んだ行事予定から「日付→A/B週」の対応表を作る
+function buildWeekByDate_() {
   var byDate = {};
-  imported.forEach(function (e) { if (e.week) byDate[e.date] = e.week; });
+  readImportedEvents_().forEach(function (e) { if (e.week) byDate[e.date] = e.week; });
+  return byDate;
+}
+
+// 指定した日付（yyyy-MM-dd）のA/B週を、取り込んだ行事予定から判定する。
+// その日の行に週があればそれを、なければ同じ週の月〜金で最初に見つかった週を返す。
+// 判定できなければ null（「設定」シートの値を使う）。
+function getWeekForDate_(dateStr, byDate) {
+  if (!byDate) byDate = buildWeekByDate_();
+  if (byDate[dateStr]) return byDate[dateStr];
+
+  var parts = String(dateStr).split('-');
+  var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  if (isNaN(d.getTime())) return null;
 
   var tz = Session.getScriptTimeZone();
-  var today = new Date();
-  var todayStr = Utilities.formatDate(today, tz, 'yyyy-MM-dd');
-  if (byDate[todayStr]) return byDate[todayStr];
-
-  var monday = new Date(today);
-  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));  // 今週の月曜
+  var monday = new Date(d);
+  monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));  // その週の月曜
   for (var i = 0; i < 5; i++) {
-    var d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    var s = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+    var x = new Date(monday);
+    x.setDate(monday.getDate() + i);
+    var s = Utilities.formatDate(x, tz, 'yyyy-MM-dd');
     if (byDate[s]) return byDate[s];
   }
   return null;
+}
+
+// 今週の週区分を自動判定する（今日の日付で判定）
+function getWeekFromImport_() {
+  return getWeekForDate_(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'), null);
 }
 
 // 行事の取込（教員のみ・画面のボタンから呼ばれる）
@@ -825,56 +842,127 @@ function api_postAnnouncement(payload) {
   return { ok: true, id: id };
 }
 
-// 今日の時間割の「持ち物・連絡」を更新する。
+/* ---------- 今日・明日の教科連絡（日別連絡） ---------- */
+
+// 「日別連絡」シートがなければ作る（注意書き＋見出し行つき）
+function getOrCreateDailyNotesSheet_() {
+  var ss = getSS_();
+  var sheet = ss.getSheetByName(SHEET.DAILY_NOTES);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET.DAILY_NOTES);
+    sheet.getRange(1, 1, 2, 7).setValues([
+      ['※ 今日・明日の教科連絡や持ち物は、このシートに日付ごとに保存されます（画面から入力します）。', '', '', '', '', '', ''],
+      ['日付', 'クラス', '時限', '教科', '連絡', '入力者メール', '更新日時']
+    ]);
+  }
+  return sheet;
+}
+
+// 「今日」と「次の登校日（通常は明日。金曜なら月曜）」の日付・曜日・週区分と、
+// そのクラスの日別連絡（今日以降の分）を返す
+function api_getDayInfo(cls) {
+  var ctx = getContext_();
+  assertCanView_(ctx, cls);
+  var tz = Session.getScriptTimeZone();
+
+  var byDate = {};
+  try { byDate = buildWeekByDate_(); } catch (e) { byDate = {}; }
+  var fallbackWeek = getSetting_('今週の週区分', 'A');
+
+  function dayEntry(d, label) {
+    var dateStr = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+    var dow = d.getDay();
+    return {
+      date: dateStr,
+      label: label,
+      dayKey: (dow >= 1 && dow <= 5) ? YOUBI_CHARS_[dow] : '',
+      week: getWeekForDate_(dateStr, byDate) || fallbackWeek
+    };
+  }
+
+  var today = new Date();
+  var next = new Date(today);
+  next.setDate(today.getDate() + 1);
+  var isLiterallyTomorrow = true;
+  while (next.getDay() === 0 || next.getDay() === 6) {  // 土日は飛ばして次の登校日へ
+    next.setDate(next.getDate() + 1);
+    isLiterallyTomorrow = false;
+  }
+  var days = [dayEntry(today, '今日'), dayEntry(next, isLiterallyTomorrow ? '明日' : '次の登校日')];
+
+  var todayStr = days[0].date;
+  var notes = [];
+  if (getSS_().getSheetByName(SHEET.DAILY_NOTES)) {
+    readSheet_(SHEET.DAILY_NOTES).forEach(function (r) {
+      var date = toDateStr_(r['日付']);
+      if (r['クラス'] !== cls || !date || date < todayStr) return;
+      notes.push({
+        date: date, period: Number(r['時限']),
+        subject: r['教科'] || '', text: r['連絡'] || ''
+      });
+    });
+  }
+  return { days: days, notes: notes };
+}
+
+// 日付を指定して教科連絡・持ち物を入力する（空欄で削除）。
 // 教員は全クラス・全時限、教科係の生徒は自分のクラスの担当教科の時限のみ入力できる。
-// 「時間割」シートの クラス・曜日・時限 が一致する行の「持ち物」列を書き換える。
-function api_setBelongings(payload) {
+function api_setDailyNote(payload) {
   var ctx = getContext_();
 
   var cls = payload && payload.cls;
-  var week = payload && payload.week ? String(payload.week).trim().toUpperCase() : '';
-  var day = payload && payload.day;
+  var date = payload && payload.date ? String(payload.date).trim() : '';
   var period = payload && Number(payload.period);
+  var subject = payload && payload.subject != null ? String(payload.subject).trim() : '';
   var text = payload && payload.text != null ? String(payload.text).trim() : '';
-  if (!cls || !day || !period) throw new Error('対象の時限が指定されていません。');
+  if (!cls || !date || !period) throw new Error('対象の時限が指定されていません。');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('日付の形式が正しくありません。');
 
-  if (ctx.role !== 'teacher' && ctx.myClass !== cls) {
-    throw new Error('このクラスの持ち物・連絡は入力できません。');
+  if (ctx.role !== 'teacher') {
+    if (ctx.myClass !== cls) throw new Error('このクラスの連絡は入力できません。');
+    var isRep = readSheet_(SHEET.ASSIGNMENTS).some(function (a) {
+      return a['クラス'] === cls && a['カテゴリ'] === 'subject'
+        && a['表示名'] === subject && a['担当者メール'] === ctx.email;
+    });
+    if (!isRep) throw new Error('「' + subject + '」の教科係に登録されている生徒のみ入力できます。');
   }
 
-  var sheet = getSheet_(SHEET.SCHEDULE);
+  var sheet = getOrCreateDailyNotesSheet_();
   var headerRow = findHeaderRow_(sheet);
+  if (!headerRow) throw new Error('「日別連絡」シートの見出し行が見つかりません。');
   var lastRow = sheet.getLastRow();
-  if (!headerRow || lastRow <= headerRow) throw new Error('時間割が登録されていません。');
-
-  var values = sheet.getRange(headerRow, 1, lastRow - headerRow + 1, sheet.getLastColumn()).getValues();
-  var headers = values[0];
-  var clsIdx = headers.indexOf('クラス');
-  var weekIdx = headers.indexOf('週');
-  var dayIdx = headers.indexOf('曜日');
-  var periodIdx = headers.indexOf('時限');
-  var subjectIdx = headers.indexOf('教科');
-  var belongingsIdx = headers.indexOf('持ち物');
-  if (belongingsIdx < 0) throw new Error('時間割シートに「持ち物」列が見つかりません。');
-
-  for (var i = 1; i < values.length; i++) {
-    var rowWeek = weekIdx >= 0 && values[i][weekIdx] ? String(values[i][weekIdx]).trim().toUpperCase() : '';
-    if (values[i][clsIdx] === cls && rowWeek === week
-        && values[i][dayIdx] === day && Number(values[i][periodIdx]) === period) {
-      // 生徒の場合は、この時限の教科の「教科係」として担当割当に登録されているか確認する
-      if (ctx.role !== 'teacher') {
-        var subject = values[i][subjectIdx];
-        var isRep = readSheet_(SHEET.ASSIGNMENTS).some(function (a) {
-          return a['クラス'] === cls && a['カテゴリ'] === 'subject'
-            && a['表示名'] === subject && a['担当者メール'] === ctx.email;
-        });
-        if (!isRep) throw new Error('「' + subject + '」の教科係に登録されている生徒のみ入力できます。');
+  if (lastRow > headerRow) {
+    var values = sheet.getRange(headerRow, 1, lastRow - headerRow + 1, sheet.getLastColumn()).getValues();
+    var headers = values[0];
+    var dateIdx = headers.indexOf('日付');
+    var clsIdx = headers.indexOf('クラス');
+    var periodIdx = headers.indexOf('時限');
+    var subjectIdx = headers.indexOf('教科');
+    var textIdx = headers.indexOf('連絡');
+    var emailIdx = headers.indexOf('入力者メール');
+    var timeIdx = headers.indexOf('更新日時');
+    for (var i = 1; i < values.length; i++) {
+      if (toDateStr_(values[i][dateIdx]) === date && values[i][clsIdx] === cls
+          && Number(values[i][periodIdx]) === period) {
+        var rowNum = headerRow + i;
+        if (text === '') {
+          sheet.deleteRow(rowNum);
+        } else {
+          sheet.getRange(rowNum, subjectIdx + 1).setValue(subject);
+          sheet.getRange(rowNum, textIdx + 1).setValue(text);
+          sheet.getRange(rowNum, emailIdx + 1).setValue(ctx.email);
+          sheet.getRange(rowNum, timeIdx + 1).setValue(new Date());
+        }
+        return { ok: true };
       }
-      sheet.getRange(headerRow + i, belongingsIdx + 1).setValue(text);
-      return { ok: true };
     }
   }
-  throw new Error('該当する時限が時間割シートに見つかりません（' + cls + ' ' + day + '曜 ' + period + '限）。');
+  if (text === '') return { ok: true };  // 削除対象がなければ何もしない
+  appendRow_(SHEET.DAILY_NOTES, {
+    '日付': date, 'クラス': cls, '時限': period, '教科': subject,
+    '連絡': text, '入力者メール': ctx.email, '更新日時': new Date()
+  });
+  return { ok: true };
 }
 
 function api_setTaskDone(taskId, done) {

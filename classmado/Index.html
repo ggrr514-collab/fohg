@@ -581,9 +581,10 @@
       gsRun("api_getSchedule", state.viewClass),
       gsRun("api_getEvents", state.viewClass),
       gsRun("api_getTasks", state.viewClass),
-      gsRun("api_getAnnouncements", state.viewClass)
+      gsRun("api_getAnnouncements", state.viewClass),
+      gsRun("api_getDayInfo", state.viewClass)
     ]);
-    state.data = { schedule: results[0], events: results[1], tasks: results[2], posts: results[3] };
+    state.data = { schedule: results[0], events: results[1], tasks: results[2], posts: results[3], dayInfo: results[4] };
     state.dataClass = state.viewClass;
   }
 
@@ -664,17 +665,18 @@
 
   async function renderToday(seq){
     var cls = state.viewClass;
-    var dayKey = todayDayKey();
-    var currentWeek = state.ctx.currentWeek || "A";
-    var periods = dayKey ? state.data.schedule.filter(function(p){
-      return p.day === dayKey && matchesWeek(p, currentWeek);
-    }) : [];
+    var dayInfo = state.data.dayInfo || { days: [], notes: [] };
+    var usesWeeks = classUsesWeeks();
     var todaysTasks = state.data.tasks.filter(function(t){
       var s = dueStatus(t.due, t.done);
       return s.cls === "soon" || s.cls === "overdue";
     });
 
-    // どの時限の持ち物・連絡を入力できるか：教員は全時限、教科係の生徒は担当教科の時限のみ
+    // 日付×時限 → その日の教科連絡 の対応表
+    var noteMap = {};
+    dayInfo.notes.forEach(function(n){ noteMap[n.date + "|" + n.period] = n; });
+
+    // どの時限の教科連絡を入力できるか：教員は全時限、教科係の生徒は担当教科の時限のみ
     var editableSubjects = null;
     if (state.ctx.role === "teacher") {
       editableSubjects = "all";
@@ -692,29 +694,43 @@
     var html = '<div class="grid-2">';
 
     html += '<div>';
-    if (dayKey) {
-      var weekLabel = classUsesWeeks() ? '・'+currentWeek+'週' : '';
-      html += '<div class="panel"><div class="panel-head"><div class="panel-title">今日（'+dayKey+'曜'+weekLabel+'）の時間割</div><div class="panel-meta">'+escapeHtml(cls)+'</div></div>';
-      if (periods.length === 0) {
-        html += '<div class="empty">時間割が登録されていません。</div>';
+    // 「今日」と「明日（金曜なら次の登校日）」の時間割を並べて表示する
+    dayInfo.days.forEach(function(day){
+      var mdParts = String(day.date).split("-");
+      var md = Number(mdParts[1]) + "/" + Number(mdParts[2]);
+      var weekLabel = usesWeeks && day.dayKey ? '・'+day.week+'週' : '';
+      var title = day.label + (day.dayKey ? '（'+day.dayKey+'曜'+weekLabel+'）' : '') + 'の時間割';
+      html += '<div class="panel"><div class="panel-head"><div class="panel-title">'+title+'</div><div class="panel-meta">'+md+' ・ '+escapeHtml(cls)+'</div></div>';
+      if (!day.dayKey) {
+        html += '<div class="empty">'+day.label+'は授業がありません。ゆっくり過ごしてください。</div>';
       } else {
-        var anyEdit = periods.some(function(p){ return canEditPeriod(p.subject); });
-        periods.forEach(function(p){
-          var icon = SUBJECT_ICON[p.subject] || "📘";
-          var editable = canEditPeriod(p.subject);
-          html += '<div class="period-row'+(anyEdit ? ' has-edit' : '')+'">' +
-            '<div class="period-num">'+p.period+'</div>' +
-            '<div><div class="period-subject">'+icon+' '+escapeHtml(p.subject)+'</div>' +
-            (p.belongings ? '<div class="period-note">'+escapeHtml(p.belongings)+'</div>' : '') +
-            '</div>' +
-            (anyEdit ? (editable ? '<button class="edit-btn" data-edit-period="'+p.period+'" title="持ち物・連絡を入力">✏️</button>' : '<span></span>') : '') +
-            '</div>';
+        var periodNums = [];
+        state.data.schedule.forEach(function(p){
+          if (p.day === day.dayKey && matchesWeek(p, day.week) && periodNums.indexOf(p.period) < 0) periodNums.push(p.period);
         });
+        periodNums.sort(function(a,b){ return a - b; });
+        var periods = periodNums.map(function(n){ return findScheduleCell(day.dayKey, n, day.week); });
+        if (periods.length === 0) {
+          html += '<div class="empty">時間割が登録されていません。</div>';
+        } else {
+          var anyEdit = periods.some(function(p){ return canEditPeriod(p.subject); });
+          periods.forEach(function(p){
+            var icon = SUBJECT_ICON[p.subject] || "📘";
+            var editable = canEditPeriod(p.subject);
+            var note = noteMap[day.date + "|" + p.period];
+            html += '<div class="period-row'+(anyEdit ? ' has-edit' : '')+'">' +
+              '<div class="period-num">'+p.period+'</div>' +
+              '<div><div class="period-subject">'+icon+' '+escapeHtml(p.subject)+'</div>' +
+              (p.belongings ? '<div class="period-note">🎒 毎回：'+escapeHtml(p.belongings)+'</div>' : '') +
+              (note && note.text ? '<div class="period-note">📣 '+escapeHtml(note.text)+'</div>' : '') +
+              '</div>' +
+              (anyEdit ? (editable ? '<button class="edit-btn" data-edit-date="'+day.date+'" data-edit-period="'+p.period+'" title="この日の教科連絡・持ち物を入力">✏️</button>' : '<span></span>') : '') +
+              '</div>';
+          });
+        }
       }
       html += '</div>';
-    } else {
-      html += '<div class="panel"><div class="panel-head"><div class="panel-title">今日の時間割</div></div><div class="empty">今日は授業がありません。ゆっくり過ごしてください。</div></div>';
-    }
+    });
 
     html += '<div class="panel"><div class="panel-head"><div class="panel-title">直近の学校行事</div></div>';
     var relevantEvents = state.data.events.slice(0,4);
@@ -744,30 +760,41 @@
     html += '</div>';
     document.getElementById("mainContent").innerHTML = html;
     bindTaskChecks();
-    bindPeriodEdits(dayKey);
+    bindDailyNoteEdits();
   }
 
-  // 今日の時間割の「持ち物・連絡」を編集するモーダル（教員＋担当教科の教科係）
-  function bindPeriodEdits(dayKey){
-    var currentWeek = state.ctx.currentWeek || "A";
-    Array.prototype.forEach.call(document.querySelectorAll("[data-edit-period]"), function(btn){
+  // 「今日・明日の教科連絡・持ち物」を編集するモーダル（教員＋担当教科の教科係）。
+  // 時間割そのものは固定のまま、日付ごとの連絡だけを書き換える。
+  function bindDailyNoteEdits(){
+    var dayInfo = state.data.dayInfo || { days: [], notes: [] };
+    var noteMap = {};
+    dayInfo.notes.forEach(function(n){ noteMap[n.date + "|" + n.period] = n; });
+    var dayByDate = {};
+    dayInfo.days.forEach(function(d){ dayByDate[d.date] = d; });
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-edit-date]"), function(btn){
       btn.onclick = function(){
+        var date = btn.getAttribute("data-edit-date");
         var period = Number(btn.getAttribute("data-edit-period"));
-        var per = state.data.schedule.filter(function(x){
-          return x.day === dayKey && x.period === period && matchesWeek(x, currentWeek);
-        })[0];
-        openBelongingsModal(dayKey, period, per ? per.subject : "", per ? per.belongings : "", per ? per.week : "");
+        var day = dayByDate[date];
+        if (!day) return;
+        var per = findScheduleCell(day.dayKey, period, day.week);
+        var note = noteMap[date + "|" + period];
+        openDailyNoteModal(day, period, per ? per.subject : "", note ? note.text : "");
       };
     });
   }
 
-  function openBelongingsModal(day, period, subject, current, week){
+  function openDailyNoteModal(day, period, subject, current){
     var root = document.getElementById("modalRoot");
+    var mdParts = String(day.date).split("-");
+    var md = Number(mdParts[1]) + "/" + Number(mdParts[2]);
+
     var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
-    html += '<h3>持ち物・連絡の入力</h3>';
-    html += '<div class="modal-sub">'+escapeHtml(state.viewClass)+' ・ '+day+'曜 '+period+'限（'+escapeHtml(subject)+'）</div>';
-    html += '<div class="field"><label>持ち物・連絡（空欄で削除）</label>'
-      + '<input type="text" id="fBelongings" value="'+escapeHtml(current || "")+'" placeholder="例：体操服・体育館シューズ／小テストあり"></div>';
+    html += '<h3>教科連絡・持ち物の入力</h3>';
+    html += '<div class="modal-sub">'+escapeHtml(state.viewClass)+' ・ '+day.label+' '+md+'（'+day.dayKey+'曜）'+period+'限（'+escapeHtml(subject)+'）</div>';
+    html += '<div class="field"><label>この日の教科連絡・持ち物（空欄で削除）</label>'
+      + '<input type="text" id="fDailyNote" value="'+escapeHtml(current || "")+'" placeholder="例：体操服・体育館シューズ／小テストあり"></div>';
     html += '<div class="field-error" id="fError" style="display:none"></div>';
     html += '<div class="modal-actions"><button class="btn-secondary" id="cancelBtn">キャンセル</button><button class="btn-primary" id="submitBtn">保存する</button></div>';
     html += '</div></div>';
@@ -779,12 +806,12 @@
     document.getElementById("submitBtn").onclick = async function(){
       var errBox = document.getElementById("fError");
       errBox.style.display = "none";
-      var text = document.getElementById("fBelongings").value.trim();
+      var text = document.getElementById("fDailyNote").value.trim();
       var btn = document.getElementById("submitBtn");
       btn.disabled = true;
       btn.textContent = "保存中…";
       try {
-        await gsRun("api_setBelongings", { cls: state.viewClass, week: week || "", day: day, period: period, text: text });
+        await gsRun("api_setDailyNote", { cls: state.viewClass, date: day.date, period: period, subject: subject, text: text });
         root.innerHTML = "";
         showToast("保存しました");
         await refreshData();
@@ -864,6 +891,9 @@
           var icon = SUBJECT_ICON[per.subject] || "📘";
           html += '<div style="font-size:13px;font-weight:600">'+icon+' '+escapeHtml(per.subject)+
             (usesWeeks && per.week ? ' <span style="font-size:10px;color:var(--ink-faint)">'+per.week+'</span>' : '')+'</div>';
+          if (per.belongings) {
+            html += '<div style="font-size:10.5px;color:var(--ink-faint)">🎒 '+escapeHtml(per.belongings)+'</div>';
+          }
         } else if (isTeacher) {
           html += '<div style="font-size:12px;color:var(--ink-faint)">＋</div>';
         }
@@ -961,6 +991,9 @@
     html += '<h3>時間割の編集</h3>';
     html += '<div class="modal-sub">'+escapeHtml(state.viewClass)+' ・ '+day+'曜 '+period+'限</div>';
     html += '<div class="field"><label>教科</label><input type="text" id="fSubject" list="subjectList" value="'+escapeHtml(existing ? existing.subject : "")+'" placeholder="例：国語">'+datalist+'</div>';
+    html += '<div class="field"><label>毎回の持ち物（任意）</label>'
+      + '<input type="text" id="fRecurring" value="'+escapeHtml(existing && existing.belongings ? existing.belongings : "")+'" placeholder="例：体操服・リコーダー">'
+      + '<div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px">その日だけの連絡は「今日の予定」タブの ✏️ から入力します。</div></div>';
     if (existing) {
       html += '<div class="field"><label>適用範囲</label><div style="font-size:13.5px;padding:4px 0">'+rangeLabel[existing.week]+'</div></div>';
     } else {
@@ -985,9 +1018,11 @@
       var errBox = document.getElementById("fError");
       errBox.style.display = "none";
       var week = existing ? existing.week : (document.getElementById("fWeekRange") ? document.getElementById("fWeekRange").value : "");
+      var recurringInput = document.getElementById("fRecurring");
       try {
         await gsRun("api_setScheduleCell", {
-          cls: state.viewClass, week: week, day: day, period: period, subject: subject
+          cls: state.viewClass, week: week, day: day, period: period, subject: subject,
+          belongings: recurringInput ? recurringInput.value.trim() : null
         });
         root.innerHTML = "";
         showToast(subject === "" ? "削除しました" : "保存しました");
