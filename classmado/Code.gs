@@ -17,6 +17,10 @@ var EVENT_SS_ID = '';
 // (2)の形式のとき、行事が入っているシート名
 var EVENT_SHEET_NAME = '予定';
 
+// 後期の開始日（この日以降は「時間割」シートの後期の教科列を表示する）。
+// 「設定」シートに キー「後期開始日」・値「2026-11-09」の行を作れば、コードを触らずに変更できる。
+var SECOND_TERM_START_DEFAULT = '2026-11-09';
+
 var SHEET = {
   CLASS_LIST: 'クラス設定',
   USERS: '利用者情報',
@@ -277,7 +281,8 @@ function api_getContext() {
     myClass: ctx.myClass, classes: classes,
     currentWeek: autoWeek || getSetting_('今週の週区分', 'A'),
     currentWeekAuto: !!autoWeek,
-    eventSyncTime: getSetting_('行事取込日時', '')
+    eventSyncTime: getSetting_('行事取込日時', ''),
+    secondTermStart: getSecondTermStart_()
   };
 }
 
@@ -330,14 +335,40 @@ function api_register(payload) {
   return { ok: true };
 }
 
+// 後期の開始日を yyyy-MM-dd で返す（「設定」シートの「後期開始日」が優先）
+function getSecondTermStart_() {
+  try {
+    var row = readSheet_(SHEET.SETTINGS).filter(function (r) { return r['キー'] === '後期開始日'; })[0];
+    if (row && row['値'] != null && row['値'] !== '') {
+      var s = toDateStr_(row['値']);  // セルが日付型でも文字列でも yyyy-MM-dd に揃える
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      var m = String(row['値']).match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);  // 2026/11/9 形式も許容
+      if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+    }
+  } catch (e) {}
+  return SECOND_TERM_START_DEFAULT;
+}
+
 function api_getSchedule(cls) {
   var ctx = getContext_();
   assertCanView_(ctx, cls);
-  return readSheet_(SHEET.SCHEDULE)
+  var rows = readSheet_(SHEET.SCHEDULE);
+
+  // 「後期」を含む列（例：後期教科・後期の教科）があれば、後期の教科として読む
+  var secondKey = null;
+  if (rows.length > 0) {
+    Object.keys(rows[0]).some(function (k) {
+      if (String(k).indexOf('後期') >= 0) { secondKey = k; return true; }
+      return false;
+    });
+  }
+
+  return rows
     .filter(function (r) { return r['クラス'] === cls; })
     .map(function (r) {
       return {
         day: r['曜日'], period: Number(r['時限']), subject: r['教科'],
+        subjectSecond: secondKey && r[secondKey] ? String(r[secondKey]).trim() : '',  // 空欄=前期と同じ
         belongings: r['持ち物'] || '',
         week: r['週'] ? String(r['週']).trim().toUpperCase() : ''   // 空欄=A週・B週共通
       };

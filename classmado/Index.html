@@ -416,6 +416,23 @@
     return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
   }
 
+  function localDateStr(d){
+    return d.getFullYear() + "-" + ("0"+(d.getMonth()+1)).slice(-2) + "-" + ("0"+d.getDate()).slice(-2);
+  }
+
+  // その日付に表示すべき教科を返す。後期開始日以降で後期の教科が入力されていれば
+  // そちらを、なければ前期（教科列）をそのまま使う。
+  function subjectForDate(p, dateStr){
+    var start = state.ctx && state.ctx.secondTermStart;
+    if (start && dateStr >= start && p.subjectSecond) return p.subjectSecond;
+    return p.subject;
+  }
+
+  function isSecondTerm(dateStr){
+    var start = state.ctx && state.ctx.secondTermStart;
+    return !!(start && dateStr >= start);
+  }
+
   // 行事の日付を「4/8（水）」の形で表示する（曜日は取込データ優先・なければ計算）
   function eventDateLabel(e){
     var parts = String(e.date).split("-");
@@ -736,10 +753,11 @@
         if (periods.length === 0) {
           html += '<div class="empty">時間割が登録されていません。</div>';
         } else {
-          var anyEdit = periods.some(function(p){ return canEditPeriod(p.subject); });
+          var anyEdit = periods.some(function(p){ return canEditPeriod(subjectForDate(p, day.date)); });
           periods.forEach(function(p){
-            var icon = SUBJECT_ICON[p.subject] || "📘";
-            var editable = canEditPeriod(p.subject);
+            var subj = subjectForDate(p, day.date);  // 後期開始日以降は後期の教科
+            var icon = SUBJECT_ICON[subj] || "📘";
+            var editable = canEditPeriod(subj);
             var note = noteMap[day.date + "|" + p.period];
             // 連絡・持ち物は教科の右隣に横並びで表示する（🎒=毎回の持ち物 ／ 📣=この日の連絡）
             var noteBits = [];
@@ -747,7 +765,7 @@
             if (note && note.text) noteBits.push('📣 '+escapeHtml(note.text));
             html += '<div class="period-row'+(anyEdit ? ' has-edit' : '')+'">' +
               '<div class="period-num">'+p.period+'</div>' +
-              '<div class="period-subject">'+icon+' '+escapeHtml(p.subject)+'</div>' +
+              '<div class="period-subject">'+icon+' '+escapeHtml(subj)+'</div>' +
               '<div class="period-note">'+noteBits.join('<span class="note-sep">／</span>')+'</div>' +
               (anyEdit ? (editable ? '<button class="edit-btn" data-edit-date="'+day.date+'" data-edit-period="'+p.period+'" title="この日の教科連絡・持ち物を入力">✏️</button>' : '<span></span>') : '') +
               '</div>';
@@ -805,7 +823,7 @@
         if (!day) return;
         var per = findScheduleCell(day.dayKey, period, day.week);
         var note = noteMap[date + "|" + period];
-        openDailyNoteModal(day, period, per ? per.subject : "", note ? note.text : "");
+        openDailyNoteModal(day, period, per ? subjectForDate(per, date) : "", note ? note.text : "");
       };
     });
   }
@@ -894,7 +912,12 @@
       html += '</div>';
     }
 
-    html += '<div class="panel"><div class="panel-head"><div class="panel-title">週間時間割'+(showWeekUI?'（'+weekView+'週）':'')+'</div><div class="panel-meta">'+escapeHtml(cls)+(isTeacher?' ・ コマをタップで編集':'')+'</div></div>';
+    var secondTermNow = isSecondTerm(localDateStr(new Date()));
+    var termLabel = secondTermNow ? '後期' : '';
+    var titleSuffix = showWeekUI
+      ? '（'+weekView+'週'+(termLabel ? '・'+termLabel : '')+'）'
+      : (termLabel ? '（'+termLabel+'）' : '');
+    html += '<div class="panel"><div class="panel-head"><div class="panel-title">週間時間割'+titleSuffix+'</div><div class="panel-meta">'+escapeHtml(cls)+(isTeacher?' ・ コマをタップで編集':'')+'</div></div>';
     html += '<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;min-width:520px">';
     html += '<thead><tr>' +
       '<th style="text-align:left;font-size:11.5px;color:var(--ink-faint);font-weight:700;padding:6px 8px;width:34px"></th>' +
@@ -913,8 +936,9 @@
         var cellAttrs = isTeacher ? ' class="sched-cell" data-cell-day="'+d+'" data-cell-period="'+p+'"' : '';
         html += '<td'+cellAttrs+' style="padding:8px;border-top:1px solid var(--line);'+(isToday?'background:var(--accent-soft);':'')+(isTeacher?'cursor:pointer;':'')+'">';
         if (per) {
-          var icon = SUBJECT_ICON[per.subject] || "📘";
-          html += '<div style="font-size:13px;font-weight:600">'+icon+' '+escapeHtml(per.subject)+
+          var cellSubj = secondTermNow ? subjectForDate(per, localDateStr(new Date())) : per.subject;
+          var icon = SUBJECT_ICON[cellSubj] || "📘";
+          html += '<div style="font-size:13px;font-weight:600">'+icon+' '+escapeHtml(cellSubj)+
             (usesWeeks && per.week ? ' <span style="font-size:10px;color:var(--ink-faint)">'+per.week+'</span>' : '')+'</div>';
           if (per.belongings) {
             html += '<div style="font-size:10.5px;color:var(--ink-faint)">🎒 '+escapeHtml(per.belongings)+'</div>';
@@ -1015,7 +1039,12 @@
     var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
     html += '<h3>時間割の編集</h3>';
     html += '<div class="modal-sub">'+escapeHtml(state.viewClass)+' ・ '+day+'曜 '+period+'限</div>';
-    html += '<div class="field"><label>教科</label><input type="text" id="fSubject" list="subjectList" value="'+escapeHtml(existing ? existing.subject : "")+'" placeholder="例：国語">'+datalist+'</div>';
+    html += '<div class="field"><label>教科（前期）</label><input type="text" id="fSubject" list="subjectList" value="'+escapeHtml(existing ? existing.subject : "")+'" placeholder="例：国語">'+datalist+'</div>';
+    if (existing && existing.subjectSecond) {
+      html += '<div class="field"><label>後期の教科</label><div style="font-size:13.5px;padding:4px 0">'
+        + escapeHtml(existing.subjectSecond)
+        + ' <span style="font-size:11.5px;color:var(--ink-faint)">（時間割シートの後期列で管理）</span></div></div>';
+    }
     html += '<div class="field"><label>毎回の持ち物（任意）</label>'
       + '<input type="text" id="fRecurring" value="'+escapeHtml(existing && existing.belongings ? existing.belongings : "")+'" placeholder="例：体操服・リコーダー">'
       + '<div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px">その日だけの連絡は「今日の予定」タブの ✏️ から入力します。</div></div>';
