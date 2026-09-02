@@ -964,10 +964,19 @@ function getOrCreateDailyNotesSheet_() {
   var sheet = ss.getSheetByName(SHEET.DAILY_NOTES);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET.DAILY_NOTES);
-    sheet.getRange(1, 1, 2, 7).setValues([
-      ['※ 今日・明日の教科連絡や持ち物は、このシートに日付ごとに保存されます（画面から入力します）。', '', '', '', '', '', ''],
-      ['日付', 'クラス', '時限', '教科', '連絡', '入力者メール', '更新日時']
+    sheet.getRange(1, 1, 2, 8).setValues([
+      ['※ 教科連絡・持ち物と、授業の学習内容（何をやったか）は、このシートに日付ごとに保存されます（画面から入力します）。', '', '', '', '', '', '', ''],
+      ['日付', 'クラス', '時限', '教科', '連絡', '学習内容', '入力者メール', '更新日時']
     ]);
+    return sheet;
+  }
+  // 旧バージョンで作られたシートに「学習内容」列がなければ末尾に追加する
+  var headerRow = findHeaderRow_(sheet);
+  if (headerRow) {
+    var headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (headers.indexOf('学習内容') < 0) {
+      sheet.getRange(headerRow, sheet.getLastColumn() + 1).setValue('学習内容');
+    }
   }
   return sheet;
 }
@@ -1011,13 +1020,17 @@ function api_getDayInfo(cls, baseDate) {
     var dateStr = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
     var dow = d.getDay();
     var isWeekday = dow >= 1 && dow <= 5;
+    var row = rowByDate[dateStr];
     return {
       date: dateStr,
       label: label,
       dayKey: (isWeekday || hasSchoolPlan(dateStr)) ? YOUBI_CHARS_[dow] : '',
       week: getWeekForDate_(dateStr, byDate) || fallbackWeek,
       // この日の校時（時限ごとの「A水3」「授」「学活」など）。行事予定にない日は null
-      plan: planFor(dateStr)
+      plan: planFor(dateStr),
+      // 学校全体のこの日の予定（行事予定ファイル由来の行事と日課）
+      schoolEvents: row ? row.title : '',
+      nikka: row ? row.nikka : ''
     };
   }
 
@@ -1067,7 +1080,8 @@ function api_getDayInfo(cls, baseDate) {
       if (r['クラス'] !== cls || !wantDates[date]) return;
       notes.push({
         date: date, period: Number(r['時限']),
-        subject: r['教科'] || '', text: r['連絡'] || ''
+        subject: r['教科'] || '', text: r['連絡'] || '',
+        study: r['学習内容'] || ''
       });
     });
   }
@@ -1147,7 +1161,9 @@ function api_setScheduleOverride(payload) {
   return { ok: true };
 }
 
-// 日付を指定して教科連絡・持ち物を入力する（空欄で削除）。
+// 日付を指定して、教科連絡・持ち物と学習内容（その授業で何をやったか）を入力する。
+// 両方を空欄にすると行ごと削除される。学習内容は欠席・不登校の生徒が
+// その日の授業内容をあとから確認できるようにするためのもの。
 // 教員は全クラス・全時限、教科係の生徒は自分のクラスの担当教科の時限のみ入力できる。
 function api_setDailyNote(payload) {
   var ctx = getContext_();
@@ -1157,6 +1173,7 @@ function api_setDailyNote(payload) {
   var period = payload && Number(payload.period);
   var subject = payload && payload.subject != null ? String(payload.subject).trim() : '';
   var text = payload && payload.text != null ? String(payload.text).trim() : '';
+  var study = payload && payload.study != null ? String(payload.study).trim() : '';
   if (!cls || !date || !period) throw new Error('対象の時限が指定されていません。');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('日付の形式が正しくありません。');
 
@@ -1184,17 +1201,19 @@ function api_setDailyNote(payload) {
     var periodIdx = headers.indexOf('時限');
     var subjectIdx = headers.indexOf('教科');
     var textIdx = headers.indexOf('連絡');
+    var studyIdx = headers.indexOf('学習内容');
     var emailIdx = headers.indexOf('入力者メール');
     var timeIdx = headers.indexOf('更新日時');
     for (var i = 1; i < values.length; i++) {
       if (toDateStr_(values[i][dateIdx]) === date && values[i][clsIdx] === cls
           && Number(values[i][periodIdx]) === period) {
         var rowNum = headerRow + i;
-        if (text === '') {
+        if (text === '' && study === '') {
           sheet.deleteRow(rowNum);
         } else {
           sheet.getRange(rowNum, subjectIdx + 1).setValue(subject);
           sheet.getRange(rowNum, textIdx + 1).setValue(text);
+          if (studyIdx >= 0) sheet.getRange(rowNum, studyIdx + 1).setValue(study);
           sheet.getRange(rowNum, emailIdx + 1).setValue(ctx.email);
           sheet.getRange(rowNum, timeIdx + 1).setValue(new Date());
         }
@@ -1202,10 +1221,10 @@ function api_setDailyNote(payload) {
       }
     }
   }
-  if (text === '') return { ok: true };  // 削除対象がなければ何もしない
+  if (text === '' && study === '') return { ok: true };  // 削除対象がなければ何もしない
   appendRow_(SHEET.DAILY_NOTES, {
     '日付': date, 'クラス': cls, '時限': period, '教科': subject,
-    '連絡': text, '入力者メール': ctx.email, '更新日時': new Date()
+    '連絡': text, '学習内容': study, '入力者メール': ctx.email, '更新日時': new Date()
   });
   return { ok: true };
 }

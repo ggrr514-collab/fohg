@@ -183,6 +183,19 @@
     border-radius: 8px; padding: 5px 12px;
   }
 
+  /* ---- 学校全体のその日の予定・学習内容 ---- */
+  .day-school {
+    font-size: 12.5px; color: var(--ink-soft); background: var(--paper);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 7px 11px; margin-bottom: 9px; line-height: 1.6;
+  }
+  .nikka-badge {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    color: var(--accent-ink); background: var(--accent-soft);
+    border-radius: 999px; padding: 1px 8px; margin-right: 6px;
+  }
+  .study-note { color: var(--duty); }
+
   .chg-badge {
     font-size: 10px; font-weight: 700; color: var(--overdue); background: var(--overdue-bg);
     border-radius: 999px; padding: 1px 7px; margin-left: 6px; vertical-align: middle;
@@ -860,6 +873,13 @@
       var weekLabel = usesWeeks && day.dayKey ? '・'+day.week+'週' : '';
       var title = day.label + (day.dayKey ? '（'+day.dayKey+'曜'+weekLabel+'）' : '') + 'の時間割';
       html += '<div class="panel"><div class="panel-head"><div class="panel-title">'+title+'</div><div class="panel-meta">'+md+' ・ '+escapeHtml(cls)+'</div></div>';
+      // 学校全体のこの日の予定（行事予定ファイル由来の行事・日課）
+      if (day.schoolEvents || day.nikka) {
+        html += '<div class="day-school">🏫 '
+          + (day.nikka ? '<span class="nikka-badge">日課：'+escapeHtml(day.nikka)+'</span>' : '')
+          + escapeHtml(day.schoolEvents || '')
+          + '</div>';
+      }
       if (!day.dayKey) {
         html += '<div class="empty">'+day.label+'は授業がありません。ゆっくり過ごしてください。</div>';
       } else {
@@ -899,6 +919,11 @@
             var noteBits = [];
             if (res.belongings) noteBits.push('🎒 '+escapeHtml(res.belongings));
             if (note && note.text) noteBits.push('📣 '+escapeHtml(note.text));
+            // 学習内容（授業で何をやったか）は連絡の下の行に表示する
+            var noteHtml = noteBits.join('<span class="note-sep">／</span>');
+            if (note && note.study) {
+              noteHtml += (noteHtml ? '<br>' : '') + '<span class="study-note">📖 '+escapeHtml(note.study)+'</span>';
+            }
             var btns = '';
             if (editable) {
               btns += '<button class="edit-btn" data-edit-date="'+day.date+'" data-edit-period="'+n+'" data-edit-subject="'+escapeHtml(res.subject)+'" title="この日の教科連絡・持ち物を入力">✏️</button>';
@@ -909,7 +934,7 @@
             html += '<div class="period-row'+(anyEdit ? ' has-edit' : '')+'">' +
               '<div class="period-num">'+n+'</div>' +
               '<div class="period-subject">'+subjHtml+'</div>' +
-              '<div class="period-note">'+noteBits.join('<span class="note-sep">／</span>')+'</div>' +
+              '<div class="period-note">'+noteHtml+'</div>' +
               (anyEdit ? '<div class="row-btns">'+btns+'</div>' : '') +
               '</div>';
           });
@@ -985,7 +1010,8 @@
         if (!day) return;
         var note = noteMap[date + "|" + period];
         // その行に表示されている教科（時間割変更・校時も反映済み）をそのまま使う
-        openDailyNoteModal(day, period, btn.getAttribute("data-edit-subject") || "", note ? note.text : "");
+        openDailyNoteModal(day, period, btn.getAttribute("data-edit-subject") || "",
+          note ? note.text : "", note ? (note.study || "") : "");
       };
     });
   }
@@ -1053,16 +1079,19 @@
     };
   }
 
-  function openDailyNoteModal(day, period, subject, current){
+  function openDailyNoteModal(day, period, subject, current, currentStudy){
     var root = document.getElementById("modalRoot");
     var mdParts = String(day.date).split("-");
     var md = Number(mdParts[1]) + "/" + Number(mdParts[2]);
 
     var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
-    html += '<h3>教科連絡・持ち物の入力</h3>';
+    html += '<h3>教科連絡・学習内容の入力</h3>';
     html += '<div class="modal-sub">'+escapeHtml(state.viewClass)+' ・ '+day.label+' '+md+'（'+day.dayKey+'曜）'+period+'限（'+escapeHtml(subject)+'）</div>';
-    html += '<div class="field"><label>この日の教科連絡・持ち物（空欄で削除）</label>'
+    html += '<div class="field"><label>この日の教科連絡・持ち物</label>'
       + '<input type="text" id="fDailyNote" value="'+escapeHtml(current || "")+'" placeholder="例：体操服・体育館シューズ／小テストあり"></div>';
+    html += '<div class="field"><label>📖 学習内容（この授業で何をやったか）</label>'
+      + '<textarea id="fDailyStudy" placeholder="例：教科書P.24〜26 二次方程式の解の公式／ワークP.10">'+escapeHtml(currentStudy || "")+'</textarea>'
+      + '<div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px">お休みした人も授業の内容が分かるように、授業のあとに入力してください。両方空欄で保存すると削除されます。</div></div>';
     html += '<div class="field-error" id="fError" style="display:none"></div>';
     html += '<div class="modal-actions"><button class="btn-secondary" id="cancelBtn">キャンセル</button><button class="btn-primary" id="submitBtn">保存する</button></div>';
     html += '</div></div>';
@@ -1075,11 +1104,12 @@
       var errBox = document.getElementById("fError");
       errBox.style.display = "none";
       var text = document.getElementById("fDailyNote").value.trim();
+      var study = document.getElementById("fDailyStudy").value.trim();
       var btn = document.getElementById("submitBtn");
       btn.disabled = true;
       btn.textContent = "保存中…";
       try {
-        await gsRun("api_setDailyNote", { cls: state.viewClass, date: day.date, period: period, subject: subject, text: text });
+        await gsRun("api_setDailyNote", { cls: state.viewClass, date: day.date, period: period, subject: subject, text: text, study: study });
         root.innerHTML = "";
         showToast("保存しました");
         await refreshData();
