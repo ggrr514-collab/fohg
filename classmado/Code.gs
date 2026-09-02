@@ -26,6 +26,7 @@ var SHEET = {
   USERS: '利用者情報',
   ASSIGNMENTS: '担当割当',
   SCHEDULE: '時間割',
+  SCHEDULE_CHANGES: '時間割変更',
   DAILY_NOTES: '日別連絡',
   EVENTS: '予定',
   EVENT_IMPORT: '行事取込',
@@ -535,6 +536,25 @@ function extractEventsFromMonthSheet_(sheet, month) {
   }
   if (headerIdx < 0) return [];
 
+  // 学年ごとの校時列を探す。見出し行に「１年」「２年」…があり、
+  // その次の行に 1,2,3… と時限番号が並ぶ（「時数」列で止まる）。
+  // セルの値は「A水3」（=A週水曜3限の授業）・「授」（=通常どおり）・
+  // 「学活」「訓練」などの特別活動名・空欄（=その時限なし）のいずれか。
+  var grades = [];
+  var numRow = values[headerIdx + 1] || [];
+  for (var j = 0; j < values[headerIdx].length; j++) {
+    var h = toHalfWidthDigits_(String(values[headerIdx][j] == null ? '' : values[headerIdx][j]).trim());
+    var gm = h.match(/^(\d)年$/);
+    if (!gm) continue;
+    var periodCols = [];
+    for (var k = j; k < numRow.length; k++) {
+      var pn = Number(numRow[k]);
+      if (!pn || pn !== Math.floor(pn) || pn !== periodCols.length + 1) break;
+      periodCols.push(k);
+    }
+    if (periodCols.length > 0) grades.push({ grade: Number(gm[1]), periodCols: periodCols });
+  }
+
   // 見出しより上の行から西暦年を探す（1〜3月のシートは年が翌年になっている）
   var year = 0;
   for (var i = 0; i < headerIdx && !year; i++) {
@@ -561,12 +581,19 @@ function extractEventsFromMonthSheet_(sheet, month) {
     if (date.getMonth() !== month - 1) continue;  // 存在しない日付（2/30など）は飛ばす
     var week = cols.week >= 0 ? String(values[r][cols.week] || '').trim().toUpperCase() : '';
     if (week !== 'A' && week !== 'B') week = '';
+    var plans = {};
+    grades.forEach(function (g) {
+      plans[g.grade] = g.periodCols.map(function (c) {
+        return String(values[r][c] == null ? '' : values[r][c]).trim();
+      });
+    });
     events.push({
       date: Utilities.formatDate(date, tz, 'yyyy-MM-dd'),
       you: you,
       week: week,
       title: String(values[r][cols.event] == null ? '' : values[r][cols.event]).trim(),
-      nikka: cols.nikka >= 0 ? String(values[r][cols.nikka] == null ? '' : values[r][cols.nikka]).trim() : ''
+      nikka: cols.nikka >= 0 ? String(values[r][cols.nikka] == null ? '' : values[r][cols.nikka]).trim() : '',
+      plans: plans
     });
   }
   return events;
@@ -608,13 +635,29 @@ function syncEventsFromMaster() {
   if (!sheet) sheet = ss.insertSheet(SHEET.EVENT_IMPORT);
   sheet.clearContents();
 
-  var rows = [
-    ['※ このシートは年間行事予定ファイルから自動で取り込まれます。手動で書き換えても、次回の取込で上書きされます。', '', '', '', ''],
-    ['日付', '曜日', '週', '行事', '日課']
-  ];
-  all.forEach(function (e) { rows.push([e.date, e.you, e.week, e.title, e.nikka]); });
+  // 学年ごとの校時列（１年校時・２年校時…）。6時限分を「|」区切りの1セルにまとめる
+  var gradeSet = {};
+  all.forEach(function (e) {
+    Object.keys(e.plans || {}).forEach(function (g) { gradeSet[g] = true; });
+  });
+  var gradeList = Object.keys(gradeSet).map(Number).sort(function (a, b) { return a - b; });
+
+  var headers = ['日付', '曜日', '週', '行事', '日課'].concat(
+    gradeList.map(function (g) { return g + '年校時'; })
+  );
+  var noteRow = ['※ このシートは年間行事予定ファイルから自動で取り込まれます。手動で書き換えても、次回の取込で上書きされます。校時列は各時限を「|」区切りで保存しています。'];
+  while (noteRow.length < headers.length) noteRow.push('');
+
+  var rows = [noteRow, headers];
+  all.forEach(function (e) {
+    var row = [e.date, e.you, e.week, e.title, e.nikka];
+    gradeList.forEach(function (g) {
+      row.push(e.plans && e.plans[g] ? e.plans[g].join('|') : '');
+    });
+    rows.push(row);
+  });
   sheet.getRange(1, 1, rows.length, 1).setNumberFormat('@');  // 日付を文字列のまま保つ
-  sheet.getRange(1, 1, rows.length, 5).setValues(rows);
+  sheet.getRange(1, 1, rows.length, headers.length).setValues(rows);
 
   var syncedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
   setSetting_('行事取込日時', syncedAt);
@@ -628,12 +671,21 @@ function readImportedEvents_() {
   var ss = getSS_();
   if (!ss.getSheetByName(SHEET.EVENT_IMPORT)) return [];
   return readSheet_(SHEET.EVENT_IMPORT).map(function (r) {
+    // 「１年校時」のような列を、学年→時限ごとの校時の配列に戻す
+    var plans = {};
+    Object.keys(r).forEach(function (k) {
+      var m = toHalfWidthDigits_(String(k)).match(/^(\d)年校時$/);
+      if (m && r[k] != null && String(r[k]) !== '') {
+        plans[Number(m[1])] = String(r[k]).split('|').map(function (t) { return t.trim(); });
+      }
+    });
     return {
       date: toDateStr_(r['日付']),
       you: String(r['曜日'] == null ? '' : r['曜日']).trim(),
       week: r['週'] ? String(r['週']).trim().toUpperCase() : '',
       title: String(r['行事'] == null ? '' : r['行事']).trim(),
-      nikka: String(r['日課'] == null ? '' : r['日課']).trim()
+      nikka: String(r['日課'] == null ? '' : r['日課']).trim(),
+      plans: plans
     };
   }).filter(function (e) { return e.date; });
 }
@@ -889,25 +941,51 @@ function getOrCreateDailyNotesSheet_() {
   return sheet;
 }
 
-// 「今日」と「次の登校日（通常は明日。金曜なら月曜）」の日付・曜日・週区分と、
-// そのクラスの日別連絡（今日以降の分）を返す
+// クラス名から学年を読み取る（例：1年1組・１年２組 → 1。読み取れなければ 0）
+function gradeFromClassName_(cls) {
+  var m = toHalfWidthDigits_(String(cls)).match(/(\d)\s*年/);
+  return m ? Number(m[1]) : 0;
+}
+
+// 「今日」と「次の登校日（通常は明日。金曜なら月曜）」の日付・曜日・週区分・
+// その日の校時（行事予定ファイル由来）と、そのクラスの日別連絡・時間割変更を返す
 function api_getDayInfo(cls) {
   var ctx = getContext_();
   assertCanView_(ctx, cls);
   var tz = Session.getScriptTimeZone();
 
-  var byDate = {};
-  try { byDate = buildWeekByDate_(); } catch (e) { byDate = {}; }
+  var byDate = {}, rowByDate = {};
+  try {
+    readImportedEvents_().forEach(function (e) {
+      if (e.week) byDate[e.date] = e.week;
+      rowByDate[e.date] = e;
+    });
+  } catch (e) {}
   var fallbackWeek = getSetting_('今週の週区分', 'A');
+  var grade = gradeFromClassName_(cls);
+
+  function planFor(dateStr) {
+    var row = rowByDate[dateStr];
+    return (grade && row && row.plans && row.plans[grade]) ? row.plans[grade] : null;
+  }
+
+  // 行事予定の校時に授業が入っている日か（土曜の公開授業なども登校日として扱う）
+  function hasSchoolPlan(dateStr) {
+    var plan = planFor(dateStr);
+    return !!(plan && plan.some(function (t) { return String(t).trim() !== ''; }));
+  }
 
   function dayEntry(d, label) {
     var dateStr = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
     var dow = d.getDay();
+    var isWeekday = dow >= 1 && dow <= 5;
     return {
       date: dateStr,
       label: label,
-      dayKey: (dow >= 1 && dow <= 5) ? YOUBI_CHARS_[dow] : '',
-      week: getWeekForDate_(dateStr, byDate) || fallbackWeek
+      dayKey: (isWeekday || hasSchoolPlan(dateStr)) ? YOUBI_CHARS_[dow] : '',
+      week: getWeekForDate_(dateStr, byDate) || fallbackWeek,
+      // この日の校時（時限ごとの「A水3」「授」「学活」など）。行事予定にない日は null
+      plan: planFor(dateStr)
     };
   }
 
@@ -915,7 +993,9 @@ function api_getDayInfo(cls) {
   var next = new Date(today);
   next.setDate(today.getDate() + 1);
   var isLiterallyTomorrow = true;
-  while (next.getDay() === 0 || next.getDay() === 6) {  // 土日は飛ばして次の登校日へ
+  // 土日は飛ばして次の登校日へ（ただし校時に授業が入っている土曜などは登校日扱い）
+  while ((next.getDay() === 0 || next.getDay() === 6)
+      && !hasSchoolPlan(Utilities.formatDate(next, tz, 'yyyy-MM-dd'))) {
     next.setDate(next.getDate() + 1);
     isLiterallyTomorrow = false;
   }
@@ -933,7 +1013,81 @@ function api_getDayInfo(cls) {
       });
     });
   }
-  return { days: days, notes: notes };
+
+  // 教員が入力した日付ごとの時間割変更（今日以降の分）
+  var overrides = [];
+  if (getSS_().getSheetByName(SHEET.SCHEDULE_CHANGES)) {
+    readSheet_(SHEET.SCHEDULE_CHANGES).forEach(function (r) {
+      var date = toDateStr_(r['日付']);
+      if (r['クラス'] !== cls || !date || date < todayStr) return;
+      overrides.push({ date: date, period: Number(r['時限']), subject: String(r['教科'] || '').trim() });
+    });
+  }
+
+  return { days: days, notes: notes, overrides: overrides };
+}
+
+// 「時間割変更」シートがなければ作る
+function getOrCreateScheduleChangesSheet_() {
+  var ss = getSS_();
+  var sheet = ss.getSheetByName(SHEET.SCHEDULE_CHANGES);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET.SCHEDULE_CHANGES);
+    sheet.getRange(1, 1, 2, 6).setValues([
+      ['※ その日だけの時間割変更は、このシートに日付ごとに保存されます（教員が画面から入力します）。', '', '', '', '', ''],
+      ['日付', 'クラス', '時限', '教科', '入力者メール', '更新日時']
+    ]);
+  }
+  return sheet;
+}
+
+// その日だけの時間割変更を入力する（教員のみ・教科を空欄にすると元に戻す）。
+// 固定の「時間割」シートは変更せず、「時間割変更」シートに日付つきで保存する。
+function api_setScheduleOverride(payload) {
+  var ctx = getContext_();
+  if (ctx.role !== 'teacher') throw new Error('時間割変更は教員のみ行えます。');
+
+  var cls = payload && payload.cls;
+  var date = payload && payload.date ? String(payload.date).trim() : '';
+  var period = payload && Number(payload.period);
+  var subject = payload && payload.subject != null ? String(payload.subject).trim() : '';
+  if (!cls || !date || !period) throw new Error('対象の時限が指定されていません。');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('日付の形式が正しくありません。');
+
+  var sheet = getOrCreateScheduleChangesSheet_();
+  var headerRow = findHeaderRow_(sheet);
+  if (!headerRow) throw new Error('「時間割変更」シートの見出し行が見つかりません。');
+  var lastRow = sheet.getLastRow();
+  if (lastRow > headerRow) {
+    var values = sheet.getRange(headerRow, 1, lastRow - headerRow + 1, sheet.getLastColumn()).getValues();
+    var headers = values[0];
+    var dateIdx = headers.indexOf('日付');
+    var clsIdx = headers.indexOf('クラス');
+    var periodIdx = headers.indexOf('時限');
+    var subjectIdx = headers.indexOf('教科');
+    var emailIdx = headers.indexOf('入力者メール');
+    var timeIdx = headers.indexOf('更新日時');
+    for (var i = 1; i < values.length; i++) {
+      if (toDateStr_(values[i][dateIdx]) === date && values[i][clsIdx] === cls
+          && Number(values[i][periodIdx]) === period) {
+        var rowNum = headerRow + i;
+        if (subject === '') {
+          sheet.deleteRow(rowNum);
+        } else {
+          sheet.getRange(rowNum, subjectIdx + 1).setValue(subject);
+          sheet.getRange(rowNum, emailIdx + 1).setValue(ctx.email);
+          sheet.getRange(rowNum, timeIdx + 1).setValue(new Date());
+        }
+        return { ok: true };
+      }
+    }
+  }
+  if (subject === '') return { ok: true };  // 削除対象がなければ何もしない
+  appendRow_(SHEET.SCHEDULE_CHANGES, {
+    '日付': date, 'クラス': cls, '時限': period, '教科': subject,
+    '入力者メール': ctx.email, '更新日時': new Date()
+  });
+  return { ok: true };
 }
 
 // 日付を指定して教科連絡・持ち物を入力する（空欄で削除）。

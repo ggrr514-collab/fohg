@@ -162,6 +162,12 @@
   .period-subject { font-size: 15px; font-weight: 600; white-space: nowrap; }
   .period-note { font-size: 12.5px; color: var(--ink-soft); }
   .period-note .note-sep { color: var(--ink-faint); margin: 0 4px; }
+  .chg-badge {
+    font-size: 10px; font-weight: 700; color: var(--overdue); background: var(--overdue-bg);
+    border-radius: 999px; padding: 1px 7px; margin-left: 6px; vertical-align: middle;
+  }
+  .swap-ref { font-size: 10.5px; color: var(--ink-faint); font-weight: 500; margin-left: 4px; }
+  .row-btns { display: flex; gap: 5px; }
 
   /* ---- events ---- */
   .event-row { display: flex; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); align-items: baseline; }
@@ -418,6 +424,10 @@
 
   function localDateStr(d){
     return d.getFullYear() + "-" + ("0"+(d.getMonth()+1)).slice(-2) + "-" + ("0"+d.getDate()).slice(-2);
+  }
+
+  function toHalfDigits(s){
+    return String(s).replace(/[０-９]/g, function(c){ return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); });
   }
 
   // その日付に表示すべき教科を返す。後期開始日以降で後期の教科が入力されていれば
@@ -731,6 +741,34 @@
       return editableSubjects === "all" || !!(editableSubjects && editableSubjects[subject]);
     }
 
+    var isTeacher = state.ctx.role === "teacher";
+
+    // 日付×時限 → 手動の時間割変更 の対応表
+    var overrideMap = {};
+    (dayInfo.overrides || []).forEach(function(o){
+      if (o.subject) overrideMap[o.date + "|" + o.period] = o.subject;
+    });
+
+    // その日・その時限に表示する教科を決める。優先順位は
+    // ①教員の手動変更 → ②行事予定の校時（「A水3」=A週水曜3限の授業、
+    // 「授」=通常どおり、それ以外の文字=特別活動） → ③固定時間割
+    function resolvePeriod(day, n){
+      var ov = overrideMap[day.date + "|" + n];
+      if (ov) return { subject: ov, belongings: "", source: "manual" };
+      var token = (day.plan && day.plan[n-1] != null) ? String(day.plan[n-1]).trim() : "";
+      if (day.plan && token && token !== "授") {
+        var m = toHalfDigits(token).toUpperCase().match(/^([AB])?([月火水木金])(\d{1,2})$/);
+        if (m) {
+          var cell = findScheduleCell(m[2], Number(m[3]), m[1] || day.week);
+          if (cell) return { subject: subjectForDate(cell, day.date), belongings: cell.belongings || "", source: "swap", ref: token };
+        }
+        return { subject: token, belongings: "", source: "special" };
+      }
+      var cell2 = findScheduleCell(day.dayKey, n, day.week);
+      if (cell2) return { subject: subjectForDate(cell2, day.date), belongings: cell2.belongings || "", source: "normal" };
+      return null;
+    }
+
     var html = '<div class="grid-2">';
 
     html += '<div>';
@@ -744,30 +782,54 @@
       if (!day.dayKey) {
         html += '<div class="empty">'+day.label+'は授業がありません。ゆっくり過ごしてください。</div>';
       } else {
+        // この日のコマ番号：行事予定の校時があればそれを優先し、なければ固定時間割。
+        // 手動変更で追加された時限も含める。
+        var hasPlan = !!(day.plan && day.plan.length > 0);
         var periodNums = [];
-        state.data.schedule.forEach(function(p){
-          if (p.day === day.dayKey && matchesWeek(p, day.week) && periodNums.indexOf(p.period) < 0) periodNums.push(p.period);
-        });
-        periodNums.sort(function(a,b){ return a - b; });
-        var periods = periodNums.map(function(n){ return findScheduleCell(day.dayKey, n, day.week); });
-        if (periods.length === 0) {
-          html += '<div class="empty">時間割が登録されていません。</div>';
+        function addP(n){ if (n && periodNums.indexOf(n) < 0) periodNums.push(n); }
+        if (hasPlan) {
+          day.plan.forEach(function(t, i){ if (String(t).trim() !== "") addP(i + 1); });
         } else {
-          var anyEdit = periods.some(function(p){ return canEditPeriod(subjectForDate(p, day.date)); });
-          periods.forEach(function(p){
-            var subj = subjectForDate(p, day.date);  // 後期開始日以降は後期の教科
-            var icon = SUBJECT_ICON[subj] || "📘";
-            var editable = canEditPeriod(subj);
-            var note = noteMap[day.date + "|" + p.period];
+          state.data.schedule.forEach(function(p){
+            if (p.day === day.dayKey && matchesWeek(p, day.week)) addP(p.period);
+          });
+        }
+        (dayInfo.overrides || []).forEach(function(o){ if (o.date === day.date) addP(o.period); });
+        periodNums.sort(function(a,b){ return a - b; });
+
+        var rows = periodNums.map(function(n){ return { n: n, res: resolvePeriod(day, n) }; })
+          .filter(function(x){ return x.res; });
+
+        if (rows.length === 0) {
+          html += hasPlan
+            ? '<div class="empty">行事予定によると、この日の授業はありません。</div>'
+            : '<div class="empty">時間割が登録されていません。</div>';
+        } else {
+          var anyEdit = isTeacher || rows.some(function(x){ return canEditPeriod(x.res.subject); });
+          rows.forEach(function(x){
+            var n = x.n, res = x.res;
+            var editable = canEditPeriod(res.subject);
+            var note = noteMap[day.date + "|" + n];
+            var icon = SUBJECT_ICON[res.subject] || (res.source === "special" ? "📌" : "📘");
+            var subjHtml = icon + ' ' + escapeHtml(res.subject);
+            if (res.source === "manual") subjHtml += '<span class="chg-badge">変更</span>';
+            else if (res.source === "swap") subjHtml += '<span class="swap-ref">('+escapeHtml(res.ref)+')</span>';
             // 連絡・持ち物は教科の右隣に横並びで表示する（🎒=毎回の持ち物 ／ 📣=この日の連絡）
             var noteBits = [];
-            if (p.belongings) noteBits.push('🎒 '+escapeHtml(p.belongings));
+            if (res.belongings) noteBits.push('🎒 '+escapeHtml(res.belongings));
             if (note && note.text) noteBits.push('📣 '+escapeHtml(note.text));
+            var btns = '';
+            if (editable) {
+              btns += '<button class="edit-btn" data-edit-date="'+day.date+'" data-edit-period="'+n+'" data-edit-subject="'+escapeHtml(res.subject)+'" title="この日の教科連絡・持ち物を入力">✏️</button>';
+            }
+            if (isTeacher) {
+              btns += '<button class="edit-btn" data-swap-date="'+day.date+'" data-swap-period="'+n+'" data-swap-current="'+escapeHtml(overrideMap[day.date + "|" + n] || "")+'" data-swap-subject="'+escapeHtml(res.subject)+'" title="この日だけ時間割を変更">🔁</button>';
+            }
             html += '<div class="period-row'+(anyEdit ? ' has-edit' : '')+'">' +
-              '<div class="period-num">'+p.period+'</div>' +
-              '<div class="period-subject">'+icon+' '+escapeHtml(subj)+'</div>' +
+              '<div class="period-num">'+n+'</div>' +
+              '<div class="period-subject">'+subjHtml+'</div>' +
               '<div class="period-note">'+noteBits.join('<span class="note-sep">／</span>')+'</div>' +
-              (anyEdit ? (editable ? '<button class="edit-btn" data-edit-date="'+day.date+'" data-edit-period="'+p.period+'" title="この日の教科連絡・持ち物を入力">✏️</button>' : '<span></span>') : '') +
+              (anyEdit ? '<div class="row-btns">'+btns+'</div>' : '') +
               '</div>';
           });
         }
@@ -804,6 +866,7 @@
     document.getElementById("mainContent").innerHTML = html;
     bindTaskChecks();
     bindDailyNoteEdits();
+    bindScheduleSwapEdits();
   }
 
   // 「今日・明日の教科連絡・持ち物」を編集するモーダル（教員＋担当教科の教科係）。
@@ -821,11 +884,75 @@
         var period = Number(btn.getAttribute("data-edit-period"));
         var day = dayByDate[date];
         if (!day) return;
-        var per = findScheduleCell(day.dayKey, period, day.week);
         var note = noteMap[date + "|" + period];
-        openDailyNoteModal(day, period, per ? subjectForDate(per, date) : "", note ? note.text : "");
+        // その行に表示されている教科（時間割変更・校時も反映済み）をそのまま使う
+        openDailyNoteModal(day, period, btn.getAttribute("data-edit-subject") || "", note ? note.text : "");
       };
     });
+  }
+
+  // 「この日だけの時間割変更」を入力するモーダル（教員のみ）
+  function bindScheduleSwapEdits(){
+    var dayInfo = state.data.dayInfo || { days: [] };
+    var dayByDate = {};
+    dayInfo.days.forEach(function(d){ dayByDate[d.date] = d; });
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-swap-date]"), function(btn){
+      btn.onclick = function(){
+        var date = btn.getAttribute("data-swap-date");
+        var day = dayByDate[date];
+        if (!day) return;
+        openScheduleOverrideModal(
+          day,
+          Number(btn.getAttribute("data-swap-period")),
+          btn.getAttribute("data-swap-current") || "",
+          btn.getAttribute("data-swap-subject") || ""
+        );
+      };
+    });
+  }
+
+  function openScheduleOverrideModal(day, period, current, resolvedSubject){
+    var root = document.getElementById("modalRoot");
+    var mdParts = String(day.date).split("-");
+    var md = Number(mdParts[1]) + "/" + Number(mdParts[2]);
+
+    var subjectList = Object.keys(SUBJECT_ICON);
+    var datalist = '<datalist id="swapSubjectList">'+subjectList.map(function(s){ return '<option value="'+s+'">'; }).join("")+'</datalist>';
+
+    var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
+    html += '<h3>時間割変更（この日だけ）</h3>';
+    html += '<div class="modal-sub">'+escapeHtml(state.viewClass)+' ・ '+day.label+' '+md+'（'+day.dayKey+'曜）'+period+'限</div>';
+    html += '<div class="field"><label>変更後の教科（空欄で元に戻す）</label>'
+      + '<input type="text" id="fSwapSubject" list="swapSubjectList" value="'+escapeHtml(current || "")+'" placeholder="現在：'+escapeHtml(resolvedSubject)+'">'+datalist
+      + '<div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px">固定の時間割は変わりません。この日のこの時限だけ差し替わります。</div></div>';
+    html += '<div class="field-error" id="fError" style="display:none"></div>';
+    html += '<div class="modal-actions"><button class="btn-secondary" id="cancelBtn">キャンセル</button><button class="btn-primary" id="submitBtn">保存する</button></div>';
+    html += '</div></div>';
+    root.innerHTML = html;
+
+    document.getElementById("cancelBtn").onclick = function(){ root.innerHTML = ""; };
+    document.getElementById("backdrop").onclick = function(e){ if (e.target.id === "backdrop") root.innerHTML = ""; };
+
+    document.getElementById("submitBtn").onclick = async function(){
+      var errBox = document.getElementById("fError");
+      errBox.style.display = "none";
+      var text = document.getElementById("fSwapSubject").value.trim();
+      var btn = document.getElementById("submitBtn");
+      btn.disabled = true;
+      btn.textContent = "保存中…";
+      try {
+        await gsRun("api_setScheduleOverride", { cls: state.viewClass, date: day.date, period: period, subject: text });
+        root.innerHTML = "";
+        showToast(text === "" ? "元の時間割に戻しました" : "時間割を変更しました");
+        await refreshData();
+      } catch (err) {
+        errBox.textContent = errorMessage(err);
+        errBox.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "保存する";
+      }
+    };
   }
 
   function openDailyNoteModal(day, period, subject, current){
