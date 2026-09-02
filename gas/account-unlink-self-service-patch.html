@@ -1,0 +1,205 @@
+<!--
+  ============================================================
+  連携アカウントを、自分で一覧確認・解除できるようにする
+  ============================================================
+  ※ 前提: gas/account-linking-patch.html（アカウント連携の基本機能）を
+    先に適用済みであることが必要です。
+
+  現状: 連携（追加）は本人が自分でできますが、連携の解除は
+  「アカウント紐付け」シートを開いて直接行を削除するしかありません。
+  ダッシュボード上に「🔗 連携アカウント」ボタンを追加し、そこから
+  自分に紐づいている連携アカウントの一覧を見て、解除（削除）できる
+  ようにします。
+
+  安全のため、削除できるのは「自分の本来のメールアドレスに紐づいた
+  行だけ」です（他の先生の連携行は操作できません）。
+
+  ⚠️ 重要: Code.gs用のコードと index.html用のコードが混ざっています。
+  index.html用のコード（HTML・JavaScript）は、既存の<script>や
+  <body>の“内側”に貼るものなので、<script>や<style>タグを
+  新しく追加しないでください。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① Code.gs: 新しい関数を2つ追加する
+  ==========================================================================
+  linkMyAccountToTeacher関数のすぐ下に、次の2つの関数を追加する:
+-->
+/**
+ * 自分（今ログインしている本人）に紐づいている連携アカウントの一覧を取得する
+ * ※ 「本人」の判定は getCurrentUser() が返す email（連携済みなら
+ *    本来の教員メールに統一されている）を基準にするので、
+ *    元のアカウント・連携済みのどちらでログインしていても、
+ *    同じ一覧が見える
+ */
+function getMyLinkedAccounts() {
+  const user = getCurrentUser();
+  if (!user.ok) return { ok: false, error: user.reason };
+  if (user.isGuest) return { ok: false, error: 'ゲスト閲覧モードではこの操作はできません' };
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = getOrCreateAccountLinkSheet_(ss);
+  const list = [];
+  if (sh.getLastRow() >= 2) {
+    const data = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+    data.forEach(row => {
+      if (String(row[0] || '').toLowerCase().trim() === user.email.toLowerCase()) {
+        list.push({
+          altEmail: row[1] || '',
+          name: row[2] || '',
+          registeredAt: row[3] instanceof Date ? Utilities.formatDate(row[3], 'JST', 'yyyy-MM-dd HH:mm') : ''
+        });
+      }
+    });
+  }
+  return { ok: true, list: list, myEmail: user.email };
+}
+
+/**
+ * 自分に紐づいている連携アカウントを解除（削除）する
+ * payload: altEmail（解除したい連携アカウントのメールアドレス）
+ * 安全のため、「紐付け先教員メール」が自分自身のものである行しか
+ * 削除できない
+ */
+function unlinkMyAccount(altEmail) {
+  const user = getCurrentUser();
+  if (!user.ok) return { ok: false, error: user.reason };
+  if (user.isGuest) return { ok: false, error: 'ゲスト閲覧モードではこの操作はできません' };
+  if (!altEmail) return { ok: false, error: 'メールアドレスが指定されていません' };
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = getOrCreateAccountLinkSheet_(ss);
+  if (sh.getLastRow() < 2) return { ok: false, error: '連携されているアカウントがありません' };
+
+  const data = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+  for (let i = 0; i < data.length; i++) {
+    const canonical = String(data[i][0] || '').toLowerCase().trim();
+    const alt = String(data[i][1] || '').toLowerCase().trim();
+    if (canonical === user.email.toLowerCase() && alt === String(altEmail).toLowerCase().trim()) {
+      sh.deleteRow(i + 2);
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: '対象の連携が見つかりません（自分が連携したものだけ解除できます）' };
+}
+
+
+<!--
+  ==========================================================================
+  ② index.html: トップバーに「🔗 連携アカウント」ボタンを追加する
+  ==========================================================================
+  探す場所（index.html内）:
+    <button id="syncAllergyBtn" onclick="syncAllergyMaster()" ...>🔄 アレルギーを反映</button>
+  この直後に次を追加する:
+-->
+<button id="linkAccountsBtn" onclick="openLinkedAccounts()" style="display:none;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:6px;">🔗 連携アカウント</button>
+
+
+<!--
+  ==========================================================================
+  ③ index.html: 連携アカウント管理モーダルのHTMLを追加する
+  ==========================================================================
+  探す場所（index.html内、マスターリンクモーダル <div id="masterLinksModal" ...>
+  の閉じタグ </div> の直後）に、次のモーダルをまるごと追加する:
+-->
+<div id="linkedAccountsModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:500;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:8px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,0.2);">
+    <div style="padding:16px 20px;border-bottom:2px solid var(--ink);display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:15px;font-weight:700;">🔗 連携アカウント管理</h3>
+      <button onclick="closeLinkedAccountsModal()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--ink-soft);padding:0 4px;">×</button>
+    </div>
+    <div style="padding:14px 20px;" id="linkedAccountsContent">
+      <div style="text-align:center;padding:20px;color:var(--ink-faint);font-size:13px;">読み込み中...</div>
+    </div>
+  </div>
+</div>
+
+
+<!--
+  ==========================================================================
+  ④ index.html: JavaScript（<script>タグは付けない。既存の<script>の中で
+     handleNippoLoaded関数に1行追加し、新しい関数を4つ追加する）
+  ==========================================================================
+  (a) 探す（handleNippoLoaded関数の中）:
+
+var syncAllergyBtnEl = document.getElementById('syncAllergyBtn');
+if (syncAllergyBtnEl) syncAllergyBtnEl.style.display = data.user.isAdmin ? '' : 'none';
+
+  この直後に、次の2行を追加する（<script>タグは書かない）:
+-->
+var linkAccountsBtnEl = document.getElementById('linkAccountsBtn');
+if (linkAccountsBtnEl) linkAccountsBtnEl.style.display = data.user.isGuest ? 'none' : '';
+
+<!--
+  (b) 新しい関数を4つ、renderHeader関数の近くなどに追加する:
+-->
+function openLinkedAccounts() {
+  document.getElementById('linkedAccountsContent').innerHTML = '<div style="text-align:center;padding:20px;color:var(--ink-faint);font-size:13px;">読み込み中...</div>';
+  document.getElementById('linkedAccountsModal').style.display = 'flex';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.ok) {
+        document.getElementById('linkedAccountsContent').innerHTML = '<div style="text-align:center;padding:20px;color:var(--danger);font-size:13px;">エラー: ' + escapeHtml(res && res.error ? res.error : '不明') + '</div>';
+        return;
+      }
+      renderLinkedAccountsModal(res.list || [], res.myEmail);
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('linkedAccountsContent').innerHTML = '<div style="text-align:center;padding:20px;color:var(--danger);font-size:13px;">通信エラー: ' + escapeHtml(err && err.message ? err.message : String(err)) + '</div>';
+    })
+    .getMyLinkedAccounts();
+}
+
+function renderLinkedAccountsModal(list, myEmail) {
+  var html = '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">現在のログインアカウント: <strong>' + escapeHtml(myEmail) + '</strong></div>';
+  if (!list.length) {
+    html += '<div style="text-align:center;padding:16px;color:var(--ink-faint);font-size:12px;">連携されている別アカウントはありません</div>';
+  } else {
+    list.forEach(function(item) {
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:4px;margin-bottom:6px;">' +
+        '<div><div style="font-size:12.5px;font-weight:600;">' + escapeHtml(item.altEmail) + '</div>' +
+        '<div style="font-size:10.5px;color:var(--ink-faint);">連携日時: ' + escapeHtml(item.registeredAt) + '</div></div>' +
+        '<button class="mini-btn" style="color:var(--danger);" onclick="unlinkAccount(' + jsArg(item.altEmail) + ')">解除</button>' +
+        '</div>';
+    });
+  }
+  html += '<div style="font-size:11px;color:var(--ink-faint);margin-top:10px;line-height:1.5;">💡 別のアカウントを追加で連携したい場合は、そのアカウントでこのダッシュボードにアクセスすると表示される「アカウント連携」画面から、ご自身の名前を選んでください。</div>';
+
+  document.getElementById('linkedAccountsContent').innerHTML = html;
+}
+
+function closeLinkedAccountsModal() {
+  document.getElementById('linkedAccountsModal').style.display = 'none';
+}
+
+function unlinkAccount(altEmail) {
+  if (!confirm('「' + altEmail + '」との連携を解除しますか？\nこのアカウントでは今後ログインできなくなります。')) return;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) {
+        openLinkedAccounts();  // 一覧を再読み込み
+      } else {
+        alert('エラー: ' + (res && res.error ? res.error : '不明'));
+      }
+    })
+    .withFailureHandler(function(err) {
+      alert('通信エラー: ' + (err && err.message ? err.message : String(err)));
+    })
+    .unlinkMyAccount(altEmail);
+}
+
+<!--
+  ============================================================
+  補足
+  ============================================================
+  ・「🔗 連携アカウント」ボタンは、ゲスト閲覧ユーザー以外の
+    全員（管理者でなくても）に表示されます。自分で追加した
+    連携アカウントを、自分で管理できるようにするためです。
+  ・削除できるのは自分自身に紐づく行だけです（unlinkMyAccount内で
+    「紐付け先教員メール」が自分のメールと一致する行しか
+    削除できないようガードしています）。
+  ============================================================
+-->
