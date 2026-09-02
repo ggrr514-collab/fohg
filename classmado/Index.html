@@ -75,7 +75,15 @@
     border-radius: 8px; padding: 5px 8px;
   }
 
-  .greeting { font-size: 14.5px; color: var(--ink-soft); margin: 0 0 20px; }
+  /* ---- 左上の大きな日付・クラス表示 ---- */
+  .day-heading { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 6px; }
+  .day-heading .dh-date { font-size: 28px; font-weight: 700; letter-spacing: .01em; font-variant-numeric: tabular-nums; }
+  .day-heading .dh-class {
+    font-size: 16px; font-weight: 700; color: var(--accent-ink);
+    background: var(--accent-soft); border-radius: 10px; padding: 4px 14px;
+  }
+
+  .greeting { font-size: 13px; color: var(--ink-soft); margin: 0 0 16px; }
 
   /* ---- tabs ---- */
   nav.tabs {
@@ -102,19 +110,19 @@
 
   .panel {
     background: var(--paper-raised); border: 1px solid var(--line);
-    border-radius: 18px; padding: 18px 20px; box-shadow: 0 1px 2px var(--shadow);
+    border-radius: 18px; padding: 14px 18px; box-shadow: 0 1px 2px var(--shadow);
   }
-  .panel + .panel { margin-top: 16px; }
-  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
+  .panel + .panel { margin-top: 14px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 10px; }
   .panel-title { font-size: 16px; font-weight: 700; }
   .panel-meta { font-size: 12px; color: var(--ink-faint); flex-shrink: 0; }
 
   /* ---- timetable ---- */
   .period-row {
-    display: grid; grid-template-columns: 34px 1fr; align-items: center;
-    gap: 12px; padding: 10px 0; border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: 26px minmax(5.5em, auto) 1fr; align-items: center;
+    gap: 10px; padding: 5px 0; border-top: 1px solid var(--line);
   }
-  .period-row.has-edit { grid-template-columns: 34px 1fr auto; }
+  .period-row.has-edit { grid-template-columns: 26px minmax(5.5em, auto) 1fr auto; }
   .period-row:first-of-type { border-top: none; }
   .edit-btn {
     background: var(--paper); border: 1px solid var(--line-strong); border-radius: 8px;
@@ -151,8 +159,9 @@
     font-family: var(--font-num); font-size: 13px; font-weight: 600;
     color: var(--ink-faint); text-align: center;
   }
-  .period-subject { font-size: 15.5px; font-weight: 600; }
-  .period-note { font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; }
+  .period-subject { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .period-note { font-size: 12.5px; color: var(--ink-soft); }
+  .period-note .note-sep { color: var(--ink-faint); margin: 0 4px; }
 
   /* ---- events ---- */
   .event-row { display: flex; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); align-items: baseline; }
@@ -175,28 +184,28 @@
   .chip.homeroom { color: var(--homeroom); background: var(--homeroom-bg); }
 
   /* ---- task list ---- */
-  .task-item { padding: 12px 0; border-top: 1px solid var(--line); }
+  .task-item { padding: 8px 0; border-top: 1px solid var(--line); }
   .task-item:first-of-type { border-top: none; }
   .task-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .task-title { font-size: 14.5px; font-weight: 600; margin: 7px 0 3px; }
+  .task-title { font-size: 14.5px; font-weight: 600; margin: 4px 0 2px; }
   .task-detail { font-size: 12.5px; color: var(--ink-soft); }
   .task-due { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; padding: 3px 10px; border-radius: 999px; }
   .task-due.normal { color: var(--ink-soft); background: var(--line); }
   .task-due.soon { color: var(--warn); background: var(--warn-bg); }
   .task-due.overdue { color: var(--overdue); background: var(--overdue-bg); }
   .task-due.done { color: var(--done); background: var(--done-bg); }
-  .task-check { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .task-check { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
   .task-check label { font-size: 12.5px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .task-check input { width: 17px; height: 17px; accent-color: var(--done); cursor: pointer; }
 
   /* ---- announcements ---- */
-  .post { padding: 14px 0; border-top: 1px solid var(--line); }
+  .post { padding: 9px 0; border-top: 1px solid var(--line); }
   .post:first-of-type { border-top: none; }
-  .post-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+  .post-top { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; flex-wrap: wrap; }
   .post-time { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; margin-left: auto; }
-  .post-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+  .post-title { font-size: 15px; font-weight: 700; margin: 0 0 2px; }
   .post-body { font-size: 13.5px; color: var(--ink-soft); white-space: pre-wrap; }
-  .post-by { font-size: 11.5px; color: var(--ink-faint); margin-top: 6px; }
+  .post-by { font-size: 11.5px; color: var(--ink-faint); margin-top: 3px; }
 
   .empty { font-size: 13px; color: var(--ink-faint); padding: 18px 0; text-align: center; }
 
@@ -293,6 +302,7 @@
     </div>
   </header>
 
+  <div class="day-heading" id="dayHeading"></div>
   <p class="greeting" id="greeting"></p>
 
   <nav class="tabs" id="tabs"></nav>
@@ -457,6 +467,7 @@
   /* ============== 初回登録フォーム ============== */
 
   function renderRegistration(ctx){
+    document.getElementById("dayHeading").innerHTML = "";
     document.getElementById("greeting").textContent = "";
     document.getElementById("tabs").innerHTML = "";
     document.getElementById("whoBadge").innerHTML = "";
@@ -544,8 +555,19 @@
     };
   }
 
+  // 左上に今日の日付・曜日と表示中のクラスを大きく表示する
+  function updateDayHeading(){
+    var el = document.getElementById("dayHeading");
+    var d = new Date();
+    var dateLabel = (d.getMonth()+1) + "月" + d.getDate() + "日（" + DAY_KEYS_BY_JSDAY[d.getDay()] + "）";
+    var clsChip = state.viewClass ? '<span class="dh-class">' + escapeHtml(state.viewClass) + '</span>' : '';
+    el.innerHTML = '<span class="dh-date">' + dateLabel + '</span>' + clsChip;
+  }
+
   function renderChrome(){
-    document.getElementById("todayDate").textContent = todayLabel();
+    // 日付は左上に大きく出すので、右上の小さな表示は使わない
+    document.getElementById("todayDate").textContent = "";
+    updateDayHeading();
 
     var badge = document.getElementById("whoBadge");
     var roleName = state.ctx.role === "teacher" ? "教員" : "生徒";
@@ -561,6 +583,7 @@
       switchSel.value = state.viewClass;
       switchSel.onchange = function(){
         state.viewClass = switchSel.value;
+        updateDayHeading();
         renderTab();
       };
     } else {
@@ -718,12 +741,14 @@
             var icon = SUBJECT_ICON[p.subject] || "📘";
             var editable = canEditPeriod(p.subject);
             var note = noteMap[day.date + "|" + p.period];
+            // 連絡・持ち物は教科の右隣に横並びで表示する（🎒=毎回の持ち物 ／ 📣=この日の連絡）
+            var noteBits = [];
+            if (p.belongings) noteBits.push('🎒 '+escapeHtml(p.belongings));
+            if (note && note.text) noteBits.push('📣 '+escapeHtml(note.text));
             html += '<div class="period-row'+(anyEdit ? ' has-edit' : '')+'">' +
               '<div class="period-num">'+p.period+'</div>' +
-              '<div><div class="period-subject">'+icon+' '+escapeHtml(p.subject)+'</div>' +
-              (p.belongings ? '<div class="period-note">🎒 毎回：'+escapeHtml(p.belongings)+'</div>' : '') +
-              (note && note.text ? '<div class="period-note">📣 '+escapeHtml(note.text)+'</div>' : '') +
-              '</div>' +
+              '<div class="period-subject">'+icon+' '+escapeHtml(p.subject)+'</div>' +
+              '<div class="period-note">'+noteBits.join('<span class="note-sep">／</span>')+'</div>' +
               (anyEdit ? (editable ? '<button class="edit-btn" data-edit-date="'+day.date+'" data-edit-period="'+p.period+'" title="この日の教科連絡・持ち物を入力">✏️</button>' : '<span></span>') : '') +
               '</div>';
           });
@@ -753,7 +778,7 @@
     html += '<div class="panel"><div class="panel-head"><div class="panel-title">新着連絡</div></div>';
     var recent = state.data.posts.slice(0,3);
     if (recent.length === 0) { html += '<div class="empty">連絡はありません。</div>'; }
-    recent.forEach(function(a){ html += renderPost(a, true); });
+    recent.forEach(function(a){ html += renderPost(a, false); });  // 本文も表示する
     html += '</div>';
     html += '</div>';
 
@@ -1443,6 +1468,7 @@
   /* ============== 読み込みエラー ============== */
 
   function renderLoadError(err){
+    document.getElementById("dayHeading").innerHTML = "";
     document.getElementById("greeting").textContent = "";
     document.getElementById("tabs").innerHTML = "";
     document.getElementById("whoBadge").innerHTML = "";
