@@ -1,0 +1,416 @@
+<!--
+  ============================================================
+  「tから始まるアカウント以外」でも、初回だけ名前を選べば
+  以後はどちらのアカウントでもログインできるようにする
+  ============================================================
+  現状: getCurrentUser() は、ログインしているGoogleアカウントの
+  メールアドレスが「教員名簿」シートに直接登録されているものと
+  完全一致しないと、その人だと認識できません（一致しないと
+  「教員名簿に登録されていません」というエラーになります）。
+
+  今回追加する仕組み:
+  1. 新しく「アカウント紐付け」シートを作る
+     （別アカウントのメール ⇔ 教員名簿に登録された本来のメール）
+  2. 教員名簿に直接一致しないアカウントでログインしたとき、
+     まずこの紐付けシートを確認する。見つかればそのまま本人として
+     ログインできる（教員名簿に登録された名前・管理者権限などを
+     そのまま使う）。
+  3. 紐付けもされていなければ、「名前を選んで連携する」画面を出す。
+     一覧から自分の名前を選んで連携すると、次回からはそのアカウント
+     でもログインできるようになる（元の登録アカウントも引き続き
+     使えます）。
+
+  ⚠️ 重要: Code.gs用のコードと index.html用のコードが混ざっています。
+  index.html用のコード（HTML・JavaScript）は、既存の<script>や
+  <body>の“内側”に貼るものなので、<script>や<style>タグを
+  新しく追加しないでください。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① Code.gs: SHEET_NAMES に「アカウント紐付け」を追加する
+  ==========================================================================
+  探す（1行）:
+
+  RENRAKU_CONFIRM: '確認スタンプ',
+
+  この直後に、次の1行を追加する:
+-->
+  ACCOUNT_LINK: 'アカウント紐付け',
+
+
+<!--
+  ==========================================================================
+  ② Code.gs: getCurrentUser() 関数を書き換える
+  ==========================================================================
+  探す（getCurrentUser関数まるごと）:
+
+function getCurrentUser() {
+  const email = (Session.getActiveUser().getEmail() || '').toLowerCase();
+  if (!email) {
+    return { ok: false, reason: 'メールアドレスが取得できません。Google にログインしているか確認してください。' };
+  }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(SHEET_NAMES.TEACHERS);
+  if (!sh || sh.getLastRow() < 3) {
+    return { ok: false, reason: '教員名簿シートにデータがありません。IMPORTRANGEの設定を確認してください。' };
+  }
+  // 列構成: A=教員名, B=メール, C=管理者
+  // データは3行目から（1行目は説明、2行目はヘッダー）
+  const data = sh.getRange(3, 1, sh.getLastRow() - 2, 3).getValues();
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    if (!row[1]) continue;  // メールが空ならスキップ
+    if (String(row[1]).toLowerCase() === email) {
+      return {
+        ok: true,
+        email: email,
+        name: row[0] || '',
+        section: '',
+        title: '',
+        ext: '',
+        isAdmin: row[2] === true,
+        isGuest: false
+      };
+    }
+  }
+  // 名簿に未登録でも、「ゲスト閲覧」設定が有効な間だけ閲覧専用アカウントとして許可する
+  // （例: 小学校の先生を研修で招く日だけ設定シートのフラグをONにする）
+  if (isGuestModeEnabled_(ss)) {
+    return {
+      ok: true,
+      email: email,
+      name: email.split('@')[0] + '（ゲスト）',
+      section: '',
+      title: '',
+      ext: '',
+      isAdmin: false,
+      isGuest: true
+    };
+  }
+  return { ok: false, reason: '教員名簿に登録されていません: ' + email };
+}
+
+  これに置き換える:
+-->
+function getCurrentUser() {
+  const email = (Session.getActiveUser().getEmail() || '').toLowerCase();
+  if (!email) {
+    return { ok: false, reason: 'メールアドレスが取得できません。Google にログインしているか確認してください。' };
+  }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(SHEET_NAMES.TEACHERS);
+  if (!sh || sh.getLastRow() < 3) {
+    return { ok: false, reason: '教員名簿シートにデータがありません。IMPORTRANGEの設定を確認してください。' };
+  }
+  // 列構成: A=教員名, B=メール, C=管理者
+  // データは3行目から（1行目は説明、2行目はヘッダー）
+  const data = sh.getRange(3, 1, sh.getLastRow() - 2, 3).getValues();
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    if (!row[1]) continue;  // メールが空ならスキップ
+    if (String(row[1]).toLowerCase() === email) {
+      return {
+        ok: true,
+        email: email,
+        name: row[0] || '',
+        section: '',
+        title: '',
+        ext: '',
+        isAdmin: row[2] === true,
+        isGuest: false
+      };
+    }
+  }
+
+  // 教員名簿に直接一致しない場合、「アカウント紐付け」で連携済みか確認する。
+  // 連携済みなら、本来の教員メール（紐付け先）として扱う
+  // （投稿の記名やピン留めなどが、どちらのアカウントでログインしても
+  //  同じ人として統一されるように、email は紐付け先の本来のメールにする）
+  try {
+    const linkedEmail = resolveLinkedTeacherEmail_(ss, email);
+    if (linkedEmail) {
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        if (!row[1]) continue;
+        if (String(row[1]).toLowerCase() === linkedEmail) {
+          return {
+            ok: true,
+            email: linkedEmail,
+            name: row[0] || '',
+            section: '',
+            title: '',
+            ext: '',
+            isAdmin: row[2] === true,
+            isGuest: false
+          };
+        }
+      }
+    }
+  } catch (e) {
+    console.log('アカウント紐付け確認エラー: ' + (e.message || e));
+  }
+
+  // 名簿に未登録でも、「ゲスト閲覧」設定が有効な間だけ閲覧専用アカウントとして許可する
+  // （例: 小学校の先生を研修で招く日だけ設定シートのフラグをONにする）
+  if (isGuestModeEnabled_(ss)) {
+    return {
+      ok: true,
+      email: email,
+      name: email.split('@')[0] + '（ゲスト）',
+      section: '',
+      title: '',
+      ext: '',
+      isAdmin: false,
+      isGuest: true
+    };
+  }
+  // 教員名簿にも紐付けにも無い → 「名前を選んで連携する」画面を出すためのフラグを付ける
+  return { ok: false, reason: '教員名簿に登録されていません: ' + email, needsLinking: true };
+}
+
+
+<!--
+  ==========================================================================
+  ③ Code.gs: 新しい関数を追加する
+  ==========================================================================
+  getCurrentUser関数のすぐ下（isGuestModeEnabled_関数の近く）に、
+  次の関数をまとめて追加する:
+-->
+/**
+ * 「アカウント紐付け」シートを取得（なければ作成）
+ * 列: A=紐付け先教員メール（教員名簿の本来のメール）, B=追加アカウントのメール,
+ *     C=氏名（確認用）, D=登録日時
+ */
+function getOrCreateAccountLinkSheet_(ss) {
+  let sh = ss.getSheetByName(SHEET_NAMES.ACCOUNT_LINK);
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_NAMES.ACCOUNT_LINK);
+    sh.getRange(1, 1, 1, 4).setValues([['紐付け先教員メール', '追加アカウントのメール', '氏名（確認用）', '登録日時']]);
+    sh.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#2c5f8d').setFontColor('#ffffff');
+    [220, 220, 120, 150].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/**
+ * 指定した追加アカウントのメールが、どの教員メールに紐付いているか調べる
+ * 見つからなければ空文字を返す
+ */
+function resolveLinkedTeacherEmail_(ss, altEmail) {
+  const sh = getOrCreateAccountLinkSheet_(ss);
+  if (sh.getLastRow() < 2) return '';
+  const data = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][1] || '').toLowerCase().trim() === altEmail) {
+      return String(data[i][0] || '').toLowerCase().trim();
+    }
+  }
+  return '';
+}
+
+/**
+ * 教員名簿の名前一覧を取得する（ログイン前でも呼べる。認証チェックなし）
+ * 「アカウント連携」画面の選択肢として使う
+ */
+function getTeacherNamesForLinking() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const teachers = getTeachersList_(ss);
+    return { ok: true, teachers: teachers.map(t => t.name).filter(Boolean) };
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) };
+  }
+}
+
+/**
+ * 今ログインしているアカウント（教員名簿に未登録のもの）を、
+ * 選択した教員名に紐付ける。
+ * 「アカウント連携」画面から呼ばれる（ログイン前の状態で呼ばれるため、
+ * requireEditUser_は使わず、Session.getActiveUser()を直接見る）
+ */
+function linkMyAccountToTeacher(teacherName) {
+  const email = (Session.getActiveUser().getEmail() || '').toLowerCase();
+  if (!email) return { ok: false, error: 'メールアドレスが取得できません' };
+  if (!teacherName) return { ok: false, error: '名前が指定されていません' };
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const teachers = getTeachersList_(ss);
+
+  // 既にこのアカウントが教員名簿に直接登録されている場合は連携不要
+  const directMatch = teachers.find(t => t.email.toLowerCase() === email);
+  if (directMatch) {
+    return { ok: false, error: 'このアカウントは既に教員名簿に登録されています' };
+  }
+
+  const matches = teachers.filter(t => t.name === teacherName);
+  if (matches.length === 0) {
+    return { ok: false, error: '教員名簿にその名前が見つかりません: ' + teacherName };
+  }
+  if (matches.length > 1) {
+    return { ok: false, error: '同じ名前の教員が複数登録されています。お手数ですが管理者に連携をご依頼ください。' };
+  }
+  const canonicalEmail = matches[0].email.toLowerCase();
+
+  const sh = getOrCreateAccountLinkSheet_(ss);
+  // 既にこのアカウントの紐付けがあれば更新、なければ新規追加
+  if (sh.getLastRow() >= 2) {
+    const data = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+    for (let i = 0; i < data.length; i++) {
+      if (String(data[i][1] || '').toLowerCase().trim() === email) {
+        sh.getRange(i + 2, 1, 1, 4).setValues([[canonicalEmail, email, teacherName, new Date()]]);
+        return { ok: true };
+      }
+    }
+  }
+  sh.appendRow([canonicalEmail, email, teacherName, new Date()]);
+  return { ok: true };
+}
+
+
+<!--
+  ==========================================================================
+  ④ index.html: 「アカウント連携」画面のHTMLを追加する
+  ==========================================================================
+  探す（index.html内、<div id="errorScreen" ...>...</div> の直後）:
+
+  <!-- エラー -->
+  <div id="errorScreen" class="error-box" style="display:none;">
+    <strong>⚠️ エラー</strong>
+    <p id="errorMessage"></p>
+  </div>
+
+  この直後に、次のHTMLを追加する:
+-->
+<div id="linkingScreen" style="display:none;padding:30px 12px;">
+  <div style="max-width:380px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:8px;padding:20px;box-shadow:0 4px 16px rgba(0,0,0,0.08);">
+    <h3 style="font-size:15px;font-weight:700;margin-bottom:10px;">🔗 アカウント連携</h3>
+    <p style="font-size:13px;line-height:1.7;color:var(--ink-soft);margin-bottom:14px;">
+      このGoogleアカウントは教員名簿に登録されていません。<br>
+      ご自身のお名前を選んで連携すると、次回からはこのアカウントでも
+      ログインできるようになります（元のアカウントも引き続き使えます）。
+    </p>
+    <select id="linkingNameSelect" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px;font-family:inherit;margin-bottom:12px;box-sizing:border-box;">
+      <option value="">読み込み中...</option>
+    </select>
+    <button class="add-btn" style="width:100%;" onclick="submitAccountLink()">この名前で連携する</button>
+    <div id="linkingResult" style="margin-top:10px;font-size:12px;"></div>
+  </div>
+</div>
+
+
+<!--
+  ==========================================================================
+  ⑤ index.html: JavaScript（<script>タグは付けない。既存の<script>の中で
+     handleNippoLoaded関数を1箇所修正し、新しい関数を2つ追加する）
+  ==========================================================================
+  (a) 探す（handleNippoLoaded関数の中、冒頭）:
+
+function handleNippoLoaded(data) {
+  document.getElementById('loadingScreen').style.display = 'none';
+
+  if (!data) {
+    showError('サーバーから応答がありませんでした');
+    return;
+  }
+  if (!data.user) {
+    showError('ユーザー情報が取得できませんでした');
+    return;
+  }
+  if (!data.user.ok) {
+    showError(data.user.reason || '認証に失敗しました');
+    return;
+  }
+
+  これに置き換える（needsLinkingのチェックを1つ追加しただけです）:
+-->
+function handleNippoLoaded(data) {
+  document.getElementById('loadingScreen').style.display = 'none';
+
+  if (!data) {
+    showError('サーバーから応答がありませんでした');
+    return;
+  }
+  if (!data.user) {
+    showError('ユーザー情報が取得できませんでした');
+    return;
+  }
+  if (!data.user.ok) {
+    if (data.user.needsLinking) {
+      showLinkingScreen();
+      return;
+    }
+    showError(data.user.reason || '認証に失敗しました');
+    return;
+  }
+
+<!--
+  (b) renderHeader関数の近くなど、どこでも良いので次の2つの関数を追加する:
+-->
+function showLinkingScreen() {
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('errorScreen').style.display = 'none';
+  document.getElementById('mainScreen').style.display = 'none';
+  document.getElementById('linkingScreen').style.display = 'block';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      var sel = document.getElementById('linkingNameSelect');
+      if (!res || !res.ok || !res.teachers || !res.teachers.length) {
+        sel.innerHTML = '<option value="">名簿を取得できませんでした</option>';
+        return;
+      }
+      var html = '<option value="">選択してください</option>';
+      res.teachers.forEach(function(name) {
+        html += '<option value="' + escapeHtml(name) + '">' + escapeHtml(name) + '</option>';
+      });
+      sel.innerHTML = html;
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('linkingNameSelect').innerHTML = '<option value="">通信エラー</option>';
+    })
+    .getTeacherNamesForLinking();
+}
+
+function submitAccountLink() {
+  var name = document.getElementById('linkingNameSelect').value;
+  if (!name) {
+    alert('お名前を選択してください');
+    return;
+  }
+  if (!confirm('「' + name + '」として、このアカウントを連携します。よろしいですか？')) return;
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) {
+        document.getElementById('linkingResult').innerHTML = '<span style="color:var(--accent);">連携しました。読み込み直します...</span>';
+        setTimeout(function() { window.location.reload(); }, 1000);
+      } else {
+        document.getElementById('linkingResult').innerHTML = '<span style="color:var(--danger);">エラー: ' + (res && res.error ? res.error : '不明') + '</span>';
+      }
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('linkingResult').innerHTML = '<span style="color:var(--danger);">通信エラー: ' + (err && err.message ? err.message : String(err)) + '</span>';
+    })
+    .linkMyAccountToTeacher(name);
+}
+
+<!--
+  ============================================================
+  補足
+  ============================================================
+  ・連携済みのアカウント一覧は「アカウント紐付け」シート（初回連携時に
+    自動作成されます）で確認・削除できます。連携を解除したい場合は、
+    そのシートの該当行を削除してください。
+  ・この仕組みは「名前を自己申告して選ぶだけ」で連携できる、比較的
+    簡易な本人確認です。Webアプリ自体が学校のGoogle Workspace内の
+    アカウントに限定されている前提であれば、実用上問題ない想定ですが、
+    厳密な本人確認（管理者の承認制など）にしたい場合はご相談ください。
+  ・同姓同名の教員が複数いる場合はエラーになり、連携できません
+    （その場合は管理者が直接「アカウント紐付け」シートに1行追加する
+    ことで対応できます: A列=本来の教員メール, B列=追加アカウントの
+    メール, C列=氏名, D列=日時）。
+  ============================================================
+-->
