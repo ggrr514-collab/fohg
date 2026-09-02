@@ -1369,7 +1369,10 @@
     var root = document.getElementById("modalRoot");
 
     var catOptions = perms.map(function(p, i){
-      return '<option value="'+i+'">'+escapeHtml(CATEGORY_META[p.category] ? CATEGORY_META[p.category].name : p.category)+'：'+escapeHtml(p.label)+'</option>';
+      var catName = CATEGORY_META[p.category] ? CATEGORY_META[p.category].name : p.category;
+      // 「学級・担任：学級・担任」のように分類名と表示名が同じときは1つだけ表示する
+      var text = catName === p.label ? p.label : catName + '：' + p.label;
+      return '<option value="'+i+'">'+escapeHtml(text)+'</option>';
     }).join("");
 
     var isTask = kind === "tasks";
