@@ -36,7 +36,16 @@ var SHEET = {
   SETTINGS: '設定'
 };
 
-var SUBJECTS = ["国語", "数学", "英語", "理科", "社会", "音楽", "美術", "保健", "技術", "家庭"];
+// 教科係の教科一覧（既定値）。「設定」シートに キー「教科リスト」・
+// 値「国語、数学、理科…」の行を作れば、コードを触らずにあとから変更できる。
+var SUBJECTS = ["国語", "数学", "理科", "社会", "GS", "音楽", "美術", "技術", "家庭科"];
+
+function getSubjects_() {
+  var raw = getSetting_('教科リスト', '');
+  if (!raw) return SUBJECTS;
+  var list = String(raw).split(/[、,・\s]+/).filter(function (s) { return s; });
+  return list.length > 0 ? list : SUBJECTS;
+}
 
 // 委員会は学校で統一（この一覧から選択する）
 var COMMITTEES = [
@@ -240,7 +249,7 @@ function getPostPermissions_(ctx, cls, kind) {
 
   if (ctx.role === 'teacher') {
     perms.push({ category: 'homeroom', label: '学級・担任' });
-    SUBJECTS.forEach(function (s) { perms.push({ category: 'subject', label: s }); });
+    getSubjects_().forEach(function (s) { perms.push({ category: 'subject', label: s }); });
     assignments
       .filter(function (a) { return ['duty', 'committee', 'exec'].indexOf(a['カテゴリ']) >= 0; })
       .forEach(function (a) { perms.push({ category: a['カテゴリ'], label: a['表示名'] }); });
@@ -291,7 +300,8 @@ function api_getContext() {
     currentWeekAuto: !!autoWeek,
     eventSyncTime: getSetting_('行事取込日時', ''),
     secondTermStart: getSecondTermStart_(),
-    committees: COMMITTEES
+    committees: COMMITTEES,
+    subjects: getSubjects_()
   };
 }
 

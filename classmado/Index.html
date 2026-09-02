@@ -360,7 +360,8 @@
 
   var SUBJECT_ICON = {
     "国語":"📕", "数学":"✏️", "英語":"🔤", "理科":"🔬", "社会":"🌏",
-    "音楽":"🎵", "美術":"🎨", "保健":"❤️", "技術":"🔧", "家庭":"🍳",
+    "GS":"🌐", "音楽":"🎵", "美術":"🎨", "保健":"❤️", "技術":"🔧",
+    "家庭":"🍳", "家庭科":"🍳", "技術家庭":"🔧",
     "体育":"🏃", "道徳":"🌱", "学活":"🗣️", "総合":"🔍"
   };
 
@@ -402,8 +403,20 @@
     {key:"roles", label:"👥 係・担当"}
   ];
 
-  // 教科係として登録できる教科（サーバー側の一覧と合わせること）
-  var SUBJECTS = ["国語", "数学", "英語", "理科", "社会", "音楽", "美術", "保健", "技術", "家庭"];
+  // 教科の既定一覧（サーバー側の一覧が正。接続前の予備として持っておく）
+  var SUBJECTS = ["国語", "数学", "理科", "社会", "GS", "音楽", "美術", "技術", "家庭科"];
+
+  // 教科一覧：「設定」シートの「教科リスト」で変更でき、サーバーから受け取る
+  function subjectsList(){
+    return (state.ctx && state.ctx.subjects) || SUBJECTS;
+  }
+
+  // 時間割編集などの入力候補（教科一覧＋特別活動など）
+  function subjectSuggestions(){
+    var base = subjectsList().slice();
+    Object.keys(SUBJECT_ICON).forEach(function(s){ if (base.indexOf(s) < 0) base.push(s); });
+    return base;
+  }
 
   var WEEKDAYS = ["月","火","水","木","金"];
   var DAY_KEYS_BY_JSDAY = ["日","月","火","水","木","金","土"];
@@ -1004,8 +1017,7 @@
     var mdParts = String(day.date).split("-");
     var md = Number(mdParts[1]) + "/" + Number(mdParts[2]);
 
-    var subjectList = Object.keys(SUBJECT_ICON);
-    var datalist = '<datalist id="swapSubjectList">'+subjectList.map(function(s){ return '<option value="'+s+'">'; }).join("")+'</datalist>';
+    var datalist = '<datalist id="swapSubjectList">'+subjectSuggestions().map(function(s){ return '<option value="'+s+'">'; }).join("")+'</datalist>';
 
     var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
     html += '<h3>時間割変更（この日だけ）</h3>';
@@ -1245,8 +1257,7 @@
     var existing = findScheduleCell(day, period, weekView);
     var root = document.getElementById("modalRoot");
 
-    var subjectList = Object.keys(SUBJECT_ICON);
-    var datalist = '<datalist id="subjectList">'+subjectList.map(function(s){ return '<option value="'+s+'">'; }).join("")+'</datalist>';
+    var datalist = '<datalist id="subjectList">'+subjectSuggestions().map(function(s){ return '<option value="'+s+'">'; }).join("")+'</datalist>';
 
     var rangeLabel = { "": "A週・B週共通", "A": "A週のみ", "B": "B週のみ" };
 
@@ -1467,8 +1478,15 @@
 
     ROLE_GROUPS.forEach(function(g){
       var items = list.filter(function(a){ return a.category === g[0]; });
+      // 教科係は、担当がまだいない教科も「未設定」としてはじめから表示する
+      var missingSubjects = [];
+      if (g[0] === "subject") {
+        missingSubjects = subjectsList().filter(function(s){
+          return !items.some(function(a){ return a.label === s || String(a.label).indexOf(s) >= 0; });
+        });
+      }
       html += '<div class="panel"><div class="panel-head"><div class="panel-title">'+g[1]+'</div><div class="panel-meta">'+items.length+'名</div></div>';
-      if (items.length === 0) {
+      if (items.length === 0 && missingSubjects.length === 0) {
         html += '<div class="empty">まだ登録されていません。</div>';
       }
       items.forEach(function(a, idx){
@@ -1478,6 +1496,12 @@
           chipHtml(a.category, a.label) +
           '<span class="role-name">'+escapeHtml(a.name || a.email)+'</span>' +
           (canDel ? '<button class="role-del" data-del-cat="'+escapeHtml(a.category)+'" data-del-label="'+escapeHtml(a.label)+'" data-del-email="'+escapeHtml(a.email)+'" title="この担当を削除">✕</button>' : '') +
+          '</div>';
+      });
+      missingSubjects.forEach(function(s){
+        html += '<div class="role-row" style="opacity:.55">' +
+          chipHtml("subject", s) +
+          '<span class="role-name" style="color:var(--ink-faint);font-weight:500">未設定</span>' +
           '</div>';
       });
       html += '</div>';
@@ -1549,18 +1573,19 @@
     var studentOptions = students.map(function(s){
       return '<option value="'+escapeHtml(s.email)+'">'+escapeHtml(s.name)+'</option>';
     }).join("");
-    var subjectDatalist = '<datalist id="roleSubjectList">'+SUBJECTS.map(function(s){
-      return '<option value="'+s+'">';
-    }).join("")+'</datalist>';
+    var subjectSelectOptions = subjectsList().map(function(s){
+      return '<option value="'+escapeHtml(s)+'">'+escapeHtml(s)+'</option>';
+    }).join("") + '<option value="__other__">その他（自由入力）</option>';
     var committeeOptions = committeeList().map(function(c){
       return '<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+'</option>';
     }).join("");
 
-    // 種類ごとの入力欄：教科係=自由入力＋候補（技術家庭のようなまとめ係も可）、
+    // 種類ごとの入力欄：教科係=教科一覧から選択（その他で自由入力も可）、
     // 係・実行委員=自由入力、委員会=学校統一の一覧から選択
     function labelFieldHtml(cat){
       if (cat === "subject") {
-        return '<label>教科係の名前</label><input type="text" id="fRoleLabel" list="roleSubjectList" placeholder="例：国語／技術家庭">'+subjectDatalist
+        return '<label>教科</label><select id="fRoleLabel">'+subjectSelectOptions+'</select>'
+          + '<div id="roleOtherWrap" style="display:none;margin-top:8px"><input type="text" id="fRoleLabelOther" placeholder="例：技術家庭"></div>'
           + '<div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px">「技術家庭」のように複数教科をまとめた係名でも、該当教科の連絡を入力できます。</div>';
       }
       if (cat === "committee") {
@@ -1570,6 +1595,25 @@
         return '<label>実行委員の名前</label><input type="text" id="fRoleLabel" placeholder="例：合唱祭実行委員">';
       }
       return '<label>係の名前</label><input type="text" id="fRoleLabel" placeholder="例：図書係・庶務係">';
+    }
+
+    // 教科係の「その他（自由入力）」の表示切り替え
+    function bindLabelField(){
+      var sel = document.getElementById("fRoleLabel");
+      var wrap = document.getElementById("roleOtherWrap");
+      if (sel && wrap && sel.tagName === "SELECT") {
+        sel.onchange = function(){ wrap.style.display = sel.value === "__other__" ? "block" : "none"; };
+      }
+    }
+
+    function getRoleLabel(){
+      var el = document.getElementById("fRoleLabel");
+      if (!el) return "";
+      if (el.value === "__other__") {
+        var o = document.getElementById("fRoleLabelOther");
+        return o ? o.value.trim() : "";
+      }
+      return String(el.value).trim();
     }
 
     var catOptions = (isTeacher ? [["subject","教科係"]] : []).concat([
@@ -1602,7 +1646,9 @@
 
     document.getElementById("fRoleCat").onchange = function(){
       document.getElementById("roleLabelField").innerHTML = labelFieldHtml(this.value);
+      bindLabelField();
     };
+    bindLabelField();
 
     document.getElementById("cancelBtn").onclick = function(){ root.innerHTML = ""; };
     document.getElementById("backdrop").onclick = function(e){ if (e.target.id === "backdrop") root.innerHTML = ""; };
@@ -1612,7 +1658,7 @@
       submitBtn.onclick = async function(){
         var errBox = document.getElementById("fRoleError");
         errBox.style.display = "none";
-        var label = document.getElementById("fRoleLabel").value.trim();
+        var label = getRoleLabel();
         if (!label) { errBox.textContent = "名前を入力してください"; errBox.style.display = "block"; return; }
 
         var payload = {
