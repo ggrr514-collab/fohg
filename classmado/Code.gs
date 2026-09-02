@@ -27,6 +27,7 @@ var SHEET = {
   ASSIGNMENTS: '担当割当',
   SCHEDULE: '時間割',
   SCHEDULE_CHANGES: '時間割変更',
+  SCHOOL_EVENT_CHANGES: '行事変更',
   DAILY_NOTES: '日別連絡',
   EVENTS: '予定',
   EVENT_IMPORT: '行事取込',
@@ -289,11 +290,64 @@ function api_getContext() {
   }
   var classes = ctx.role === 'teacher' ? getAllClasses_() : [ctx.myClass];
 
-  // 行事予定ファイルを取り込み済みなら、そのA/B週から今週の週区分を自動判定する
+  var tz = Session.getScriptTimeZone();
+  var todayStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+
+  // 行事予定の取込データを一度だけ読み、週の自動判定と学校予定の両方に使う
+  var byDate = {}, rowByDate = {};
+  try {
+    readImportedEvents_().forEach(function (e) {
+      if (e.week) byDate[e.date] = e.week;
+      rowByDate[e.date] = e;
+    });
+  } catch (e) {}
   var autoWeek = null;
-  try { autoWeek = getWeekFromImport_(); } catch (e) { autoWeek = null; }
+  try { autoWeek = getWeekForDate_(todayStr, byDate); } catch (e) { autoWeek = null; }
+
+  // 学校全体の「今日」と「次の登校日」の予定（行事・日課）。教員の上書き（行事変更）を優先する
+  var evOverrides = {};
+  try { evOverrides = readSchoolEventOverrides_(); } catch (e) {}
+
+  function isSchoolWideDay(d) {
+    var s = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+    var row = rowByDate[s];
+    if (row && row.plans && Object.keys(row.plans).length > 0) {
+      var any = false;
+      Object.keys(row.plans).forEach(function (g) {
+        if (row.plans[g].some(function (t) { return String(t).trim() !== ''; })) any = true;
+      });
+      return any;
+    }
+    var dow = d.getDay();
+    return dow >= 1 && dow <= 5;
+  }
+  function schoolDayEntry(d, label) {
+    var s = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+    var row = rowByDate[s];
+    return {
+      date: s, label: label,
+      md: (d.getMonth() + 1) + '/' + d.getDate(),
+      you: YOUBI_CHARS_[d.getDay()],
+      text: evOverrides[s] || (row ? row.title : ''),
+      edited: !!evOverrides[s],
+      nikka: row ? row.nikka : ''
+    };
+  }
+  var todayD = new Date();
+  var nextD = new Date(todayD);
+  nextD.setDate(todayD.getDate() + 1);
+  var literallyTomorrow = true;
+  for (var gd = 0; gd < 60 && !isSchoolWideDay(nextD); gd++) {
+    nextD.setDate(nextD.getDate() + 1);
+    literallyTomorrow = false;
+  }
+  var schoolDays = [
+    schoolDayEntry(todayD, '今日'),
+    schoolDayEntry(nextD, literallyTomorrow ? '明日' : '次の登校日')
+  ];
 
   return {
+    schoolDays: schoolDays,
     needsRegistration: false, email: ctx.email, name: ctx.name, role: ctx.role,
     myClass: ctx.myClass, classes: classes,
     currentWeek: autoWeek || getSetting_('今週の週区分', 'A'),
@@ -504,6 +558,44 @@ function api_getEvents(cls) {
   return readEvents_()
     .filter(function (r) { return (r.cls === cls || r.cls === '全校') && r.date >= today; })
     .sort(function (a, b) { return a.date.localeCompare(b.date); });
+}
+
+// カレンダー表示用に、指定月（yyyy-MM）の行事を日付ごとにまとめて返す（過去の日も含む）。
+// 教員が「行事変更」で上書きした日は、取込由来の行事の代わりに上書き内容を返す。
+function api_getCalendar(cls, ym) {
+  var ctx = getContext_();
+  assertCanView_(ctx, cls);
+  if (!/^\d{4}-\d{2}$/.test(String(ym))) throw new Error('月の指定が正しくありません。');
+
+  var overrides = {};
+  try { overrides = readSchoolEventOverrides_(); } catch (e) {}
+
+  var byDate = {};
+  function entry(date) {
+    if (!byDate[date]) byDate[date] = { date: date, week: '', titles: [] };
+    return byDate[date];
+  }
+  readEvents_().forEach(function (e) {
+    if (String(e.date).indexOf(ym) !== 0) return;
+    if (e.cls !== cls && e.cls !== '全校') return;
+    var isImported = e.you !== undefined;  // 行事取込由来の行かどうか
+    var en = entry(e.date);
+    if (e.week) en.week = e.week;
+    if (isImported && overrides[e.date]) return;  // 上書きされた日は取込の行事を出さない
+    if (e.title) en.titles.push(e.title);
+  });
+  // 行事がない日にもA/B週の表示が出るよう、取込データの週を補完する
+  try {
+    readImportedEvents_().forEach(function (e) {
+      if (String(e.date).indexOf(ym) !== 0 || !e.week) return;
+      entry(e.date).week = e.week;
+    });
+  } catch (e) {}
+  Object.keys(overrides).forEach(function (d) {
+    if (d.indexOf(ym) !== 0) return;
+    entry(d).titles.unshift(overrides[d]);
+  });
+  return Object.keys(byDate).map(function (d) { return byDate[d]; });
 }
 
 /* ============================================================
@@ -741,6 +833,75 @@ function getWeekForDate_(dateStr, byDate) {
 // 今週の週区分を自動判定する（今日の日付で判定）
 function getWeekFromImport_() {
   return getWeekForDate_(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'), null);
+}
+
+/* ---------- 学校予定の手動上書き（急な予定変更用） ---------- */
+
+// 「行事変更」シートを読み、日付→上書き内容 の表を返す（シートがなければ空）
+function readSchoolEventOverrides_() {
+  var ss = getSS_();
+  if (!ss.getSheetByName(SHEET.SCHOOL_EVENT_CHANGES)) return {};
+  var map = {};
+  readSheet_(SHEET.SCHOOL_EVENT_CHANGES).forEach(function (r) {
+    var date = toDateStr_(r['日付']);
+    var text = String(r['内容'] == null ? '' : r['内容']).trim();
+    if (date && text) map[date] = text;
+  });
+  return map;
+}
+
+function getOrCreateSchoolEventSheet_() {
+  var ss = getSS_();
+  var sheet = ss.getSheetByName(SHEET.SCHOOL_EVENT_CHANGES);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET.SCHOOL_EVENT_CHANGES);
+    sheet.getRange(1, 1, 2, 4).setValues([
+      ['※ 急な予定変更などで、その日の学校予定（行事）の表示を上書きしたいときに使います（教員が画面から入力します）。行を消すと取込内容の表示に戻ります。', '', '', ''],
+      ['日付', '内容', '入力者メール', '更新日時']
+    ]);
+  }
+  return sheet;
+}
+
+// その日の学校予定（行事の表示）を上書きする（教員のみ・空欄で取込内容に戻す）
+function api_setSchoolEvent(payload) {
+  var ctx = getContext_();
+  if (ctx.role !== 'teacher') throw new Error('学校予定の編集は教員のみ行えます。');
+
+  var date = payload && payload.date ? String(payload.date).trim() : '';
+  var text = payload && payload.text != null ? String(payload.text).trim() : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('日付の形式が正しくありません。');
+
+  var sheet = getOrCreateSchoolEventSheet_();
+  var headerRow = findHeaderRow_(sheet);
+  if (!headerRow) throw new Error('「行事変更」シートの見出し行が見つかりません。');
+  var lastRow = sheet.getLastRow();
+  if (lastRow > headerRow) {
+    var values = sheet.getRange(headerRow, 1, lastRow - headerRow + 1, sheet.getLastColumn()).getValues();
+    var headers = values[0];
+    var dateIdx = headers.indexOf('日付');
+    var textIdx = headers.indexOf('内容');
+    var emailIdx = headers.indexOf('入力者メール');
+    var timeIdx = headers.indexOf('更新日時');
+    for (var i = 1; i < values.length; i++) {
+      if (toDateStr_(values[i][dateIdx]) === date) {
+        var rowNum = headerRow + i;
+        if (text === '') {
+          sheet.deleteRow(rowNum);
+        } else {
+          sheet.getRange(rowNum, textIdx + 1).setValue(text);
+          sheet.getRange(rowNum, emailIdx + 1).setValue(ctx.email);
+          sheet.getRange(rowNum, timeIdx + 1).setValue(new Date());
+        }
+        return { ok: true };
+      }
+    }
+  }
+  if (text === '') return { ok: true };
+  appendRow_(SHEET.SCHOOL_EVENT_CHANGES, {
+    '日付': date, '内容': text, '入力者メール': ctx.email, '更新日時': new Date()
+  });
+  return { ok: true };
 }
 
 // 行事の取込（教員のみ・画面のボタンから呼ばれる）
@@ -1004,6 +1165,8 @@ function api_getDayInfo(cls, baseDate) {
   } catch (e) {}
   var fallbackWeek = getSetting_('今週の週区分', 'A');
   var grade = gradeFromClassName_(cls);
+  var evOverrides = {};
+  try { evOverrides = readSchoolEventOverrides_(); } catch (e) {}
 
   function planFor(dateStr) {
     var row = rowByDate[dateStr];
@@ -1028,8 +1191,8 @@ function api_getDayInfo(cls, baseDate) {
       week: getWeekForDate_(dateStr, byDate) || fallbackWeek,
       // この日の校時（時限ごとの「A水3」「授」「学活」など）。行事予定にない日は null
       plan: planFor(dateStr),
-      // 学校全体のこの日の予定（行事予定ファイル由来の行事と日課）
-      schoolEvents: row ? row.title : '',
+      // 学校全体のこの日の予定（教員の上書き＞行事予定ファイル由来の行事）と日課
+      schoolEvents: evOverrides[dateStr] || (row ? row.title : ''),
       nikka: row ? row.nikka : ''
     };
   }

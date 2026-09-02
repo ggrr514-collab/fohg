@@ -84,6 +84,19 @@
     font-size: 16px; font-weight: 700; color: var(--accent-ink);
     background: var(--accent-soft); border-radius: 10px; padding: 4px 14px;
   }
+  /* 日付の右隣に出す、学校全体の今日・明日の予定 */
+  .head-school { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 3px; margin-left: 6px; }
+  .head-school-row { font-size: 12.5px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .hs-label {
+    flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--ink);
+    background: var(--line); border-radius: 999px; padding: 1px 9px;
+  }
+  .hs-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hs-edit {
+    flex-shrink: 0; background: none; border: 1px solid var(--line-strong); border-radius: 6px;
+    font-size: 11px; padding: 1px 6px; cursor: pointer; line-height: 1.4;
+  }
+  .hs-edit:hover { background: var(--accent-soft); border-color: var(--accent); }
 
   .greeting { font-size: 13px; color: var(--ink-soft); margin: 0 0 16px; }
 
@@ -182,6 +195,25 @@
     font-size: 12.5px; color: var(--warn); background: var(--warn-bg);
     border-radius: 8px; padding: 5px 12px;
   }
+
+  /* ---- カレンダー ---- */
+  .cal-table { border-collapse: collapse; width: 100%; min-width: 640px; table-layout: fixed; }
+  .cal-table th {
+    font-size: 11.5px; color: var(--ink-soft); font-weight: 700; padding: 4px;
+    border: 1px solid var(--line); background: var(--paper); text-align: center;
+  }
+  .cal-cell { border: 1px solid var(--line); vertical-align: top; padding: 4px 5px; height: 64px; }
+  .cal-empty { border: 1px solid var(--line); background: var(--paper); }
+  .cal-daynum { font-family: var(--font-num); font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+  .cal-week { font-size: 9.5px; color: var(--ink-faint); margin-left: 4px; font-weight: 700; }
+  .cal-title {
+    font-size: 10.5px; color: var(--ink-soft); line-height: 1.45; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  }
+  .cal-today { background: var(--accent-soft); }
+  .cal-today .cal-daynum { color: var(--accent-ink); }
+  td.cal-sun .cal-daynum, th.cal-sun { color: var(--overdue); }
+  td.cal-sat .cal-daynum, th.cal-sat { color: var(--accent); }
 
   /* ---- 学校全体のその日の予定・学習内容 ---- */
   .day-school {
@@ -447,6 +479,8 @@
     dataClass: null,
     renderSeq: 0,
     permsCache: {},
+    calMonth: null,      // カレンダーで表示中の月（yyyy-MM）。null=今月
+    calCache: {},        // クラス|月 → カレンダーデータ
     weekView: null
   };
 
@@ -640,13 +674,81 @@
     };
   }
 
-  // 左上に今日の日付・曜日と表示中のクラスを大きく表示する
+  // 左上に今日の日付・曜日と表示中のクラス、その右に学校全体の今日・明日の予定を表示する
   function updateDayHeading(){
     var el = document.getElementById("dayHeading");
     var d = new Date();
     var dateLabel = (d.getMonth()+1) + "月" + d.getDate() + "日（" + DAY_KEYS_BY_JSDAY[d.getDay()] + "）";
     var clsChip = state.viewClass ? '<span class="dh-class">' + escapeHtml(state.viewClass) + '</span>' : '';
-    el.innerHTML = '<span class="dh-date">' + dateLabel + '</span>' + clsChip;
+    var html = '<span class="dh-date">' + dateLabel + '</span>' + clsChip;
+
+    var sds = (state.ctx && state.ctx.schoolDays) || [];
+    if (sds.length > 0) {
+      html += '<div class="head-school">';
+      sds.forEach(function(sd, i){
+        var labelText = (sd.label === "今日" || sd.label === "明日") ? sd.label : sd.md + "（" + sd.you + "）";
+        html += '<div class="head-school-row">'
+          + '<span class="hs-label">' + escapeHtml(labelText) + '</span>'
+          + (sd.nikka ? '<span class="nikka-badge">日課：' + escapeHtml(sd.nikka) + '</span>' : '')
+          + '<span class="hs-text" title="' + escapeHtml(sd.text || "") + '">' + (sd.text ? escapeHtml(sd.text) : '<span style="color:var(--ink-faint)">予定なし</span>') + '</span>'
+          + (sd.edited ? '<span class="chg-badge">変更</span>' : '')
+          + (state.ctx.role === "teacher" ? '<button class="hs-edit" data-school-edit="' + i + '" title="この日の学校予定を編集">✏️</button>' : '')
+          + '</div>';
+      });
+      html += '</div>';
+    }
+    el.innerHTML = html;
+
+    Array.prototype.forEach.call(el.querySelectorAll("[data-school-edit]"), function(btn){
+      btn.onclick = function(){
+        openSchoolEventModal(sds[Number(btn.getAttribute("data-school-edit"))]);
+      };
+    });
+  }
+
+  // 学校全体のその日の予定を上書きするモーダル（教員のみ・急な予定変更用）
+  function openSchoolEventModal(sd){
+    var root = document.getElementById("modalRoot");
+    var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
+    html += '<h3>学校予定の編集</h3>';
+    html += '<div class="modal-sub">' + escapeHtml(sd.label) + ' ' + escapeHtml(sd.md) + '（' + escapeHtml(sd.you) + '曜）・全クラスに表示されます</div>';
+    html += '<div class="field"><label>この日の学校予定</label>'
+      + '<textarea id="fSchoolEvent">' + escapeHtml(sd.text || "") + '</textarea>'
+      + '<div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px">急な予定変更のときに書き換えてください。空欄で保存すると、行事予定ファイルの取込内容の表示に戻ります。</div></div>';
+    html += '<div class="field-error" id="fError" style="display:none"></div>';
+    html += '<div class="modal-actions"><button class="btn-secondary" id="cancelBtn">キャンセル</button><button class="btn-primary" id="submitBtn">保存する</button></div>';
+    html += '</div></div>';
+    root.innerHTML = html;
+
+    document.getElementById("cancelBtn").onclick = function(){ root.innerHTML = ""; };
+    document.getElementById("backdrop").onclick = function(e){ if (e.target.id === "backdrop") root.innerHTML = ""; };
+
+    document.getElementById("submitBtn").onclick = async function(){
+      var errBox = document.getElementById("fError");
+      errBox.style.display = "none";
+      var text = document.getElementById("fSchoolEvent").value.trim();
+      var btn = document.getElementById("submitBtn");
+      btn.disabled = true;
+      btn.textContent = "保存中…";
+      try {
+        await gsRun("api_setSchoolEvent", { date: sd.date, text: text });
+        root.innerHTML = "";
+        showToast(text === "" ? "取込内容の表示に戻しました" : "学校予定を更新しました");
+        // ヘッダー・パネル・カレンダーに反映するため取り直す
+        state.calCache = {};
+        try {
+          var ctx = await gsRun("api_getContext");
+          if (!ctx.needsRegistration) state.ctx = ctx;
+        } catch (e2) {}
+        updateDayHeading();
+        await refreshData();
+      } catch (err) {
+        errBox.textContent = errorMessage(err);
+        errBox.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "保存する";
+      }
+    };
   }
 
   function renderChrome(){
@@ -855,6 +957,16 @@
       return null;
     }
 
+    // カレンダー（表示中の月のデータをまとめて取得・キャッシュ）
+    var calYm = state.calMonth || localDateStr(new Date()).slice(0, 7);
+    var calKey = cls + "|" + calYm;
+    var calData = state.calCache[calKey];
+    if (!calData) {
+      try { calData = await gsRun("api_getCalendar", cls, calYm); } catch (e) { calData = []; }
+      if (seq !== state.renderSeq) return;
+      state.calCache[calKey] = calData;
+    }
+
     // 日付ナビ：前の日・日付選択・次の日・今日に戻る
     var baseDate = dayInfo.days.length ? dayInfo.days[0].date : localDateStr(new Date());
     var todayStr = localDateStr(new Date());
@@ -876,11 +988,12 @@
     dayInfo.days.forEach(function(day){
       var mdParts = String(day.date).split("-");
       var md = Number(mdParts[1]) + "/" + Number(mdParts[2]);
-      var weekLabel = usesWeeks && day.dayKey ? '・'+day.week+'週' : '';
-      var title = day.label + (day.dayKey ? '（'+day.dayKey+'曜'+weekLabel+'）' : '') + 'の時間割';
+      var weekLabel = usesWeeks && day.dayKey ? day.week+'週・' : '';
+      var title = day.label + (day.dayKey ? '（'+weekLabel+day.dayKey+'曜）' : '') + 'の時間割';
       html += '<div class="panel"><div class="panel-head"><div class="panel-title">'+title+'</div><div class="panel-meta">'+md+' ・ '+escapeHtml(cls)+'</div></div>';
-      // 学校全体のこの日の予定（行事予定ファイル由来の行事・日課）
-      if (day.schoolEvents || day.nikka) {
+      // 学校全体のこの日の予定。今日・明日の分はページ上部に出すので、
+      // 日付を移動して別の日を見ているときだけパネル内に表示する
+      if (state.viewDate && (day.schoolEvents || day.nikka)) {
         html += '<div class="day-school">🏫 '
           + (day.nikka ? '<span class="nikka-badge">日課：'+escapeHtml(day.nikka)+'</span>' : '')
           + escapeHtml(day.schoolEvents || '')
@@ -976,7 +1089,22 @@
     html += '</div>';
 
     html += '</div>';
+
+    // 月間カレンダー（一番下・全幅）
+    html += calendarHtml(calYm, calData, todayStr);
+
     document.getElementById("mainContent").innerHTML = html;
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-cal-nav]"), function(btn){
+      btn.onclick = function(){
+        var p2 = calYm.split("-");
+        var nd = new Date(Number(p2[0]), Number(p2[1]) - 1 + Number(btn.getAttribute("data-cal-nav")), 1);
+        state.calMonth = nd.getFullYear() + "-" + ("0"+(nd.getMonth()+1)).slice(-2);
+        renderTab();
+      };
+    });
+    var calTodayBtn = document.getElementById("calToday");
+    if (calTodayBtn) calTodayBtn.onclick = function(){ state.calMonth = null; renderTab(); };
     bindTaskChecks();
     bindDailyNoteEdits();
     bindScheduleSwapEdits();
@@ -998,6 +1126,47 @@
     if (picker) picker.onchange = function(){ if (picker.value) setViewDate(picker.value); };
     var backBtn = document.getElementById("backToToday");
     if (backBtn) backBtn.onclick = function(){ setViewDate(localDateStr(new Date())); };
+  }
+
+  // 月間カレンダーのHTMLを作る（日曜はじまり・行事と A/B 週を表示）
+  function calendarHtml(ym, entries, todayStr){
+    var parts = ym.split("-");
+    var y = Number(parts[0]), mo = Number(parts[1]);
+    var startDow = new Date(y, mo - 1, 1).getDay();
+    var daysInMonth = new Date(y, mo, 0).getDate();
+    var byDate = {};
+    (entries || []).forEach(function(e){ byDate[e.date] = e; });
+
+    var html = '<div class="panel" style="margin-top:14px"><div class="panel-head">'
+      + '<div class="panel-title">🗓️ '+y+'年'+mo+'月</div>'
+      + '<div class="panel-meta">'
+      + '<button class="edit-btn" data-cal-nav="-1" title="前の月">◀</button> '
+      + '<button class="edit-btn" id="calToday" title="今月に戻る">今月</button> '
+      + '<button class="edit-btn" data-cal-nav="1" title="次の月">▶</button>'
+      + '</div></div>';
+    html += '<div style="overflow-x:auto"><table class="cal-table"><thead><tr>';
+    ["日","月","火","水","木","金","土"].forEach(function(w, i){
+      html += '<th class="'+(i === 0 ? 'cal-sun' : (i === 6 ? 'cal-sat' : ''))+'">'+w+'</th>';
+    });
+    html += '</tr></thead><tbody><tr>';
+    for (var pad = 0; pad < startDow; pad++) html += '<td class="cal-empty"></td>';
+    for (var dnum = 1; dnum <= daysInMonth; dnum++){
+      var dow = (startDow + dnum - 1) % 7;
+      if (dnum > 1 && dow === 0) html += '</tr><tr>';
+      var ds = ym + "-" + ("0"+dnum).slice(-2);
+      var e = byDate[ds];
+      var titleText = e && e.titles.length ? e.titles.join("　") : "";
+      html += '<td class="cal-cell'
+        + (ds === todayStr ? ' cal-today' : '')
+        + (dow === 0 ? ' cal-sun' : (dow === 6 ? ' cal-sat' : ''))+'">'
+        + '<div class="cal-daynum">'+dnum+(e && e.week ? '<span class="cal-week">'+e.week+'</span>' : '')+'</div>'
+        + (titleText ? '<div class="cal-title" title="'+escapeHtml(titleText)+'">'+escapeHtml(titleText)+'</div>' : '')
+        + '</td>';
+    }
+    var endDow = (startDow + daysInMonth - 1) % 7;
+    for (var pad2 = endDow + 1; pad2 <= 6; pad2++) html += '<td class="cal-empty"></td>';
+    html += '</tr></tbody></table></div></div>';
+    return html;
   }
 
   // 「今日・明日の教科連絡・持ち物」を編集するモーダル（教員＋担当教科の教科係）。
@@ -1259,12 +1428,13 @@
         try {
           var res = await gsRun("api_syncEvents");
           state.ctx.eventSyncTime = res.syncedAt;
-          // 取り込んだ週区分（A/B）を反映するため、今週の判定も取り直す
+          state.calCache = {};
+          // 週区分の自動判定・ヘッダーの学校予定にも反映するため、コンテキストを取り直す
           try {
             var ctx = await gsRun("api_getContext");
             if (!ctx.needsRegistration) {
-              state.ctx.currentWeek = ctx.currentWeek;
-              state.ctx.currentWeekAuto = ctx.currentWeekAuto;
+              state.ctx = ctx;
+              updateDayHeading();
             }
           } catch (e2) {}
           showToast("行事予定を取り込みました（"+res.count+"件）");
