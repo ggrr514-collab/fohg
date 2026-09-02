@@ -832,9 +832,15 @@
     // その日・その時限に表示する教科を決める。優先順位は
     // ①教員の手動変更 → ②行事予定の校時（「A水3」=A週水曜3限の授業、
     // 「授」=通常どおり、それ以外の文字=特別活動） → ③固定時間割
-    function resolvePeriod(day, n){
-      var ov = overrideMap[day.date + "|" + n];
-      if (ov) return { subject: ov, belongings: "", source: "manual" };
+    // ignoreOverride=true で「手動変更がなかった場合の教科」（元の教科）を返す。
+    function resolvePeriod(day, n, ignoreOverride){
+      var ov = ignoreOverride ? "" : overrideMap[day.date + "|" + n];
+      if (ov) {
+        // 元の教科と同じ名前に変更されている場合は、変更扱いにしない
+        var base = resolvePeriod(day, n, true);
+        if (base && base.subject === ov) return base;
+        return { subject: ov, belongings: "", source: "manual" };
+      }
       var token = (day.plan && day.plan[n-1] != null) ? String(day.plan[n-1]).trim() : "";
       if (day.plan && token && token !== "授") {
         var m = toHalfDigits(token).toUpperCase().match(/^([AB])?([月火水木金])(\d{1,2})$/);
@@ -929,7 +935,8 @@
               btns += '<button class="edit-btn" data-edit-date="'+day.date+'" data-edit-period="'+n+'" data-edit-subject="'+escapeHtml(res.subject)+'" title="この日の教科連絡・持ち物を入力">✏️</button>';
             }
             if (isTeacher) {
-              btns += '<button class="edit-btn" data-swap-date="'+day.date+'" data-swap-period="'+n+'" data-swap-current="'+escapeHtml(overrideMap[day.date + "|" + n] || "")+'" data-swap-subject="'+escapeHtml(res.subject)+'" title="この日だけ時間割を変更">🔁</button>';
+              var baseRes = res.source === "manual" ? resolvePeriod(day, n, true) : res;
+              btns += '<button class="edit-btn" data-swap-date="'+day.date+'" data-swap-period="'+n+'" data-swap-current="'+escapeHtml(overrideMap[day.date + "|" + n] || "")+'" data-swap-base="'+escapeHtml(baseRes ? baseRes.subject : "")+'" title="この日だけ時間割を変更">🔁</button>';
             }
             html += '<div class="period-row'+(anyEdit ? ' has-edit' : '')+'">' +
               '<div class="period-num">'+n+'</div>' +
@@ -1031,13 +1038,13 @@
           day,
           Number(btn.getAttribute("data-swap-period")),
           btn.getAttribute("data-swap-current") || "",
-          btn.getAttribute("data-swap-subject") || ""
+          btn.getAttribute("data-swap-base") || ""
         );
       };
     });
   }
 
-  function openScheduleOverrideModal(day, period, current, resolvedSubject){
+  function openScheduleOverrideModal(day, period, current, baseSubject){
     var root = document.getElementById("modalRoot");
     var mdParts = String(day.date).split("-");
     var md = Number(mdParts[1]) + "/" + Number(mdParts[2]);
@@ -1046,25 +1053,28 @@
 
     var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
     html += '<h3>時間割変更（この日だけ）</h3>';
-    html += '<div class="modal-sub">'+escapeHtml(state.viewClass)+' ・ '+day.label+' '+md+'（'+day.dayKey+'曜）'+period+'限</div>';
-    html += '<div class="field"><label>変更後の教科（空欄で元に戻す）</label>'
-      + '<input type="text" id="fSwapSubject" list="swapSubjectList" value="'+escapeHtml(current || "")+'" placeholder="現在：'+escapeHtml(resolvedSubject)+'">'+datalist
-      + '<div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px">固定の時間割は変わりません。この日のこの時限だけ差し替わります。</div></div>';
+    html += '<div class="modal-sub">'+escapeHtml(state.viewClass)+' ・ '+day.label+' '+md+'（'+day.dayKey+'曜）'+period+'限'
+      + (baseSubject ? ' ・ 元の教科：'+escapeHtml(baseSubject) : '')+'</div>';
+    html += '<div class="field"><label>変更後の教科</label>'
+      + '<input type="text" id="fSwapSubject" list="swapSubjectList" value="'+escapeHtml(current || "")+'" placeholder="'+(baseSubject ? '元の教科：'+escapeHtml(baseSubject) : '例：数学')+'">'+datalist
+      + '<div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px">固定の時間割は変わりません。この日のこの時限だけ差し替わります。'
+      + '空欄または元の教科名で保存すると、変更が取り消されます。</div></div>';
     html += '<div class="field-error" id="fError" style="display:none"></div>';
-    html += '<div class="modal-actions"><button class="btn-secondary" id="cancelBtn">キャンセル</button><button class="btn-primary" id="submitBtn">保存する</button></div>';
+    html += '<div class="modal-actions">'
+      + (current ? '<button class="btn-secondary" id="resetBtn" style="margin-right:auto;color:var(--overdue);border-color:var(--overdue)">元に戻す</button>' : '')
+      + '<button class="btn-secondary" id="cancelBtn">キャンセル</button>'
+      + '<button class="btn-primary" id="submitBtn">保存する</button></div>';
     html += '</div></div>';
     root.innerHTML = html;
 
     document.getElementById("cancelBtn").onclick = function(){ root.innerHTML = ""; };
     document.getElementById("backdrop").onclick = function(e){ if (e.target.id === "backdrop") root.innerHTML = ""; };
 
-    document.getElementById("submitBtn").onclick = async function(){
+    async function save(text){
       var errBox = document.getElementById("fError");
       errBox.style.display = "none";
-      var text = document.getElementById("fSwapSubject").value.trim();
-      var btn = document.getElementById("submitBtn");
-      btn.disabled = true;
-      btn.textContent = "保存中…";
+      // 元の教科名がそのまま入力された場合は、変更の取り消しとして扱う
+      if (baseSubject && text === baseSubject) text = "";
       try {
         await gsRun("api_setScheduleOverride", { cls: state.viewClass, date: day.date, period: period, subject: text });
         root.innerHTML = "";
@@ -1073,10 +1083,27 @@
       } catch (err) {
         errBox.textContent = errorMessage(err);
         errBox.style.display = "block";
-        btn.disabled = false;
-        btn.textContent = "保存する";
+        var btn = document.getElementById("submitBtn");
+        if (btn) { btn.disabled = false; btn.textContent = "保存する"; }
+        var rbtn = document.getElementById("resetBtn");
+        if (rbtn) { rbtn.disabled = false; rbtn.textContent = "元に戻す"; }
       }
+    }
+
+    document.getElementById("submitBtn").onclick = function(){
+      this.disabled = true;
+      this.textContent = "保存中…";
+      save(document.getElementById("fSwapSubject").value.trim());
     };
+
+    var resetBtn = document.getElementById("resetBtn");
+    if (resetBtn) {
+      resetBtn.onclick = function(){
+        this.disabled = true;
+        this.textContent = "戻しています…";
+        save("");
+      };
+    }
   }
 
   function openDailyNoteModal(day, period, subject, current, currentStudy){
