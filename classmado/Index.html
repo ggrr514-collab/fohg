@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+  /* 端末のダークモード設定にかかわらず、常に白ベースの落ち着いた配色で表示する */
+  :root {
+    color-scheme: light;
+    --paper: #FAF7F2;
+    --paper-raised: #FFFFFF;
+    --ink: #2B2A28;
+    --ink-soft: #6B6560;
+    --ink-faint: #9A9187;
+    --line: #E4DFD6;
+    --line-strong: #D2CBBE;
+    --accent: #2E76A6;
+    --accent-soft: #E3F0F8;
+    --accent-ink: #1F5478;
+    --subject: #2E76A6;
+    --subject-bg: #E3F0F8;
+    --duty: #4C8C46;
+    --duty-bg: #E8F3E4;
+    --committee: #8656A6;
+    --committee-bg: #F1E7F7;
+    --homeroom: #C97A2E;
+    --homeroom-bg: #FBEEDC;
+    --warn: #C6912A;
+    --warn-bg: #FBF1DC;
+    --overdue: #C15A3E;
+    --overdue-bg: #FBE7E0;
+    --done: #4F9D5B;
+    --done-bg: #E8F6EA;
+    --shadow: rgba(43,42,40,0.08);
+
+    --font-jp: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Noto Sans JP", sans-serif;
+    --font-num: ui-monospace, "SF Mono", Menlo, "Yu Gothic UI", var(--font-jp);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-jp);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100%;
+  }
+  a { color: inherit; }
+  button { font-family: inherit; }
+  ::selection { background: var(--accent-soft); }
+
+  .app { max-width: 1040px; margin: 0 auto; padding: 0 20px 80px; }
+
+  /* ---- header ---- */
+  header.app-head { padding: 22px 0 10px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand-mark { font-size: 26px; font-weight: 700; letter-spacing: .02em; }
+  .brand-mark .dot { color: var(--accent); }
+  .head-right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .today-date { font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .who-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 600; color: var(--accent-ink);
+    background: var(--accent-soft); border-radius: 10px; padding: 5px 10px;
+  }
+  .who-badge .role-pill {
+    font-size: 10.5px; font-weight: 700; background: var(--paper-raised);
+    border-radius: 999px; padding: 1px 7px; color: var(--accent-ink);
+  }
+  .class-switch select {
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--ink);
+    background: var(--paper-raised); border: 1px solid var(--line-strong);
+    border-radius: 8px; padding: 5px 8px;
+  }
+
+  .greeting { font-size: 14.5px; color: var(--ink-soft); margin: 0 0 20px; }
+
+  /* ---- tabs ---- */
+  nav.tabs {
+    display: flex; gap: 4px; border-bottom: 1px solid var(--line);
+    margin-bottom: 20px; overflow-x: auto;
+  }
+  nav.tabs button {
+    background: none; border: none; cursor: pointer;
+    padding: 10px 14px; font-size: 14.5px; font-weight: 600;
+    color: var(--ink-faint); border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  nav.tabs button:hover { color: var(--ink-soft); }
+  nav.tabs button.active { color: var(--ink); border-bottom-color: var(--accent); }
+  nav.tabs button .count {
+    font-variant-numeric: tabular-nums; font-size: 11.5px; color: var(--ink-faint);
+    margin-left: 4px;
+  }
+  nav.tabs button.active .count { color: var(--accent-ink); }
+
+  /* ---- layout grid ---- */
+  .grid-2 { display: grid; grid-template-columns: 1.1fr .9fr; gap: 18px; }
+  @media (max-width: 760px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--paper-raised); border: 1px solid var(--line);
+    border-radius: 18px; padding: 18px 20px; box-shadow: 0 1px 2px var(--shadow);
+  }
+  .panel + .panel { margin-top: 16px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
+  .panel-title { font-size: 16px; font-weight: 700; }
+  .panel-meta { font-size: 12px; color: var(--ink-faint); flex-shrink: 0; }
+
+  /* ---- timetable ---- */
+  .period-row {
+    display: grid; grid-template-columns: 34px 1fr; align-items: center;
+    gap: 12px; padding: 10px 0; border-top: 1px solid var(--line);
+  }
+  .period-row.has-edit { grid-template-columns: 34px 1fr auto; }
+  .period-row:first-of-type { border-top: none; }
+  .edit-btn {
+    background: var(--paper); border: 1px solid var(--line-strong); border-radius: 8px;
+    font-size: 14px; padding: 4px 9px; cursor: pointer; line-height: 1;
+  }
+  .edit-btn:hover { background: var(--accent-soft); border-color: var(--accent); }
+
+  /* ---- 初回登録：クラス選択ボタン ---- */
+  .class-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+  .class-pick-btn {
+    font-size: 14.5px; font-weight: 700; color: var(--ink-soft);
+    background: var(--paper); border: 1.5px solid var(--line-strong);
+    border-radius: 12px; padding: 10px 16px; cursor: pointer;
+  }
+  .class-pick-btn:hover { border-color: var(--accent); }
+  .class-pick-btn.active {
+    background: var(--accent); border-color: var(--accent); color: var(--paper-raised);
+  }
+
+  /* ---- 係・担当 ---- */
+  .role-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 0; border-top: 1px solid var(--line);
+  }
+  .role-row:first-of-type { border-top: none; }
+  .role-name { font-size: 14px; font-weight: 600; }
+  .role-del {
+    margin-left: auto; background: none; border: 1px solid var(--line-strong);
+    border-radius: 999px; color: var(--ink-faint); font-size: 12px; font-weight: 700;
+    padding: 3px 10px; cursor: pointer; white-space: nowrap;
+  }
+  .role-del:hover { color: var(--overdue); border-color: var(--overdue); background: var(--overdue-bg); }
+  .period-num {
+    font-family: var(--font-num); font-size: 13px; font-weight: 600;
+    color: var(--ink-faint); text-align: center;
+  }
+  .period-subject { font-size: 15.5px; font-weight: 600; }
+  .period-note { font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; }
+
+  /* ---- events ---- */
+  .event-row { display: flex; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); align-items: baseline; }
+  .event-row:first-of-type { border-top: none; }
+  .event-date {
+    font-family: var(--font-num); font-size: 12.5px; color: var(--ink-faint);
+    width: 64px; flex-shrink: 0; font-variant-numeric: tabular-nums;
+  }
+  .event-title { font-size: 13.5px; }
+
+  /* ---- category chip ---- */
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; font-weight: 700; border-radius: 999px; padding: 3px 10px;
+    white-space: nowrap;
+  }
+  .chip.subject { color: var(--subject); background: var(--subject-bg); }
+  .chip.duty { color: var(--duty); background: var(--duty-bg); }
+  .chip.committee { color: var(--committee); background: var(--committee-bg); }
+  .chip.homeroom { color: var(--homeroom); background: var(--homeroom-bg); }
+
+  /* ---- task list ---- */
+  .task-item { padding: 12px 0; border-top: 1px solid var(--line); }
+  .task-item:first-of-type { border-top: none; }
+  .task-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .task-title { font-size: 14.5px; font-weight: 600; margin: 7px 0 3px; }
+  .task-detail { font-size: 12.5px; color: var(--ink-soft); }
+  .task-due { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; padding: 3px 10px; border-radius: 999px; }
+  .task-due.normal { color: var(--ink-soft); background: var(--line); }
+  .task-due.soon { color: var(--warn); background: var(--warn-bg); }
+  .task-due.overdue { color: var(--overdue); background: var(--overdue-bg); }
+  .task-due.done { color: var(--done); background: var(--done-bg); }
+  .task-check { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .task-check label { font-size: 12.5px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .task-check input { width: 17px; height: 17px; accent-color: var(--done); cursor: pointer; }
+
+  /* ---- announcements ---- */
+  .post { padding: 14px 0; border-top: 1px solid var(--line); }
+  .post:first-of-type { border-top: none; }
+  .post-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+  .post-time { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; margin-left: auto; }
+  .post-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+  .post-body { font-size: 13.5px; color: var(--ink-soft); white-space: pre-wrap; }
+  .post-by { font-size: 11.5px; color: var(--ink-faint); margin-top: 6px; }
+
+  .empty { font-size: 13px; color: var(--ink-faint); padding: 18px 0; text-align: center; }
+
+  /* ---- filter row (announcements) ---- */
+  .filter-row { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+  .filter-btn {
+    font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+    background: var(--paper); border: 1px solid var(--line-strong);
+    border-radius: 999px; padding: 5px 12px; cursor: pointer;
+  }
+  .filter-btn.active { background: var(--accent); border-color: var(--accent); color: var(--paper-raised); }
+
+  /* ---- segmented tabs (task status) ---- */
+  .seg-tabs {
+    display: inline-flex; gap: 3px; background: var(--paper);
+    border: 1px solid var(--line-strong); border-radius: 999px;
+    padding: 4px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .seg-tabs button {
+    border: none; background: none; cursor: pointer;
+    padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+    color: var(--ink-soft); white-space: nowrap;
+  }
+  .seg-tabs button.active { background: var(--accent); color: var(--paper-raised); }
+  .seg-tabs .seg-count { font-variant-numeric: tabular-nums; font-size: 11.5px; opacity: .8; margin-left: 2px; }
+
+  /* ---- post fab + form ---- */
+  .fab-wrap { position: sticky; bottom: 18px; display: flex; justify-content: flex-end; margin-top: 18px; }
+  .fab {
+    background: var(--accent); color: var(--paper-raised); border: none;
+    border-radius: 999px; padding: 13px 22px; font-size: 14px; font-weight: 700;
+    cursor: pointer; box-shadow: 0 4px 14px var(--shadow); display: flex; align-items: center; gap: 8px;
+  }
+  .fab:hover { filter: brightness(1.08); }
+  .fab:disabled { opacity: .6; cursor: default; }
+
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(20,18,15,0.4);
+    display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50;
+  }
+  .modal {
+    background: var(--paper-raised); border-radius: 20px; max-width: 480px; width: 100%;
+    padding: 22px 24px; box-shadow: 0 12px 40px var(--shadow); max-height: 88vh; overflow-y: auto;
+  }
+  .modal h3 { margin: 0 0 4px; font-size: 17px; }
+  .modal .modal-sub { font-size: 12.5px; color: var(--ink-faint); margin-bottom: 16px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); margin-bottom: 5px; }
+  .field select, .field input[type="text"], .field input[type="date"], .field textarea {
+    width: 100%; font-family: inherit; font-size: 14px; color: var(--ink);
+    background: var(--paper); border: 1px solid var(--line-strong); border-radius: 10px;
+    padding: 8px 10px;
+  }
+  .field textarea { resize: vertical; min-height: 80px; }
+  .field-error { font-size: 12.5px; color: var(--overdue); margin-top: 8px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .btn-secondary, .btn-primary {
+    font-size: 13.5px; font-weight: 700; border-radius: 12px; padding: 9px 16px; cursor: pointer; border: 1px solid transparent;
+  }
+  .btn-secondary { background: none; border-color: var(--line-strong); color: var(--ink-soft); }
+  .btn-primary { background: var(--accent); color: var(--paper-raised); }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-primary:disabled { opacity: .6; cursor: default; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: var(--paper); font-size: 13.5px; font-weight: 600;
+    padding: 10px 18px; border-radius: 999px; box-shadow: 0 6px 20px var(--shadow); z-index: 60;
+    opacity: 0; pointer-events: none; transition: opacity .25s ease, transform .25s ease;
+    max-width: 88vw; text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+
+  .no-access, .load-error { text-align: center; padding: 60px 20px; color: var(--ink-soft); }
+  .no-access .big, .load-error .big { font-size: 34px; margin-bottom: 10px; }
+
+  .skeleton { padding: 18px 0; text-align: center; color: var(--ink-faint); font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <header class="app-head">
+    <div class="brand">
+      <div class="brand-mark">クラス<span class="dot">まど</span></div>
+    </div>
+    <div class="head-right">
+      <div class="today-date" id="todayDate"></div>
+      <div class="who-badge" id="whoBadge"></div>
+      <div class="class-switch" id="classSwitchWrap" style="display:none">
+        <label for="classSwitch" style="font-size:11.5px;color:var(--ink-faint);font-weight:600;margin-right:4px">表示中のクラス</label>
+        <select id="classSwitch"></select>
+      </div>
+    </div>
+  </header>
+
+  <p class="greeting" id="greeting"></p>
+
+  <nav class="tabs" id="tabs"></nav>
+
+  <main id="mainContent"><div class="skeleton">読み込み中…</div></main>
+</div>
+
+<div id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+
+  /* ============== google.script.run を Promise 化 ============== */
+
+  function gsRun(fn){
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function(resolve, reject){
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(function(err){ reject(err); })
+        [fn].apply(null, args);
+    });
+  }
+
+  /* ============== 表示用の定数（見た目のみ。権限判定はサーバー側） ============== */
+
+  var SUBJECT_ICON = {
+    "国語":"📕", "数学":"✏️", "英語":"🔤", "理科":"🔬", "社会":"🌏",
+    "音楽":"🎵", "美術":"🎨", "保健":"❤️", "技術":"🔧", "家庭":"🍳",
+    "体育":"🏃", "道徳":"🌱", "学活":"🗣️", "総合":"🔍"
+  };
+
+  var CATEGORY_META = {
+    subject: {chip:"subject", name:"教科", icon:"📘"},
+    duty: {chip:"duty", name:"係", icon:"🧹"},
+    committee: {chip:"committee", name:"委員会", icon:"🗳️"},
+    homeroom: {chip:"homeroom", name:"学級・担任", icon:"🏠"}
+  };
+
+  var TASK_FILTERS = [
+    {key:"soon", label:"締切が近い"},
+    {key:"overdue", label:"期限切れ"},
+    {key:"done", label:"提出済み"},
+    {key:"all", label:"すべて"}
+  ];
+
+  var TASK_EMPTY_TEXT = {
+    soon: "締切が近い提出物はありません。ひと安心ですね。",
+    overdue: "期限切れの提出物はありません。",
+    done: "まだ提出済みのものはありません。",
+    all: "提出物はまだ登録されていません。"
+  };
+
+  var TABS = [
+    {key:"today", label:"☀️ 今日の予定"},
+    {key:"week", label:"🗓️ 週間予定"},
+    {key:"tasks", label:"📝 課題・提出物"},
+    {key:"posts", label:"📣 連絡"},
+    {key:"roles", label:"👥 係・担当"}
+  ];
+
+  // 教科係として登録できる教科（サーバー側の一覧と合わせること）
+  var SUBJECTS = ["国語", "数学", "英語", "理科", "社会", "音楽", "美術", "保健", "技術", "家庭"];
+
+  var WEEKDAYS = ["月","火","水","木","金"];
+  var DAY_KEYS_BY_JSDAY = ["日","月","火","水","木","金","土"];
+
+  /* ============== 状態 ============== */
+
+  var state = {
+    ctx: null,          // {email, name, role, myClass, classes}
+    viewClass: null,
+    tab: "today",
+    announceFilter: "all",
+    taskFilter: "soon",
+    data: null,          // {schedule, events, tasks, posts}
+    dataClass: null,
+    renderSeq: 0,
+    permsCache: {},
+    weekView: null
+  };
+
+  /* ============== ヘルパー ============== */
+
+  function escapeHtml(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function chipHtml(category, label){
+    var meta = CATEGORY_META[category] || {chip:"homeroom", name:category, icon:"📌"};
+    var icon = category === "subject" ? (SUBJECT_ICON[label] || meta.icon) : meta.icon;
+    return '<span class="chip '+meta.chip+'">'+icon+' '+escapeHtml(label)+'</span>';
+  }
+
+  function showToast(msg){
+    var t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(function(){ t.classList.remove("show"); }, 2600);
+  }
+
+  function errorMessage(err){
+    return (err && err.message) ? err.message : String(err);
+  }
+
+  function parseDateLocal_(s){
+    var parts = String(s).split("-");
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  }
+
+  // 行事の日付を「4/8（水）」の形で表示する（曜日は取込データ優先・なければ計算）
+  function eventDateLabel(e){
+    var parts = String(e.date).split("-");
+    if (parts.length !== 3) return String(e.date);
+    var you = e.you || DAY_KEYS_BY_JSDAY[parseDateLocal_(e.date).getDay()];
+    return Number(parts[1]) + "/" + Number(parts[2]) + "（" + you + "）";
+  }
+
+  function dueStatus(due, done){
+    if (done) return {cls:"done", text:"提出済み"};
+    if (!due) return {cls:"normal", text:""};
+    var today = new Date(); today.setHours(0,0,0,0);
+    var d = parseDateLocal_(due); d.setHours(0,0,0,0);
+    var diffDays = Math.round((d - today) / 86400000);
+    var label = (d.getMonth()+1) + "/" + d.getDate() + "締切";
+    if (diffDays < 0) return {cls:"overdue", text:"期限切れ"};
+    if (diffDays <= 2) return {cls:"soon", text:label};
+    return {cls:"normal", text:label};
+  }
+
+  function todayLabel(){
+    var d = new Date();
+    return d.getFullYear() + "年" + (d.getMonth()+1) + "月" + d.getDate() + "日（" + DAY_KEYS_BY_JSDAY[d.getDay()] + "）";
+  }
+
+  function todayDayKey(){
+    var k = DAY_KEYS_BY_JSDAY[new Date().getDay()];
+    return WEEKDAYS.indexOf(k) >= 0 ? k : null;
+  }
+
+  /* ============== 初期化 ============== */
+
+  async function init(){
+    try {
+      var ctx = await gsRun("api_getContext");
+      if (ctx.needsRegistration) {
+        renderRegistration(ctx);
+        return;
+      }
+      state.ctx = ctx;
+      state.viewClass = ctx.role === "teacher" ? (ctx.classes[0] || null) : ctx.myClass;
+      renderChrome();
+      await renderTab();
+    } catch (err) {
+      renderLoadError(err);
+    }
+  }
+
+  /* ============== 初回登録フォーム ============== */
+
+  function renderRegistration(ctx){
+    document.getElementById("greeting").textContent = "";
+    document.getElementById("tabs").innerHTML = "";
+    document.getElementById("whoBadge").innerHTML = "";
+    document.getElementById("classSwitchWrap").style.display = "none";
+    document.getElementById("todayDate").textContent = todayLabel();
+
+    var isTeacher = ctx.role === "teacher";
+    var classes = ctx.classes || [];
+    var selectedClass = "";
+
+    var html = '<div class="panel" style="max-width:480px;margin:40px auto">';
+    html += '<div class="panel-title" style="margin-bottom:6px">はじめまして👋</div>';
+    html += '<div style="font-size:13.5px;color:var(--ink-soft);margin-bottom:18px">'
+      + 'はじめて使う方は、' + (isTeacher ? 'お名前' : '自分のクラスとお名前') + 'を教えてください。次回からは自動で表示されます。'
+      + (isTeacher ? '<br>先生は登録後、すべてのクラスのページを切り替えて閲覧・投稿できます。' : '')
+      + '</div>';
+
+    if (!isTeacher) {
+      if (classes.length > 0) {
+        html += '<div class="field"><label>自分のクラスをえらぶ</label><div class="class-pick" id="regClassPick">';
+        classes.forEach(function(c){
+          html += '<button type="button" class="class-pick-btn" data-cls="'+escapeHtml(c)+'">'+escapeHtml(c)+'</button>';
+        });
+        html += '</div></div>';
+      } else {
+        html += '<div class="empty">クラスがまだ設定されていません。先生に確認してください。</div>';
+      }
+    }
+
+    html += '<div class="field"><label>お名前</label><div style="display:flex;gap:10px">'
+      + '<input type="text" id="regLastName" placeholder="苗字（例：山田）" style="flex:1">'
+      + '<input type="text" id="regFirstName" placeholder="名前（例：花子）" style="flex:1">'
+      + '</div></div>';
+
+    html += '<div class="field-error" id="regError" style="display:none"></div>';
+    html += '<button class="btn-primary" id="regSubmit" style="width:100%">はじめる</button>';
+    html += '</div>';
+
+    document.getElementById("mainContent").innerHTML = html;
+
+    // クラスのタブ（ボタン）選択
+    Array.prototype.forEach.call(document.querySelectorAll(".class-pick-btn"), function(btn){
+      btn.onclick = function(){
+        selectedClass = btn.getAttribute("data-cls");
+        Array.prototype.forEach.call(document.querySelectorAll(".class-pick-btn"), function(b){
+          b.classList.toggle("active", b === btn);
+        });
+      };
+    });
+
+    document.getElementById("regSubmit").onclick = async function(){
+      var errBox = document.getElementById("regError");
+      errBox.style.display = "none";
+
+      if (!isTeacher && !selectedClass) {
+        errBox.textContent = "自分のクラスをえらんでください";
+        errBox.style.display = "block";
+        return;
+      }
+
+      var lastName = document.getElementById("regLastName").value.trim();
+      var firstName = document.getElementById("regFirstName").value.trim();
+      if (!lastName || !firstName) {
+        errBox.textContent = "苗字と名前を入力してください";
+        errBox.style.display = "block";
+        return;
+      }
+
+      var payload = { name: lastName + "　" + firstName };
+      if (!isTeacher) payload.cls = selectedClass;
+
+      var btn = document.getElementById("regSubmit");
+      btn.disabled = true;
+      btn.textContent = "登録中…";
+
+      try {
+        await gsRun("api_register", payload);
+        await init();
+      } catch (err) {
+        errBox.textContent = errorMessage(err);
+        errBox.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "はじめる";
+      }
+    };
+  }
+
+  function renderChrome(){
+    document.getElementById("todayDate").textContent = todayLabel();
+
+    var badge = document.getElementById("whoBadge");
+    var roleName = state.ctx.role === "teacher" ? "教員" : "生徒";
+    badge.innerHTML = '<span class="role-pill">'+roleName+'</span> ' + escapeHtml(state.ctx.name);
+
+    var switchWrap = document.getElementById("classSwitchWrap");
+    var switchSel = document.getElementById("classSwitch");
+    if (state.ctx.role === "teacher") {
+      switchWrap.style.display = "block";
+      switchSel.innerHTML = state.ctx.classes.map(function(c){
+        return '<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+'</option>';
+      }).join("");
+      switchSel.value = state.viewClass;
+      switchSel.onchange = function(){
+        state.viewClass = switchSel.value;
+        renderTab();
+      };
+    } else {
+      switchWrap.style.display = "none";
+    }
+
+    document.getElementById("greeting").textContent =
+      "自分のペースで大丈夫。今日の時間割・提出物・連絡をここでまとめてチェックできます。";
+  }
+
+  /* ============== データ読み込み ============== */
+
+  async function ensureData(){
+    if (state.data && state.dataClass === state.viewClass) return;
+    if (!state.viewClass) throw new Error("表示できるクラスがありません。");
+    document.getElementById("mainContent").innerHTML = '<div class="skeleton">読み込み中…</div>';
+    var results = await Promise.all([
+      gsRun("api_getSchedule", state.viewClass),
+      gsRun("api_getEvents", state.viewClass),
+      gsRun("api_getTasks", state.viewClass),
+      gsRun("api_getAnnouncements", state.viewClass)
+    ]);
+    state.data = { schedule: results[0], events: results[1], tasks: results[2], posts: results[3] };
+    state.dataClass = state.viewClass;
+  }
+
+  async function refreshData(){
+    state.data = null;
+    await renderTab();
+  }
+
+  /* ============== タブナビ ============== */
+
+  function renderTabsNav(){
+    var nav = document.getElementById("tabs");
+    var urgentTasks = 0, posts = 0;
+    if (state.data) {
+      urgentTasks = state.data.tasks.filter(function(t){
+        var s = dueStatus(t.due, t.done);
+        return s.cls === "soon" || s.cls === "overdue";
+      }).length;
+      posts = state.data.posts.length;
+    }
+    nav.innerHTML = TABS.map(function(t){
+      var count = "";
+      if (t.key === "tasks" && urgentTasks > 0) count = ' <span class="count">'+urgentTasks+'</span>';
+      if (t.key === "posts") count = ' <span class="count">'+posts+'</span>';
+      return '<button data-tab="'+t.key+'" class="'+(state.tab===t.key?"active":"")+'">'+t.label+count+'</button>';
+    }).join("");
+    Array.prototype.forEach.call(nav.querySelectorAll("button"), function(btn){
+      btn.onclick = function(){ state.tab = btn.getAttribute("data-tab"); renderTab(); };
+    });
+  }
+
+  async function renderTab(){
+    // タブ・フィルタを素早く切り替えたとき、古い描画処理が後から
+    // ボタンなどを追加してしまわないよう、描画に通し番号を付けて区別する
+    var seq = ++state.renderSeq;
+    try {
+      await ensureData();
+    } catch (err) {
+      document.getElementById("mainContent").innerHTML =
+        '<div class="load-error"><div class="big">⚠️</div>'+escapeHtml(errorMessage(err))+'</div>';
+      return;
+    }
+    if (seq !== state.renderSeq) return;
+    renderTabsNav();
+    if (state.tab === "today") await renderToday(seq);
+    else if (state.tab === "week") renderWeek();
+    else if (state.tab === "tasks") await renderTasks(seq);
+    else if (state.tab === "posts") await renderPosts(seq);
+    else if (state.tab === "roles") await renderRoles(seq);
+  }
+
+  /* ============== 今日の予定 ============== */
+
+  // 権限を クラス×用途 ごとに一度だけ取得してキャッシュする
+  async function getCachedPerms(kind){
+    var cacheKey = state.viewClass + "|" + kind;
+    var perms = state.permsCache[cacheKey];
+    if (!perms) {
+      try {
+        perms = await gsRun("api_getPostPermissions", state.viewClass, kind);
+      } catch (err) {
+        perms = [];
+      }
+      state.permsCache[cacheKey] = perms;
+    }
+    return perms;
+  }
+
+  // このクラスの時間割がA週・B週を使っているか
+  function classUsesWeeks(){
+    return state.data.schedule.some(function(p){ return p.week; });
+  }
+
+  // 指定した週に表示すべき時間割の行か（空欄=毎週共通）
+  function matchesWeek(p, week){
+    return p.week === "" || p.week === week;
+  }
+
+  async function renderToday(seq){
+    var cls = state.viewClass;
+    var dayKey = todayDayKey();
+    var currentWeek = state.ctx.currentWeek || "A";
+    var periods = dayKey ? state.data.schedule.filter(function(p){
+      return p.day === dayKey && matchesWeek(p, currentWeek);
+    }) : [];
+    var todaysTasks = state.data.tasks.filter(function(t){
+      var s = dueStatus(t.due, t.done);
+      return s.cls === "soon" || s.cls === "overdue";
+    });
+
+    // どの時限の持ち物・連絡を入力できるか：教員は全時限、教科係の生徒は担当教科の時限のみ
+    var editableSubjects = null;
+    if (state.ctx.role === "teacher") {
+      editableSubjects = "all";
+    } else {
+      var perms = await getCachedPerms("announcement");
+      if (seq !== undefined && seq !== state.renderSeq) return;
+      var set = {};
+      perms.forEach(function(p){ if (p.category === "subject") set[p.label] = true; });
+      editableSubjects = set;
+    }
+    function canEditPeriod(subject){
+      return editableSubjects === "all" || !!(editableSubjects && editableSubjects[subject]);
+    }
+
+    var html = '<div class="grid-2">';
+
+    html += '<div>';
+    if (dayKey) {
+      var weekLabel = classUsesWeeks() ? '・'+currentWeek+'週' : '';
+      html += '<div class="panel"><div class="panel-head"><div class="panel-title">今日（'+dayKey+'曜'+weekLabel+'）の時間割</div><div class="panel-meta">'+escapeHtml(cls)+'</div></div>';
+      if (periods.length === 0) {
+        html += '<div class="empty">時間割が登録されていません。</div>';
+      } else {
+        var anyEdit = periods.some(function(p){ return canEditPeriod(p.subject); });
+        periods.forEach(function(p){
+          var icon = SUBJECT_ICON[p.subject] || "📘";
+          var editable = canEditPeriod(p.subject);
+          html += '<div class="period-row'+(anyEdit ? ' has-edit' : '')+'">' +
+            '<div class="period-num">'+p.period+'</div>' +
+            '<div><div class="period-subject">'+icon+' '+escapeHtml(p.subject)+'</div>' +
+            (p.belongings ? '<div class="period-note">'+escapeHtml(p.belongings)+'</div>' : '') +
+            '</div>' +
+            (anyEdit ? (editable ? '<button class="edit-btn" data-edit-period="'+p.period+'" title="持ち物・連絡を入力">✏️</button>' : '<span></span>') : '') +
+            '</div>';
+        });
+      }
+      html += '</div>';
+    } else {
+      html += '<div class="panel"><div class="panel-head"><div class="panel-title">今日の時間割</div></div><div class="empty">今日は授業がありません。ゆっくり過ごしてください。</div></div>';
+    }
+
+    html += '<div class="panel"><div class="panel-head"><div class="panel-title">直近の学校行事</div></div>';
+    var relevantEvents = state.data.events.slice(0,4);
+    if (relevantEvents.length === 0) { html += '<div class="empty">予定はありません。</div>'; }
+    relevantEvents.forEach(function(e){
+      html += '<div class="event-row"><div class="event-date">'+escapeHtml(eventDateLabel(e))+'</div><div class="event-title">'+escapeHtml(e.title)+'</div></div>';
+    });
+    html += '</div>';
+    html += '</div>';
+
+    html += '<div>';
+    html += '<div class="panel"><div class="panel-head"><div class="panel-title">締切が近い課題</div><div class="panel-meta">2日以内 or 期限切れ</div></div>';
+    if (todaysTasks.length === 0) {
+      html += '<div class="empty">今のところ、締切が近い課題はありません。</div>';
+    } else {
+      todaysTasks.forEach(function(t){ html += renderTaskItem(t); });
+    }
+    html += '</div>';
+
+    html += '<div class="panel"><div class="panel-head"><div class="panel-title">新着連絡</div></div>';
+    var recent = state.data.posts.slice(0,3);
+    if (recent.length === 0) { html += '<div class="empty">連絡はありません。</div>'; }
+    recent.forEach(function(a){ html += renderPost(a, true); });
+    html += '</div>';
+    html += '</div>';
+
+    html += '</div>';
+    document.getElementById("mainContent").innerHTML = html;
+    bindTaskChecks();
+    bindPeriodEdits(dayKey);
+  }
+
+  // 今日の時間割の「持ち物・連絡」を編集するモーダル（教員＋担当教科の教科係）
+  function bindPeriodEdits(dayKey){
+    var currentWeek = state.ctx.currentWeek || "A";
+    Array.prototype.forEach.call(document.querySelectorAll("[data-edit-period]"), function(btn){
+      btn.onclick = function(){
+        var period = Number(btn.getAttribute("data-edit-period"));
+        var per = state.data.schedule.filter(function(x){
+          return x.day === dayKey && x.period === period && matchesWeek(x, currentWeek);
+        })[0];
+        openBelongingsModal(dayKey, period, per ? per.subject : "", per ? per.belongings : "", per ? per.week : "");
+      };
+    });
+  }
+
+  function openBelongingsModal(day, period, subject, current, week){
+    var root = document.getElementById("modalRoot");
+    var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
+    html += '<h3>持ち物・連絡の入力</h3>';
+    html += '<div class="modal-sub">'+escapeHtml(state.viewClass)+' ・ '+day+'曜 '+period+'限（'+escapeHtml(subject)+'）</div>';
+    html += '<div class="field"><label>持ち物・連絡（空欄で削除）</label>'
+      + '<input type="text" id="fBelongings" value="'+escapeHtml(current || "")+'" placeholder="例：体操服・体育館シューズ／小テストあり"></div>';
+    html += '<div class="field-error" id="fError" style="display:none"></div>';
+    html += '<div class="modal-actions"><button class="btn-secondary" id="cancelBtn">キャンセル</button><button class="btn-primary" id="submitBtn">保存する</button></div>';
+    html += '</div></div>';
+    root.innerHTML = html;
+
+    document.getElementById("cancelBtn").onclick = function(){ root.innerHTML = ""; };
+    document.getElementById("backdrop").onclick = function(e){ if (e.target.id === "backdrop") root.innerHTML = ""; };
+
+    document.getElementById("submitBtn").onclick = async function(){
+      var errBox = document.getElementById("fError");
+      errBox.style.display = "none";
+      var text = document.getElementById("fBelongings").value.trim();
+      var btn = document.getElementById("submitBtn");
+      btn.disabled = true;
+      btn.textContent = "保存中…";
+      try {
+        await gsRun("api_setBelongings", { cls: state.viewClass, week: week || "", day: day, period: period, text: text });
+        root.innerHTML = "";
+        showToast("保存しました");
+        await refreshData();
+      } catch (err) {
+        errBox.textContent = errorMessage(err);
+        errBox.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "保存する";
+      }
+    };
+  }
+
+  /* ============== 週間予定 ============== */
+
+  // 表示中の週で、そのコマに表示すべき行を返す（A/B週専用の行があれば共通行より優先）
+  function findScheduleCell(day, period, week){
+    var specific = null, common = null;
+    state.data.schedule.forEach(function(x){
+      if (x.day !== day || x.period !== period) return;
+      if (x.week === week) specific = x;
+      else if (x.week === "") common = x;
+    });
+    return specific || common;
+  }
+
+  function renderWeek(){
+    var cls = state.viewClass;
+    var todayKey = todayDayKey();
+    var isTeacher = state.ctx.role === "teacher";
+    var currentWeek = state.ctx.currentWeek || "A";
+    if (!state.weekView) state.weekView = currentWeek;
+    var weekView = state.weekView;
+    var usesWeeks = classUsesWeeks();
+    var showWeekUI = usesWeeks || isTeacher;
+
+    var html = '';
+
+    // A週・B週の切り替えと、「今週はどちらか」の設定（設定は教員のみ）
+    if (showWeekUI) {
+      html += '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px">';
+      html += '<div class="seg-tabs" style="margin-bottom:0">';
+      ["A","B"].forEach(function(w){
+        html += '<button data-week-view="'+w+'" class="'+(weekView===w?"active":"")+'">'+w+'週'+(currentWeek===w?"（今週）":"")+'</button>';
+      });
+      html += '</div>';
+      if (state.ctx.currentWeekAuto) {
+        html += '<span style="font-size:12.5px;color:var(--ink-soft)">今週は行事予定から自動判定：'+currentWeek+'週</span>';
+      } else if (isTeacher) {
+        html += '<label style="font-size:12.5px;color:var(--ink-soft);display:flex;align-items:center;gap:6px">今週の設定：'
+          + '<select id="currentWeekSel" style="font-family:inherit;font-size:13px;padding:4px 8px;border:1px solid var(--line-strong);border-radius:8px;background:var(--paper-raised);color:var(--ink)">'
+          + '<option value="A"'+(currentWeek==="A"?" selected":"")+'>A週</option>'
+          + '<option value="B"'+(currentWeek==="B"?" selected":"")+'>B週</option>'
+          + '</select></label>';
+      }
+      html += '</div>';
+    }
+
+    html += '<div class="panel"><div class="panel-head"><div class="panel-title">週間時間割'+(showWeekUI?'（'+weekView+'週）':'')+'</div><div class="panel-meta">'+escapeHtml(cls)+(isTeacher?' ・ コマをタップで編集':'')+'</div></div>';
+    html += '<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;min-width:520px">';
+    html += '<thead><tr>' +
+      '<th style="text-align:left;font-size:11.5px;color:var(--ink-faint);font-weight:700;padding:6px 8px;width:34px"></th>' +
+      WEEKDAYS.map(function(d){
+        var isToday = d === todayKey;
+        return '<th style="text-align:left;font-size:12.5px;font-weight:700;padding:6px 8px;'+(isToday?'color:var(--accent-ink)':'color:var(--ink-soft)')+'">'+d+'</th>';
+      }).join("") + '</tr></thead><tbody>';
+
+    var maxPeriod = state.data.schedule.reduce(function(m,p){ return Math.max(m, p.period||0); }, 6);
+    for (var p = 1; p <= maxPeriod; p++) {
+      html += '<tr>';
+      html += '<td style="font-family:var(--font-num);font-size:12.5px;color:var(--ink-faint);padding:8px;border-top:1px solid var(--line)">'+p+'</td>';
+      WEEKDAYS.forEach(function(d){
+        var per = findScheduleCell(d, p, weekView);
+        var isToday = d === todayKey;
+        var cellAttrs = isTeacher ? ' class="sched-cell" data-cell-day="'+d+'" data-cell-period="'+p+'"' : '';
+        html += '<td'+cellAttrs+' style="padding:8px;border-top:1px solid var(--line);'+(isToday?'background:var(--accent-soft);':'')+(isTeacher?'cursor:pointer;':'')+'">';
+        if (per) {
+          var icon = SUBJECT_ICON[per.subject] || "📘";
+          html += '<div style="font-size:13px;font-weight:600">'+icon+' '+escapeHtml(per.subject)+
+            (usesWeeks && per.week ? ' <span style="font-size:10px;color:var(--ink-faint)">'+per.week+'</span>' : '')+'</div>';
+        } else if (isTeacher) {
+          html += '<div style="font-size:12px;color:var(--ink-faint)">＋</div>';
+        }
+        html += '</td>';
+      });
+      html += '</tr>';
+    }
+    html += '</tbody></table></div></div>';
+
+    html += '<div class="panel"><div class="panel-head"><div class="panel-title">今後の学校行事</div>';
+    if (isTeacher) {
+      var syncMeta = state.ctx.eventSyncTime ? '最終取込 '+escapeHtml(state.ctx.eventSyncTime)+' ・ ' : '';
+      html += '<div class="panel-meta">'+syncMeta+'<button class="edit-btn" id="syncEventsBtn" title="年間行事予定ファイルから取り込む">🔄 行事を取り込む</button></div>';
+    }
+    html += '</div>';
+    var eventList = state.data.events.slice(0, 15);
+    if (eventList.length === 0) { html += '<div class="empty">予定はありません。</div>'; }
+    eventList.forEach(function(e){
+      html += '<div class="event-row"><div class="event-date">'+escapeHtml(eventDateLabel(e))+'</div><div class="event-title">'+escapeHtml(e.title)+'</div></div>';
+    });
+    if (state.data.events.length > eventList.length) {
+      html += '<div class="empty">ほか '+(state.data.events.length - eventList.length)+' 件の予定があります。</div>';
+    }
+    html += '</div>';
+
+    document.getElementById("mainContent").innerHTML = html;
+
+    var syncBtn = document.getElementById("syncEventsBtn");
+    if (syncBtn) {
+      syncBtn.onclick = async function(){
+        syncBtn.disabled = true;
+        syncBtn.textContent = "取込中…";
+        try {
+          var res = await gsRun("api_syncEvents");
+          state.ctx.eventSyncTime = res.syncedAt;
+          // 取り込んだ週区分（A/B）を反映するため、今週の判定も取り直す
+          try {
+            var ctx = await gsRun("api_getContext");
+            if (!ctx.needsRegistration) {
+              state.ctx.currentWeek = ctx.currentWeek;
+              state.ctx.currentWeekAuto = ctx.currentWeekAuto;
+            }
+          } catch (e2) {}
+          showToast("行事予定を取り込みました（"+res.count+"件）");
+          await refreshData();
+        } catch (err) {
+          syncBtn.disabled = false;
+          syncBtn.textContent = "🔄 行事を取り込む";
+          showToast(errorMessage(err));
+        }
+      };
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-week-view]"), function(btn){
+      btn.onclick = function(){ state.weekView = btn.getAttribute("data-week-view"); renderTab(); };
+    });
+
+    var weekSel = document.getElementById("currentWeekSel");
+    if (weekSel) {
+      weekSel.onchange = async function(){
+        var w = weekSel.value;
+        weekSel.disabled = true;
+        try {
+          await gsRun("api_setCurrentWeek", w);
+          state.ctx.currentWeek = w;
+          showToast("今週を"+w+"週に設定しました");
+          renderTab();
+        } catch (err) {
+          weekSel.disabled = false;
+          showToast(errorMessage(err));
+        }
+      };
+    }
+
+    if (isTeacher) {
+      Array.prototype.forEach.call(document.querySelectorAll(".sched-cell"), function(td){
+        td.onclick = function(){
+          openScheduleCellModal(td.getAttribute("data-cell-day"), Number(td.getAttribute("data-cell-period")), weekView);
+        };
+      });
+    }
+  }
+
+  // 時間割の1コマを編集するモーダル（教員のみ）
+  function openScheduleCellModal(day, period, weekView){
+    var existing = findScheduleCell(day, period, weekView);
+    var root = document.getElementById("modalRoot");
+
+    var subjectList = Object.keys(SUBJECT_ICON);
+    var datalist = '<datalist id="subjectList">'+subjectList.map(function(s){ return '<option value="'+s+'">'; }).join("")+'</datalist>';
+
+    var rangeLabel = { "": "A週・B週共通", "A": "A週のみ", "B": "B週のみ" };
+
+    var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
+    html += '<h3>時間割の編集</h3>';
+    html += '<div class="modal-sub">'+escapeHtml(state.viewClass)+' ・ '+day+'曜 '+period+'限</div>';
+    html += '<div class="field"><label>教科</label><input type="text" id="fSubject" list="subjectList" value="'+escapeHtml(existing ? existing.subject : "")+'" placeholder="例：国語">'+datalist+'</div>';
+    if (existing) {
+      html += '<div class="field"><label>適用範囲</label><div style="font-size:13.5px;padding:4px 0">'+rangeLabel[existing.week]+'</div></div>';
+    } else {
+      html += '<div class="field"><label>適用範囲</label><select id="fWeekRange">'
+        + '<option value="">A週・B週共通</option>'
+        + '<option value="A"'+(weekView==="A"?" selected":"")+'>A週のみ</option>'
+        + '<option value="B"'+(weekView==="B"?" selected":"")+'>B週のみ</option>'
+        + '</select></div>';
+    }
+    html += '<div class="field-error" id="fError" style="display:none"></div>';
+    html += '<div class="modal-actions">'
+      + (existing ? '<button class="btn-secondary" id="deleteBtn" style="margin-right:auto;color:var(--overdue);border-color:var(--overdue)">このコマを削除</button>' : '')
+      + '<button class="btn-secondary" id="cancelBtn">キャンセル</button>'
+      + '<button class="btn-primary" id="submitBtn">保存する</button></div>';
+    html += '</div></div>';
+    root.innerHTML = html;
+
+    document.getElementById("cancelBtn").onclick = function(){ root.innerHTML = ""; };
+    document.getElementById("backdrop").onclick = function(e){ if (e.target.id === "backdrop") root.innerHTML = ""; };
+
+    async function save(subject){
+      var errBox = document.getElementById("fError");
+      errBox.style.display = "none";
+      var week = existing ? existing.week : (document.getElementById("fWeekRange") ? document.getElementById("fWeekRange").value : "");
+      try {
+        await gsRun("api_setScheduleCell", {
+          cls: state.viewClass, week: week, day: day, period: period, subject: subject
+        });
+        root.innerHTML = "";
+        showToast(subject === "" ? "削除しました" : "保存しました");
+        await refreshData();
+      } catch (err) {
+        errBox.textContent = errorMessage(err);
+        errBox.style.display = "block";
+      }
+    }
+
+    document.getElementById("submitBtn").onclick = function(){
+      var subject = document.getElementById("fSubject").value.trim();
+      if (!subject) {
+        var errBox = document.getElementById("fError");
+        errBox.textContent = "教科を入力してください（コマを消す場合は「このコマを削除」を押してください）";
+        errBox.style.display = "block";
+        return;
+      }
+      this.disabled = true;
+      this.textContent = "保存中…";
+      save(subject);
+    };
+
+    var deleteBtn = document.getElementById("deleteBtn");
+    if (deleteBtn) {
+      deleteBtn.onclick = function(){
+        this.disabled = true;
+        this.textContent = "削除中…";
+        save("");
+      };
+    }
+  }
+
+  /* ============== 課題・提出物 ============== */
+
+  function renderTaskItem(t){
+    var s = dueStatus(t.due, t.done);
+    var html = '<div class="task-item">';
+    html += '<div class="task-top">'+chipHtml(t.category, t.label)+'<span class="task-due '+s.cls+'">'+s.text+'</span></div>';
+    html += '<div class="task-title">'+escapeHtml(t.title)+'</div>';
+    if (t.detail) html += '<div class="task-detail">'+escapeHtml(t.detail)+'</div>';
+    if (state.ctx.role === "student") {
+      html += '<div class="task-check"><label><input type="checkbox" data-task="'+escapeHtml(t.id)+'" '+(t.done?"checked":"")+'> 自分でチェック（提出できたら）</label></div>';
+    }
+    html += '<div class="post-by">'+escapeHtml(t.postedBy)+'</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function bindTaskChecks(){
+    Array.prototype.forEach.call(document.querySelectorAll("[data-task]"), function(cb){
+      cb.onchange = async function(){
+        var id = cb.getAttribute("data-task");
+        var checked = cb.checked;
+        cb.disabled = true;
+        try {
+          await gsRun("api_setTaskDone", id, checked);
+          showToast(checked ? "提出済みにしました" : "未提出に戻しました");
+          await refreshData();
+        } catch (err) {
+          cb.checked = !checked;
+          cb.disabled = false;
+          showToast(errorMessage(err));
+        }
+      };
+    });
+  }
+
+  function taskCounts(list){
+    var counts = {all: list.length, soon: 0, overdue: 0, done: 0, normal: 0};
+    list.forEach(function(t){
+      var s = dueStatus(t.due, t.done);
+      counts[s.cls] = (counts[s.cls] || 0) + 1;
+    });
+    return counts;
+  }
+
+  function renderTaskSection(title, icon, category, filterKey){
+    var list = state.data.tasks.filter(function(t){ return t.category === category; })
+      .filter(function(t){ var s = dueStatus(t.due, t.done); return filterKey === "all" ? true : s.cls === filterKey; })
+      .sort(function(a,b){ return a.due.localeCompare(b.due); });
+    var html = '<div class="panel"><div class="panel-head"><div class="panel-title">'+icon+' '+title+'</div><div class="panel-meta">'+list.length+'件</div></div>';
+    if (list.length === 0) { html += '<div class="empty">'+TASK_EMPTY_TEXT[filterKey]+'</div>'; }
+    list.forEach(function(t){ html += renderTaskItem(t); });
+    html += '</div>';
+    return html;
+  }
+
+  async function renderTasks(seq){
+    var counts = taskCounts(state.data.tasks);
+
+    var html = '<div class="seg-tabs">';
+    TASK_FILTERS.forEach(function(f){
+      html += '<button data-filter="'+f.key+'" class="'+(state.taskFilter===f.key?"active":"")+'">'+f.label+' <span class="seg-count">'+(counts[f.key]||0)+'</span></button>';
+    });
+    html += '</div>';
+
+    html += '<div class="grid-2">';
+    html += renderTaskSection("教科の提出物", "📘", "subject", state.taskFilter);
+    html += renderTaskSection("担任に出す提出物", "🏠", "homeroom", state.taskFilter);
+    html += '</div>';
+
+    document.getElementById("mainContent").innerHTML = html;
+    bindTaskChecks();
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-filter]"), function(btn){
+      btn.onclick = function(){ state.taskFilter = btn.getAttribute("data-filter"); renderTab(); };
+    });
+
+    await renderComposer("tasks", seq);
+  }
+
+  /* ============== 連絡 ============== */
+
+  function renderPost(a, compact){
+    var html = '<div class="post">';
+    html += '<div class="post-top">'+chipHtml(a.category, a.label)+'<span class="post-time">'+escapeHtml(a.time)+'</span></div>';
+    html += '<div class="post-title">'+escapeHtml(a.title)+'</div>';
+    if (!compact && a.body) html += '<div class="post-body">'+escapeHtml(a.body)+'</div>';
+    html += '<div class="post-by">'+escapeHtml(a.postedBy)+'</div>';
+    html += '</div>';
+    return html;
+  }
+
+  async function renderPosts(seq){
+    var list = state.data.posts;
+    if (state.announceFilter !== "all") list = list.filter(function(a){ return a.category === state.announceFilter; });
+
+    var html = '<div class="filter-row">';
+    var filters = [["all","すべて"],["homeroom","学級・担任"],["subject","教科"],["duty","係"],["committee","委員会"]];
+    filters.forEach(function(f){
+      html += '<button class="filter-btn '+(state.announceFilter===f[0]?"active":"")+'" data-filter="'+f[0]+'">'+f[1]+'</button>';
+    });
+    html += '</div>';
+
+    html += '<div class="panel"><div class="panel-head"><div class="panel-title">連絡一覧</div><div class="panel-meta">'+escapeHtml(state.viewClass)+' ・ 新着順</div></div>';
+    if (list.length === 0) { html += '<div class="empty">この条件の連絡はありません。</div>'; }
+    list.forEach(function(a){ html += renderPost(a, false); });
+    html += '</div>';
+
+    document.getElementById("mainContent").innerHTML = html;
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-filter]"), function(btn){
+      btn.onclick = function(){ state.announceFilter = btn.getAttribute("data-filter"); renderTab(); };
+    });
+
+    await renderComposer("announcement", seq);
+  }
+
+  /* ============== 係・担当 ============== */
+
+  var ROLE_GROUPS = [
+    ["subject", "📘 教科係"],
+    ["duty", "🧹 係"],
+    ["committee", "🗳️ 委員会"]
+  ];
+
+  async function renderRoles(seq){
+    var cls = state.viewClass;
+    document.getElementById("mainContent").innerHTML = '<div class="skeleton">読み込み中…</div>';
+    var list;
+    try {
+      list = await gsRun("api_getAssignments", cls);
+    } catch (err) {
+      document.getElementById("mainContent").innerHTML =
+        '<div class="load-error"><div class="big">⚠️</div>'+escapeHtml(errorMessage(err))+'</div>';
+      return;
+    }
+    if (seq !== state.renderSeq) return;
+
+    var isTeacher = state.ctx.role === "teacher";
+    var html = '';
+
+    ROLE_GROUPS.forEach(function(g){
+      var items = list.filter(function(a){ return a.category === g[0]; });
+      html += '<div class="panel"><div class="panel-head"><div class="panel-title">'+g[1]+'</div><div class="panel-meta">'+items.length+'名</div></div>';
+      if (items.length === 0) {
+        html += '<div class="empty">まだ登録されていません。</div>';
+      }
+      items.forEach(function(a, idx){
+        html += '<div class="role-row">' +
+          chipHtml(a.category, a.label) +
+          '<span class="role-name">'+escapeHtml(a.name || a.email)+'</span>' +
+          (isTeacher ? '<button class="role-del" data-del-cat="'+escapeHtml(a.category)+'" data-del-label="'+escapeHtml(a.label)+'" data-del-email="'+escapeHtml(a.email)+'" title="この担当を削除">✕</button>' : '') +
+          '</div>';
+      });
+      html += '</div>';
+    });
+
+    if (isTeacher) {
+      html += '<div style="font-size:12.5px;color:var(--ink-faint);margin-top:10px">' +
+        '※担当にできるのは、このクラスで初回登録を済ませた生徒です。担当を変更すると、その生徒が投稿・入力できる範囲もすぐに変わります。</div>';
+    }
+
+    document.getElementById("mainContent").innerHTML = html;
+
+    if (isTeacher) {
+      Array.prototype.forEach.call(document.querySelectorAll("[data-del-email]"), function(btn){
+        btn.onclick = async function(){
+          if (btn.getAttribute("data-armed") !== "1") {
+            btn.setAttribute("data-armed", "1");
+            btn.textContent = "削除する？";
+            setTimeout(function(){ btn.setAttribute("data-armed",""); btn.textContent = "✕"; }, 3000);
+            return;
+          }
+          btn.disabled = true;
+          try {
+            await gsRun("api_deleteAssignment", {
+              cls: cls, category: btn.getAttribute("data-del-cat"),
+              label: btn.getAttribute("data-del-label"), email: btn.getAttribute("data-del-email")
+            });
+            state.permsCache = {};
+            showToast("削除しました");
+            renderTab();
+          } catch (err) {
+            btn.disabled = false;
+            showToast(errorMessage(err));
+          }
+        };
+      });
+
+      var wrap = document.getElementById("mainContent");
+      var fabWrap = document.createElement("div");
+      fabWrap.className = "fab-wrap";
+      fabWrap.innerHTML = '<button class="fab" id="openRoleAdd">＋ 担当を追加</button>';
+      wrap.appendChild(fabWrap);
+      document.getElementById("openRoleAdd").onclick = function(){ openAssignmentModal(); };
+    }
+  }
+
+  async function openAssignmentModal(){
+    var cls = state.viewClass;
+    var root = document.getElementById("modalRoot");
+    root.innerHTML = '<div class="modal-backdrop"><div class="modal"><div class="skeleton">生徒一覧を読み込み中…</div></div></div>';
+
+    var students;
+    try {
+      students = await gsRun("api_getClassStudents", cls);
+    } catch (err) {
+      root.innerHTML = "";
+      showToast(errorMessage(err));
+      return;
+    }
+
+    var studentOptions = students.map(function(s){
+      return '<option value="'+escapeHtml(s.email)+'">'+escapeHtml(s.name)+'</option>';
+    }).join("");
+
+    var subjectOptions = SUBJECTS.map(function(s){
+      return '<option value="'+s+'">'+s+'</option>';
+    }).join("");
+
+    var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
+    html += '<h3>担当を追加</h3>';
+    html += '<div class="modal-sub">対象クラス：'+escapeHtml(cls)+'</div>';
+    html += '<div class="field"><label>種類</label><select id="fRoleCat">'
+      + '<option value="subject">教科係</option>'
+      + '<option value="duty">係</option>'
+      + '<option value="committee">委員会</option>'
+      + '</select></div>';
+    html += '<div class="field" id="roleLabelField"><label>教科</label><select id="fRoleLabel">'+subjectOptions+'</select></div>';
+    if (students.length > 0) {
+      html += '<div class="field"><label>担当する生徒</label><select id="fRoleStudent">'+studentOptions+'</select></div>';
+    } else {
+      html += '<div class="empty">このクラスで初回登録を済ませた生徒がまだいません。<br>生徒が一度「クラスまど」を開いて登録すると選べるようになります。</div>';
+    }
+    html += '<div class="field-error" id="fRoleError" style="display:none"></div>';
+    html += '<div class="modal-actions"><button class="btn-secondary" id="cancelBtn">キャンセル</button>'
+      + (students.length > 0 ? '<button class="btn-primary" id="submitBtn">追加する</button>' : '')
+      + '</div>';
+    html += '</div></div>';
+    root.innerHTML = html;
+
+    // 種類に応じて「教科プルダウン」か「名前の自由入力」を切り替える
+    document.getElementById("fRoleCat").onchange = function(){
+      var cat = this.value;
+      var field = document.getElementById("roleLabelField");
+      if (cat === "subject") {
+        field.innerHTML = '<label>教科</label><select id="fRoleLabel">'+subjectOptions+'</select>';
+      } else {
+        var ph = cat === "duty" ? "例：図書係" : "例：保健委員会";
+        field.innerHTML = '<label>'+(cat === "duty" ? "係の名前" : "委員会の名前")+'</label><input type="text" id="fRoleLabel" placeholder="'+ph+'">';
+      }
+    };
+
+    document.getElementById("cancelBtn").onclick = function(){ root.innerHTML = ""; };
+    document.getElementById("backdrop").onclick = function(e){ if (e.target.id === "backdrop") root.innerHTML = ""; };
+
+    var submitBtn = document.getElementById("submitBtn");
+    if (submitBtn) {
+      submitBtn.onclick = async function(){
+        var errBox = document.getElementById("fRoleError");
+        errBox.style.display = "none";
+        var label = document.getElementById("fRoleLabel").value.trim();
+        if (!label) { errBox.textContent = "名前を入力してください"; errBox.style.display = "block"; return; }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = "追加中…";
+        try {
+          await gsRun("api_addAssignment", {
+            cls: cls,
+            category: document.getElementById("fRoleCat").value,
+            label: label,
+            email: document.getElementById("fRoleStudent").value
+          });
+          root.innerHTML = "";
+          state.permsCache = {};
+          showToast("追加しました");
+          renderTab();
+        } catch (err) {
+          errBox.textContent = errorMessage(err);
+          errBox.style.display = "block";
+          submitBtn.disabled = false;
+          submitBtn.textContent = "追加する";
+        }
+      };
+    }
+  }
+
+  /* ============== 投稿フォーム ============== */
+
+  async function renderComposer(kind, seq){
+    var wrap = document.getElementById("mainContent");
+    var perms = await getCachedPerms(kind);
+
+    // この描画より新しい描画が始まっていたら、何も追加しない（ボタン二重表示の防止）
+    if (seq !== state.renderSeq) return;
+    if (!perms || perms.length === 0) return;
+
+    // 念のため、すでにボタンが表示されていたら取り除いてから追加する
+    Array.prototype.forEach.call(wrap.querySelectorAll(".fab-wrap"), function(el){ el.remove(); });
+
+    var fabWrap = document.createElement("div");
+    fabWrap.className = "fab-wrap";
+    var label = kind === "tasks" ? "課題・提出物を投稿" : "連絡を投稿";
+    fabWrap.innerHTML = '<button class="fab" id="openComposer">＋ '+label+'</button>';
+    wrap.appendChild(fabWrap);
+
+    document.getElementById("openComposer").onclick = function(){ openComposerModal(kind, perms); };
+  }
+
+  function openComposerModal(kind, perms){
+    var cls = state.viewClass;
+    var root = document.getElementById("modalRoot");
+
+    var catOptions = perms.map(function(p, i){
+      return '<option value="'+i+'">'+escapeHtml(CATEGORY_META[p.category] ? CATEGORY_META[p.category].name : p.category)+'：'+escapeHtml(p.label)+'</option>';
+    }).join("");
+
+    var isTask = kind === "tasks";
+    var todayIso = new Date().toISOString().slice(0,10);
+
+    var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
+    html += '<h3>'+(isTask ? "課題・提出物を投稿" : "連絡を投稿")+'</h3>';
+    html += '<div class="modal-sub">投稿先：'+escapeHtml(cls)+'</div>';
+
+    html += '<div class="field"><label>投稿する立場</label><select id="fCategory">'+catOptions+'</select></div>';
+
+    if (isTask) {
+      html += '<div class="field"><label>タイトル</label><input type="text" id="fTitle" placeholder="例：数学ワークP.10〜12"></div>';
+      html += '<div class="field"><label>締切日</label><input type="date" id="fDue" value="'+todayIso+'"></div>';
+      html += '<div class="field"><label>詳細（任意）</label><textarea id="fBody" placeholder="提出方法や注意点など"></textarea></div>';
+    } else {
+      html += '<div class="field"><label>タイトル</label><input type="text" id="fTitle" placeholder="例：明日の集合時間について"></div>';
+      html += '<div class="field"><label>本文</label><textarea id="fBody" placeholder="伝えたい内容を入力してください"></textarea></div>';
+    }
+
+    html += '<div class="field-error" id="fError" style="display:none"></div>';
+    html += '<div class="modal-actions"><button class="btn-secondary" id="cancelBtn">キャンセル</button><button class="btn-primary" id="submitBtn">投稿する</button></div>';
+    html += '</div></div>';
+
+    root.innerHTML = html;
+
+    document.getElementById("cancelBtn").onclick = function(){ root.innerHTML = ""; };
+    document.getElementById("backdrop").onclick = function(e){ if (e.target.id === "backdrop") root.innerHTML = ""; };
+
+    document.getElementById("submitBtn").onclick = async function(){
+      var errBox = document.getElementById("fError");
+      errBox.style.display = "none";
+
+      var title = document.getElementById("fTitle").value.trim();
+      if (!title) { errBox.textContent = "タイトルを入力してください"; errBox.style.display = "block"; return; }
+      var chosen = perms[parseInt(document.getElementById("fCategory").value, 10)];
+
+      var submitBtn = document.getElementById("submitBtn");
+      submitBtn.disabled = true;
+      submitBtn.textContent = "投稿中…";
+
+      try {
+        if (isTask) {
+          var due = document.getElementById("fDue").value;
+          if (!due) { throw new Error("締切日を入力してください"); }
+          await gsRun("api_postTask", {
+            cls: cls, category: chosen.category, label: chosen.label, title: title,
+            due: due, detail: document.getElementById("fBody").value.trim()
+          });
+        } else {
+          await gsRun("api_postAnnouncement", {
+            cls: cls, category: chosen.category, label: chosen.label, title: title,
+            body: document.getElementById("fBody").value.trim()
+          });
+        }
+        root.innerHTML = "";
+        showToast("投稿しました");
+        await refreshData();
+      } catch (err) {
+        errBox.textContent = errorMessage(err);
+        errBox.style.display = "block";
+        submitBtn.disabled = false;
+        submitBtn.textContent = "投稿する";
+      }
+    };
+  }
+
+  /* ============== 読み込みエラー ============== */
+
+  function renderLoadError(err){
+    document.getElementById("greeting").textContent = "";
+    document.getElementById("tabs").innerHTML = "";
+    document.getElementById("whoBadge").innerHTML = "";
+    document.getElementById("mainContent").innerHTML =
+      '<div class="load-error"><div class="big">😢</div>' + escapeHtml(errorMessage(err)) + '</div>';
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
