@@ -1032,12 +1032,23 @@ function api_getDayInfo(cls, baseDate) {
   var baseIsToday = Utilities.formatDate(base, tz, 'yyyy-MM-dd')
     === Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
 
+  // その日が登校日かどうか。行事予定の校時データがある日はそれに従い
+  // （祝日・振替休業日は校時がすべて空欄なので休み、公開授業の土曜は登校日になる）、
+  // データがない日は平日なら登校日とみなす。
+  function isSchoolDay_(d) {
+    var dateStr = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+    var plan = planFor(dateStr);
+    if (plan) return plan.some(function (t) { return String(t).trim() !== ''; });
+    var dow = d.getDay();
+    return dow >= 1 && dow <= 5;
+  }
+
   var next = new Date(base);
   next.setDate(base.getDate() + 1);
   var isLiterallyTomorrow = true;
-  // 土日は飛ばして次の登校日へ（ただし校時に授業が入っている土曜などは登校日扱い）
-  while ((next.getDay() === 0 || next.getDay() === 6)
-      && !hasSchoolPlan(Utilities.formatDate(next, tz, 'yyyy-MM-dd'))) {
+  // 土日・祝日・振替休業日を飛ばして次の登校日へ。
+  // 長期休業をまたぐ場合に備えて最大60日先まで探す
+  for (var guard = 0; guard < 60 && !isSchoolDay_(next); guard++) {
     next.setDate(next.getDate() + 1);
     isLiterallyTomorrow = false;
   }
