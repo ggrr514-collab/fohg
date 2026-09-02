@@ -162,6 +162,25 @@
   .period-subject { font-size: 15px; font-weight: 600; white-space: nowrap; }
   .period-note { font-size: 12.5px; color: var(--ink-soft); }
   .period-note .note-sep { color: var(--ink-faint); margin: 0 4px; }
+  /* ---- 今日の予定：日付ナビ ---- */
+  .date-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .nav-day-btn {
+    font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+    background: var(--paper-raised); border: 1px solid var(--line-strong);
+    border-radius: 999px; padding: 5px 12px; cursor: pointer; white-space: nowrap;
+  }
+  .nav-day-btn:hover { border-color: var(--accent); color: var(--accent-ink); }
+  .nav-day-btn.today-btn { color: var(--accent-ink); border-color: var(--accent); background: var(--accent-soft); }
+  .date-nav input[type="date"] {
+    font-family: inherit; font-size: 13px; padding: 5px 8px;
+    border: 1px solid var(--line-strong); border-radius: 8px;
+    background: var(--paper-raised); color: var(--ink);
+  }
+  .past-notice {
+    font-size: 12.5px; color: var(--warn); background: var(--warn-bg);
+    border-radius: 8px; padding: 5px 12px;
+  }
+
   .chg-badge {
     font-size: 10px; font-weight: 700; color: var(--overdue); background: var(--overdue-bg);
     border-radius: 999px; padding: 1px 7px; margin-left: 6px; vertical-align: middle;
@@ -382,6 +401,7 @@
   var state = {
     ctx: null,          // {email, name, role, myClass, classes}
     viewClass: null,
+    viewDate: null,     // 「今日の予定」で表示する基準日（yyyy-MM-dd）。null=今日
     tab: "today",
     announceFilter: "all",
     taskFilter: "soon",
@@ -632,9 +652,10 @@
       gsRun("api_getEvents", state.viewClass),
       gsRun("api_getTasks", state.viewClass),
       gsRun("api_getAnnouncements", state.viewClass),
-      gsRun("api_getDayInfo", state.viewClass)
+      gsRun("api_getDayInfo", state.viewClass, state.viewDate || null)
     ]);
     state.data = { schedule: results[0], events: results[1], tasks: results[2], posts: results[3], dayInfo: results[4] };
+    state.data.dayInfoFor = state.viewDate || "today";
     state.dataClass = state.viewClass;
   }
 
@@ -715,6 +736,23 @@
 
   async function renderToday(seq){
     var cls = state.viewClass;
+
+    // 日付を移動しているときは、その基準日の情報を取り直す
+    var wantFor = state.viewDate || "today";
+    if (state.data.dayInfoFor !== wantFor) {
+      document.getElementById("mainContent").innerHTML = '<div class="skeleton">読み込み中…</div>';
+      try {
+        var di = await gsRun("api_getDayInfo", cls, state.viewDate || null);
+        if (seq !== state.renderSeq) return;
+        state.data.dayInfo = di;
+        state.data.dayInfoFor = wantFor;
+      } catch (err) {
+        document.getElementById("mainContent").innerHTML =
+          '<div class="load-error"><div class="big">⚠️</div>'+escapeHtml(errorMessage(err))+'</div>';
+        return;
+      }
+    }
+
     var dayInfo = state.data.dayInfo || { days: [], notes: [] };
     var usesWeeks = classUsesWeeks();
     var todaysTasks = state.data.tasks.filter(function(t){
@@ -769,10 +807,24 @@
       return null;
     }
 
-    var html = '<div class="grid-2">';
+    // 日付ナビ：前の日・日付選択・次の日・今日に戻る
+    var baseDate = dayInfo.days.length ? dayInfo.days[0].date : localDateStr(new Date());
+    var todayStr = localDateStr(new Date());
+    var html = '<div class="date-nav">';
+    html += '<button class="nav-day-btn" data-nav="-1">◀ 前の日</button>';
+    html += '<input type="date" id="dayPicker" value="'+baseDate+'">';
+    html += '<button class="nav-day-btn" data-nav="1">次の日 ▶</button>';
+    if (state.viewDate) {
+      html += '<button class="nav-day-btn today-btn" id="backToToday">今日に戻る</button>';
+      if (baseDate < todayStr) html += '<span class="past-notice">過去の連絡を表示中</span>';
+      else html += '<span class="past-notice" style="color:var(--accent-ink);background:var(--accent-soft)">先の予定を表示中</span>';
+    }
+    html += '</div>';
+
+    html += '<div class="grid-2">';
 
     html += '<div>';
-    // 「今日」と「明日（金曜なら次の登校日）」の時間割を並べて表示する
+    // 基準日と「その次の登校日」の時間割を並べて表示する
     dayInfo.days.forEach(function(day){
       var mdParts = String(day.date).split("-");
       var md = Number(mdParts[1]) + "/" + Number(mdParts[2]);
@@ -867,6 +919,24 @@
     bindTaskChecks();
     bindDailyNoteEdits();
     bindScheduleSwapEdits();
+
+    // 日付ナビ
+    function setViewDate(dateStr){
+      state.viewDate = (dateStr === localDateStr(new Date())) ? null : dateStr;
+      renderTab();
+    }
+    Array.prototype.forEach.call(document.querySelectorAll("[data-nav]"), function(btn){
+      btn.onclick = function(){
+        var p = baseDate.split("-");
+        var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+        d.setDate(d.getDate() + Number(btn.getAttribute("data-nav")));
+        setViewDate(localDateStr(d));
+      };
+    });
+    var picker = document.getElementById("dayPicker");
+    if (picker) picker.onchange = function(){ if (picker.value) setViewDate(picker.value); };
+    var backBtn = document.getElementById("backToToday");
+    if (backBtn) backBtn.onclick = function(){ setViewDate(localDateStr(new Date())); };
   }
 
   // 「今日・明日の教科連絡・持ち物」を編集するモーダル（教員＋担当教科の教科係）。

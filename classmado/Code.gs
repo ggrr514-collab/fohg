@@ -947,9 +947,10 @@ function gradeFromClassName_(cls) {
   return m ? Number(m[1]) : 0;
 }
 
-// 「今日」と「次の登校日（通常は明日。金曜なら月曜）」の日付・曜日・週区分・
-// その日の校時（行事予定ファイル由来）と、そのクラスの日別連絡・時間割変更を返す
-function api_getDayInfo(cls) {
+// 基準日とその「次の登校日」の日付・曜日・週区分・その日の校時（行事予定ファイル由来）と、
+// そのクラスの日別連絡・時間割変更を返す。
+// baseDate（yyyy-MM-dd）を省略すると今日が基準になる。過去・未来どちらの日付も指定できる。
+function api_getDayInfo(cls, baseDate) {
   var ctx = getContext_();
   assertCanView_(ctx, cls);
   var tz = Session.getScriptTimeZone();
@@ -989,9 +990,19 @@ function api_getDayInfo(cls) {
     };
   }
 
-  var today = new Date();
-  var next = new Date(today);
-  next.setDate(today.getDate() + 1);
+  // 基準日（指定がなければ今日）
+  var base;
+  if (baseDate && /^\d{4}-\d{2}-\d{2}$/.test(String(baseDate))) {
+    var bp = String(baseDate).split('-');
+    base = new Date(Number(bp[0]), Number(bp[1]) - 1, Number(bp[2]));
+  } else {
+    base = new Date();
+  }
+  var baseIsToday = Utilities.formatDate(base, tz, 'yyyy-MM-dd')
+    === Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+
+  var next = new Date(base);
+  next.setDate(base.getDate() + 1);
   var isLiterallyTomorrow = true;
   // 土日は飛ばして次の登校日へ（ただし校時に授業が入っている土曜などは登校日扱い）
   while ((next.getDay() === 0 || next.getDay() === 6)
@@ -999,14 +1010,19 @@ function api_getDayInfo(cls) {
     next.setDate(next.getDate() + 1);
     isLiterallyTomorrow = false;
   }
-  var days = [dayEntry(today, '今日'), dayEntry(next, isLiterallyTomorrow ? '明日' : '次の登校日')];
+  var label1 = baseIsToday ? '今日' : Utilities.formatDate(base, tz, 'M/d');
+  var label2 = baseIsToday ? (isLiterallyTomorrow ? '明日' : '次の登校日') : '翌登校日';
+  var days = [dayEntry(base, label1), dayEntry(next, label2)];
 
-  var todayStr = days[0].date;
+  // 日別連絡・時間割変更は、表示する2日分だけ返す
+  var wantDates = {};
+  days.forEach(function (d) { wantDates[d.date] = true; });
+
   var notes = [];
   if (getSS_().getSheetByName(SHEET.DAILY_NOTES)) {
     readSheet_(SHEET.DAILY_NOTES).forEach(function (r) {
       var date = toDateStr_(r['日付']);
-      if (r['クラス'] !== cls || !date || date < todayStr) return;
+      if (r['クラス'] !== cls || !wantDates[date]) return;
       notes.push({
         date: date, period: Number(r['時限']),
         subject: r['教科'] || '', text: r['連絡'] || ''
@@ -1014,12 +1030,11 @@ function api_getDayInfo(cls) {
     });
   }
 
-  // 教員が入力した日付ごとの時間割変更（今日以降の分）
   var overrides = [];
   if (getSS_().getSheetByName(SHEET.SCHEDULE_CHANGES)) {
     readSheet_(SHEET.SCHEDULE_CHANGES).forEach(function (r) {
       var date = toDateStr_(r['日付']);
-      if (r['クラス'] !== cls || !date || date < todayStr) return;
+      if (r['クラス'] !== cls || !wantDates[date]) return;
       overrides.push({ date: date, period: Number(r['時限']), subject: String(r['教科'] || '').trim() });
     });
   }
