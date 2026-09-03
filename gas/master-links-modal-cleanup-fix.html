@@ -1,0 +1,86 @@
+<!--
+  ============================================================
+  「マスターリンクモーダル」まわりの崩れを修正する
+  ============================================================
+  前回の修正案内（linked-accounts-modal-nesting-fix.html）の中で
+  「...」（省略記号）を使って例を示した部分を、そのまま実際のコードに
+  コピーしてしまったことが原因で、#masterLinksModal の中身が壊れて
+  しまっています。
+
+  現状の問題:
+  ・#masterLinksModal の本来の中身（説明文・リンク一覧）が失われ、
+    代わりに「...」という文字が入ってしまっている
+  ・本来の中身が、#linkedAccountsModal の直後に“はみ出した”状態で
+    残っており、どの display:none の親にも囲まれていないため、
+    ダッシュボードの画面に常時表示されてしまう
+    （空欄の段落＋「💡 クリックすると新しいタブでスプレッドシートが
+    開きます」という文字が出しっぱなしになる）
+  ・id="masterLinksDesc" と id="masterLinksContent" が2箇所に重複
+
+  今回は「探して置き換え」ではなく、該当ブロックをまるごと削除して
+  置き換える方法で直します（「...」のような省略は一切使っていません。
+  下のコードをそのままコピーしてください）。
+
+  ⚠️ 重要: このファイルはindex.html用のHTML・JavaScriptの一部です。
+  <script>や<style>タグは新しく追加しないでください。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  手順
+  ==========================================================================
+  index.html内で、コメント <!-- マスターリンクモーダル（管理ボタン共通） -->
+  から、コメント <!-- 過去の連絡一覧モーダル --> の直前までの範囲を
+  まるごと選択して削除し、代わりに下記をそのまま貼り付けてください。
+
+  （つまり、壊れてしまった #masterLinksModal ブロックと、はみ出した
+  残骸、#linkedAccountsModal ブロックをすべて含めて、いったん全部
+  削除してから、下記のきれいな内容に置き換える、ということです）
+-->
+<!-- マスターリンクモーダル（管理ボタン共通） -->
+<div id="masterLinksModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:500;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:8px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,0.2);">
+    <div style="padding:16px 20px;border-bottom:2px solid var(--ink);display:flex;justify-content:space-between;align-items:center;">
+      <h3 id="masterLinksTitle" style="font-size:15px;font-weight:700;">管理</h3>
+      <button onclick="closeMasterLinksModal()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--ink-soft);padding:0 4px;">×</button>
+    </div>
+    <div style="padding:14px 20px;">
+      <p id="masterLinksDesc" style="font-size:12px;color:var(--ink-soft);margin-bottom:14px;"></p>
+      <div id="masterLinksContent"></div>
+      <div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);font-size:11px;color:var(--ink-faint);">
+        💡 クリックすると新しいタブでスプレッドシートが開きます
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="linkedAccountsModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:500;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:8px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,0.2);">
+    <div style="padding:16px 20px;border-bottom:2px solid var(--ink);display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:15px;font-weight:700;">🔗 連携アカウント管理</h3>
+      <button onclick="closeLinkedAccountsModal()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--ink-soft);padding:0 4px;">×</button>
+    </div>
+    <div style="padding:14px 20px;" id="linkedAccountsContent">
+      <div style="text-align:center;padding:20px;color:var(--ink-faint);font-size:13px;">読み込み中...</div>
+    </div>
+  </div>
+</div>
+
+<!--
+  ============================================================
+  確認方法
+  ============================================================
+  貼り付けたあと、ページ全体を検索して id="masterLinksDesc" と
+  id="masterLinksContent" が、それぞれ1箇所ずつしかないことを
+  確認してください（重複がなければOKです）。
+
+  リロードして:
+  ・「⚙️ 管理」ボタン → 管理画面モーダルが正しく表示される
+  ・「✈️ 出張マスター」「📚 研究ライブラリ」なども同じ仕組みで開く
+  ・「🔗 連携アカウント」ボタン → 連携アカウント管理モーダルが表示される
+  ・ページ上部などに「💡 クリックすると新しいタブで...」という
+    文字が出しっぱなしになっていないこと
+  すべて確認できればOKです。
+  ============================================================
+-->
