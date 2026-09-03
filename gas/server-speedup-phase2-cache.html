@@ -53,8 +53,9 @@ function dayKey_(d) {
 // ------------------------------------------------------------
 // リクエストをまたぐキャッシュ（CacheService）
 // ------------------------------------------------------------
-// 1つの値は最大100KBまでしか入らないので、90KBずつに分割して保存する
-var CROSS_CACHE_CHUNK = 90000;
+// 1つの値は最大100KB（バイト）までしか入らない。日本語は1文字3バイトなので、
+// 3万文字（最大約90KB）ずつに分割して保存する
+var CROSS_CACHE_CHUNK = 30000;
 
 // シートごとの保持時間（秒）。0 のシートはキャッシュしない
 function crossCacheTtl_(name) {
@@ -125,7 +126,7 @@ function crossCachePut_(baseKey, value, ttlSec) {
       obj[key + '#' + n] = s.substr(i, CROSS_CACHE_CHUNK);
       n++;
     }
-    if (n === 0 || n > 10) return;   // 空、または約900KB超のものは保持しない
+    if (n === 0 || n > 30) return;   // 空、または約900KB超のものは保持しない
     obj[key + '#h'] = String(n);
     cache.putAll(obj, ttlSec);
   } catch (e) {
