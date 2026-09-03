@@ -1,0 +1,150 @@
+<!--
+  ============================================================
+  トップバーの管理者用ボタンを「⚙️ 管理」モーダルの中にまとめる
+  ============================================================
+  現状: トップバーに「⚙️ 管理」「🔄 行事予定を反映」「🔄 出張を反映」
+  「🔄 アレルギーを反映」「🔗 連携アカウント」と並んでいて、管理者
+  ログイン時にボタンがあふれて見づらくなっています。
+
+  この修正では、日常的に押すものではない3つの「反映」ボタンを
+  トップバーから消し、代わりに「⚙️ 管理」を押したときに開く
+  モーダルの中（上部）に表示するようにします。
+  「🔗 連携アカウント」は全員が使うボタンなので、トップバーに
+  そのまま残します。
+
+  ⚠️ 重要: このファイルはindex.html用のHTML/JavaScriptです。
+  <script>や<style>タグは新しく追加しないでください。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① トップバー: 3つの「反映」ボタンを削除する
+  ==========================================================================
+  探す（トップバー内、ユーザー情報のあたり）:
+-->
+<button id="syncR8Btn" onclick="syncR8EventMaster()" style="display:none;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:6px;">🔄 行事予定を反映</button>
+<button id="syncShuchoBtn" onclick="syncShuchoMaster()" style="display:none;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:6px;">🔄 出張を反映</button>
+<button id="syncAllergyBtn" onclick="syncAllergyMaster()" style="display:none;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:6px;">🔄 アレルギーを反映</button>
+<button id="linkAccountsBtn" onclick="openLinkedAccounts()" style="display:none;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:6px;">🔗 連携アカウント</button>
+
+<!--
+  これに置き換える（3つの「反映」ボタンを削除。連携アカウントボタンのみ残す）:
+-->
+<button id="linkAccountsBtn" onclick="openLinkedAccounts()" style="display:none;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:6px;">🔗 連携アカウント</button>
+
+
+<!--
+  ==========================================================================
+  ② handleNippoLoaded関数内: 削除したボタンの表示切り替え処理も削除する
+  ==========================================================================
+  探す:
+-->
+var syncR8BtnEl = document.getElementById('syncR8Btn');
+if (syncR8BtnEl) syncR8BtnEl.style.display = data.user.isAdmin ? '' : 'none';
+var syncShuchoBtnEl = document.getElementById('syncShuchoBtn');
+if (syncShuchoBtnEl) syncShuchoBtnEl.style.display = data.user.isAdmin ? '' : 'none';
+var syncAllergyBtnEl = document.getElementById('syncAllergyBtn');
+if (syncAllergyBtnEl) syncAllergyBtnEl.style.display = data.user.isAdmin ? '' : 'none';
+var linkAccountsBtnEl = document.getElementById('linkAccountsBtn');
+if (linkAccountsBtnEl) linkAccountsBtnEl.style.display = data.user.isGuest ? 'none' : '';
+
+<!--
+  これに置き換える:
+-->
+var linkAccountsBtnEl = document.getElementById('linkAccountsBtn');
+if (linkAccountsBtnEl) linkAccountsBtnEl.style.display = data.user.isGuest ? 'none' : '';
+
+
+<!--
+  ==========================================================================
+  ③ masterLinksModal: モーダルの中に3つの「反映」ボタンを追加する
+  ==========================================================================
+  探す（#masterLinksModal の中、#masterLinksDesc のすぐ上）:
+-->
+    <div style="padding:14px 20px;">
+      <p id="masterLinksDesc" style="font-size:12px;color:var(--ink-soft);margin-bottom:14px;"></p>
+      <div id="masterLinksContent"></div>
+      <div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);font-size:11px;color:var(--ink-faint);">
+        💡 クリックすると新しいタブでスプレッドシートが開きます
+      </div>
+    </div>
+
+<!--
+  これに置き換える（masterLinksActionsという新しいdivを追加）:
+-->
+    <div style="padding:14px 20px;">
+      <div id="masterLinksActions" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px dashed var(--line);">
+        <button id="syncR8Btn" onclick="syncR8EventMaster()" class="section-mgmt-btn">🔄 行事予定を反映</button>
+        <button id="syncShuchoBtn" onclick="syncShuchoMaster()" class="section-mgmt-btn">🔄 出張を反映</button>
+        <button id="syncAllergyBtn" onclick="syncAllergyMaster()" class="section-mgmt-btn">🔄 アレルギーを反映</button>
+      </div>
+      <p id="masterLinksDesc" style="font-size:12px;color:var(--ink-soft);margin-bottom:14px;"></p>
+      <div id="masterLinksContent"></div>
+      <div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);font-size:11px;color:var(--ink-faint);">
+        💡 クリックすると新しいタブでスプレッドシートが開きます
+      </div>
+    </div>
+
+
+<!--
+  ==========================================================================
+  ④ showMasterLinksModal関数: 反映ボタンの表示/非表示を切り替える
+  ==========================================================================
+  探す（showMasterLinksModal関数の先頭付近）:
+-->
+function showMasterLinksModal(opts) {
+  var modal = document.getElementById('masterLinksModal');
+  document.getElementById('masterLinksTitle').textContent = opts.title || '管理';
+  document.getElementById('masterLinksDesc').textContent = opts.description || '';
+
+  var html = '';
+
+<!--
+  これに置き換える（actionsEl の表示切り替えを追加）:
+-->
+function showMasterLinksModal(opts) {
+  var modal = document.getElementById('masterLinksModal');
+  document.getElementById('masterLinksTitle').textContent = opts.title || '管理';
+  document.getElementById('masterLinksDesc').textContent = opts.description || '';
+  var actionsEl = document.getElementById('masterLinksActions');
+  if (actionsEl) actionsEl.style.display = opts.showActions ? 'flex' : 'none';
+
+  var html = '';
+
+
+<!--
+  ==========================================================================
+  ⑤ openAdmin関数: 管理画面モーダルを開くときだけ反映ボタンを表示する
+  ==========================================================================
+  探す（openAdmin関数内、showMasterLinksModalの呼び出し部分）:
+-->
+      showMasterLinksModal({
+        title: '⚙️ 管理画面',
+        description: '各シートを別タブで開けます。',
+        links: [
+
+<!--
+  これに置き換える（showActions: true を追加）:
+-->
+      showMasterLinksModal({
+        title: '⚙️ 管理画面',
+        description: '各シートを別タブで開けます。',
+        showActions: true,
+        links: [
+
+
+<!--
+  ============================================================
+  補足
+  ============================================================
+  ・「✈️ 出張マスター」「📚 研究ライブラリ」「⚠️ アレルギー対応
+    マスター」を開くときは showActions を渡していないので、反映
+    ボタンは表示されません（管理画面を開いたときだけ表示）。
+  ・syncR8EventMaster / syncShuchoMaster / syncAllergyMaster
+    関数（Code.gsへの呼び出し・ボタンの文言変更処理など）は
+    変更不要です。ボタンのIDが同じなのでそのまま動作します。
+  ・これで管理者がログインしたときのトップバーは
+    「⚙️ 管理」「🔗 連携アカウント」の2つだけになり、すっきりします。
+  ============================================================
+-->
