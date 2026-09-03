@@ -1,0 +1,330 @@
+<!--
+  ============================================================
+  「明日の予定」を、週休日・祝日を飛ばして「次の登校日」にする
+  ============================================================
+  【現状】
+    「明日の予定」は常に「見ている日の翌日」を表示しています。
+    金曜日に見ると土曜日（🌙 休業日）が出て、月曜日の予定が
+    見えません。連休前も同様です。
+
+  【この修正でこうなる】
+  ・「明日の予定」欄に、行事取込シート上で授業（校時 or 給食）が
+    ある「次の登校日」を表示します。
+      例: 金曜に見ている → 月曜の予定
+          3連休の前日に見ている → 連休明けの予定
+  ・翌日が登校日ならこれまでどおり「明日の予定」と表示し、
+    飛ばした場合は見出しが「次の登校日の予定 9月7日（月）」の
+    ように変わります（どの日を見ているか分かるように）。
+  ・「＋ 項目を追記」「✏️ 編集」「✕ 非表示」も、明日欄で操作した
+    ときは自動的に「次の登校日」の日付に保存されます。
+    （ここを直さないと、金曜に明日欄へ追記すると土曜に保存されて
+    画面に出てこない、という不整合が起きるため）
+  ・授業変更の「明日」も、同じ「次の登校日」に合わせます。
+    （⑨〜⑪。予定欄と授業変更で「明日」が別の日になるのを防ぐため。
+    ここは不要なら飛ばしても、予定欄の動作には影響しません）
+
+  【次の登校日の決め方】
+    翌日から順に最大31日先まで、行事取込シートの行を見ていきます。
+    ・行があって授業がある（rowHasClasses_ が true）→ その日
+    ・行があって授業がない（週休日・祝日・休業日）→ 飛ばす
+    ・行がない平日 → その日（データ未取込は登校日とみなす。
+      これまでの「行が無ければ登校日扱い」と同じ考え方）
+    ・行がない土日 → 飛ばす
+    31日先まで見つからなければ、これまでどおり翌日にします。
+
+  ⚠️ 重要:
+  ・①〜⑤は Code.gs、⑥〜⑪は index.html です。
+  ・第1段の高速化（server-speedup-phase1-memo.html）が適用済みである
+    ことが前提です。findEventRow_ を最大31回呼びますが、第1段の
+    実行内キャッシュが効いているのでシートの再読込は起きません。
+  ・「...」のような省略は一切使っていません。すべてそのままコピーできます。
+  ・<script>や<style>タグは新しく追加しないでください。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① Code.gs: 「次の登校日」を求める関数を追加する（新規）
+  ==========================================================================
+  探す（rowHasClasses_ 関数。この関数の閉じカッコ } の直後に追加）:
+-->
+function rowHasClasses_(row) {
+  if (!row) return false;
+  const lunchCols = [EVENT_COL.LUNCH1, EVENT_COL.LUNCH2, EVENT_COL.LUNCH3];
+  for (let i = 0; i < lunchCols.length; i++) {
+    const v = String(row[lunchCols[i] - 1] || '').trim();
+    if (v === '○' || v === '◯') return true;
+  }
+  const periodCols = [].concat(EVENT_COL.G1_PERIODS, EVENT_COL.G2_PERIODS, EVENT_COL.G3_PERIODS);
+  for (let i = 0; i < periodCols.length; i++) {
+    const v = row[periodCols[i] - 1];
+    if (v !== null && v !== undefined && String(v).trim() !== '') return true;
+  }
+  return false;
+}
+
+<!--
+  上の関数の直後に、次を追加する:
+-->
+
+/**
+ * 指定日の「次の登校日」を返す（週休日・祝日・休業日を飛ばす）
+ * - 行事取込に行があり授業がある日 → その日
+ * - 行事取込に行があり授業がない日 → 飛ばす
+ * - 行事取込に行がない平日 → その日（未取込は登校日扱い）
+ * - 行事取込に行がない土日 → 飛ばす
+ * 31日先まで見つからなければ翌日を返す
+ */
+function getNextSchoolDay_(ss, date) {
+  const fallback = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+  for (let i = 1; i <= 31; i++) {
+    const candidate = new Date(date.getFullYear(), date.getMonth(), date.getDate() + i);
+    let row = null;
+    try { row = findEventRow_(ss, candidate); } catch (e) { row = null; }
+    if (row) {
+      if (rowHasClasses_(row)) return candidate;
+      continue;
+    }
+    const dow = candidate.getDay();
+    if (dow === 0 || dow === 6) continue;
+    return candidate;
+  }
+  return fallback;
+}
+
+/**
+ * 追記・上書き・非表示の保存先の日付を決める
+ * kubun が 'tomorrow' なら「次の登校日」、それ以外は基準日そのもの
+ */
+function resolveTargetDate_(ss, baseDate, kubun) {
+  if (kubun === 'tomorrow') return getNextSchoolDay_(ss, baseDate);
+  return new Date(baseDate.getTime());
+}
+
+
+<!--
+  ==========================================================================
+  ② Code.gs: getSchedule_ 関数の「翌日」を「次の登校日」にする
+  ==========================================================================
+  探す（getSchedule_ 関数の先頭付近。この行はファイル内に1箇所だけ）:
+-->
+  const nextDate = new Date(date.getTime() + 24 * 60 * 60 * 1000);
+
+<!--
+  これに置き換える:
+-->
+  const nextDate = getNextSchoolDay_(ss, date);
+
+
+<!--
+  ==========================================================================
+  ③ Code.gs: getSchedule_ 関数の戻り値に「明日欄の日付」を追加する
+  ==========================================================================
+  探す（getSchedule_ 関数の最後の return 行）:
+-->
+  return { today: today, tomorrow: tomorrow, todayIsSchoolDay: todayIsSchoolDay, tomorrowIsSchoolDay: tomorrowIsSchoolDay };
+
+<!--
+  これに置き換える:
+-->
+  const calendarTomorrow = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+  return {
+    today: today,
+    tomorrow: tomorrow,
+    todayIsSchoolDay: todayIsSchoolDay,
+    tomorrowIsSchoolDay: tomorrowIsSchoolDay,
+    tomorrowDate: Utilities.formatDate(nextDate, 'JST', 'yyyy-MM-dd'),
+    tomorrowLabel: Utilities.formatDate(nextDate, 'JST', 'M月d日') + '（' + getWeekdayJp_(nextDate) + '）',
+    tomorrowIsNextDay: isSameDay_(nextDate, calendarTomorrow)
+  };
+
+
+<!--
+  ==========================================================================
+  ④ Code.gs: 追記・上書き・非表示の保存先を「次の登校日」にする（3箇所）
+  ==========================================================================
+  次の4行のかたまりは、addNippoExtra / overrideNippoMaster /
+  hideNippoMaster の3つの関数に、まったく同じ形で1つずつあります。
+  3箇所すべてを置き換えてください。
+  （直前のコメント行「// 「明日の予定」に追記 → ...」「// 「明日の予定」を編集 → ...」
+  「// 「明日の予定」を非表示 → ...」はそのまま残して構いません）
+
+  探す（3箇所）:
+-->
+  const targetDate = new Date(baseDate.getTime());
+  if (payload.kubun === 'tomorrow') {
+    targetDate.setDate(targetDate.getDate() + 1);
+  }
+
+<!--
+  これに置き換える（3箇所とも同じ）:
+-->
+  const targetDate = resolveTargetDate_(ss, baseDate, payload.kubun);
+
+
+<!--
+  ==========================================================================
+  ⑤ Code.gs: 授業変更一覧の「明日」も「次の登校日」にする
+  ==========================================================================
+  探す（getClassChangeList_ 関数の中。この2行はファイル内に1箇所だけ）:
+-->
+  const tomorrow = new Date(baseDate.getTime());
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+<!--
+  これに置き換える:
+-->
+  const tomorrow = getNextSchoolDay_(ss, baseDate);
+
+
+<!--
+  ==========================================================================
+  ⑥ index.html: 「明日の予定」の見出しに id を付ける
+  ==========================================================================
+  探す（本日・明日の予定セクションの中）:
+-->
+            <div class="label">明日の予定</div>
+
+<!--
+  これに置き換える:
+-->
+            <div class="label"><span id="scheduleTomorrowLabel">明日の予定</span></div>
+
+
+<!--
+  ==========================================================================
+  ⑦ index.html: renderSchedule 関数を丸ごと置き換える
+  ==========================================================================
+  探す（function renderSchedule(sch) { から、対応する閉じカッコ } まで）:
+-->
+function renderSchedule(sch) {
+  sch = sch || { today: [], tomorrow: [] };
+  renderScheduleList(sch.today || [], 'scheduleToday', 'today');
+  renderScheduleList(sch.tomorrow || [], 'scheduleTomorrow', 'tomorrow');
+  setScheduleDayOff('scheduleToday', sch.todayIsSchoolDay === false);
+  setScheduleDayOff('scheduleTomorrow', sch.tomorrowIsSchoolDay === false);
+}
+
+<!--
+  これに置き換える（変数2つ + 関数）:
+-->
+var nippoTomorrowDate = null;
+var nippoTomorrowIsNextDay = true;
+
+function renderSchedule(sch) {
+  sch = sch || { today: [], tomorrow: [] };
+  nippoTomorrowDate = sch.tomorrowDate || null;
+  nippoTomorrowIsNextDay = (sch.tomorrowIsNextDay !== false);
+
+  var tomorrowLabelText = '明日の予定';
+  if (!nippoTomorrowIsNextDay && sch.tomorrowLabel) {
+    tomorrowLabelText = '次の登校日の予定 ' + sch.tomorrowLabel;
+  }
+  var labelEl = document.getElementById('scheduleTomorrowLabel');
+  if (labelEl) labelEl.textContent = tomorrowLabelText;
+
+  var ccTomorrowBtn = document.getElementById('ccTargetTomorrow');
+  if (ccTomorrowBtn) {
+    ccTomorrowBtn.textContent = nippoTomorrowIsNextDay ? '明日' : '次の登校日（' + (sch.tomorrowLabel || '') + '）';
+  }
+
+  renderScheduleList(sch.today || [], 'scheduleToday', 'today');
+  renderScheduleList(sch.tomorrow || [], 'scheduleTomorrow', 'tomorrow');
+  setScheduleDayOff('scheduleToday', sch.todayIsSchoolDay === false);
+  setScheduleDayOff('scheduleTomorrow', sch.tomorrowIsSchoolDay === false);
+}
+
+
+<!--
+  ==========================================================================
+  ⑧ index.html: 「＋ 項目を追記」の入力ダイアログの文言を合わせる
+  ==========================================================================
+  探す（addExtra 関数の先頭）:
+-->
+  var content = prompt(kubun === 'today' ? '本日の予定に追加する内容:' : '明日の予定に追加する内容:');
+
+<!--
+  これに置き換える:
+-->
+  var tomorrowWord = nippoTomorrowIsNextDay ? '明日' : '次の登校日';
+  var content = prompt(kubun === 'today' ? '本日の予定に追加する内容:' : tomorrowWord + 'の予定に追加する内容:');
+
+
+<!--
+  ==========================================================================
+  ⑨ index.html: 授業変更の登録先（明日）を「次の登校日」にする
+  ==========================================================================
+  探す（授業変更モーダルの登録処理の中）:
+-->
+    if (ccState.target === 'tomorrow') {
+      var d = new Date(currentDate);
+      d.setDate(d.getDate() + 1);
+      targetDate = formatDate(d);
+    } else {
+
+<!--
+  これに置き換える:
+-->
+    if (ccState.target === 'tomorrow') {
+      if (nippoTomorrowDate) {
+        targetDate = nippoTomorrowDate;
+      } else {
+        var d = new Date(currentDate);
+        d.setDate(d.getDate() + 1);
+        targetDate = formatDate(d);
+      }
+    } else {
+
+
+<!--
+  ==========================================================================
+  ⑩ index.html: 授業変更一覧の「▼ 明日」の見出しを合わせる
+  ==========================================================================
+  探す（renderClassChange 関数の中）:
+-->
+    html += '<div class="cc-day-label">▼ 明日</div>';
+
+<!--
+  これに置き換える:
+-->
+    html += '<div class="cc-day-label">▼ ' + (nippoTomorrowIsNextDay ? '明日' : '次の登校日') + '</div>';
+
+
+<!--
+  ==========================================================================
+  ⑪ index.html: 授業変更が無いときの文言を合わせる
+  ==========================================================================
+  探す（renderClassChange 関数の中）:
+-->
+    container.innerHTML = '<div class="cc-empty">今日・明日の授業変更はありません。「＋ 追加」から登録できます。</div>';
+
+<!--
+  これに置き換える:
+-->
+    container.innerHTML = '<div class="cc-empty">今日・' + (nippoTomorrowIsNextDay ? '明日' : '次の登校日') + 'の授業変更はありません。「＋ 追加」から登録できます。</div>';
+
+
+<!--
+  ============================================================
+  適用後にやること
+  ============================================================
+  1. Code.gs の APP_VERSION を1つ上げる（'2' → '3'）
+  2. 新しいバージョンとしてデプロイする
+
+  確認方法:
+  ・金曜日の日付を表示 → 「明日の予定」の見出しが
+    「次の登校日の予定 9月7日（月）」のようになり、月曜の予定が出る
+  ・木曜日の日付を表示 → 見出しは「明日の予定」のままで金曜の予定が出る
+  ・金曜日を表示した状態で明日欄の「＋ 項目を追記」→ 追記した項目が
+    そのまま明日欄に出る（月曜の日付で保存されている）
+  ・金曜日を表示した状態で授業変更を「次の登校日」で登録 → 一覧の
+    「▼ 次の登校日」に出る
+  ・週報（📋 週報）はこの修正の影響を受けません
+
+  補足:
+  ・「次の登校日」の判定は行事取込シートの校時・給食欄に基づきます。
+    祝日でも校時が入力されていれば登校日として扱われます。
+  ・夏休みなど31日を超える休業期間の直前は、翌日（休業日）を表示
+    します（これまでと同じ動作）。
+  ============================================================
+-->
