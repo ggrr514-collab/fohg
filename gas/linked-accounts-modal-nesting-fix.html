@@ -1,0 +1,109 @@
+<!--
+  ============================================================
+  「🔗 連携アカウント管理」モーダルが表示されない不具合の修正
+  ============================================================
+  現象: 「🔗 連携アカウント」ボタンを押しても、連携アカウント管理の
+  モーダルが表示されない（何も起こらないように見える）。
+
+  原因: #linkedAccountsModal の <div> が、独立したモーダルとして
+  ではなく、誤って #masterLinksModal（管理者用「管理」モーダル）の
+  “内側”（ヘッダーの<div>と説明文の<div>の間）に貼られてしまって
+  います。
+
+  #masterLinksModal は普段 display:none（閉じた状態）なので、その
+  内側にある #linkedAccountsModal は、自分自身が display:flex に
+  なっていても、親の display:none によって画面上には現れません
+  （CSSでは、親要素がdisplay:noneだと、子要素のdisplay設定に
+  関わらず子要素も非表示になるため）。
+
+  直し方はとても簡単で、#linkedAccountsModal の<div>を
+  #masterLinksModal の外に出すだけです。中身（IDやJavaScript）は
+  一切変更しません。
+
+  ⚠️ 重要: このファイルはindex.html用のHTML/JavaScriptの一部です。
+  <script>や<style>タグは新しく追加しないでください。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  手順
+  ==========================================================================
+  1. index.html内で、次の並び（#masterLinksModal の内側に
+     #linkedAccountsModal が入ってしまっている箇所）を探す:
+
+  <div id="masterLinksModal" style="display:none; ...">
+    <div style="background:#fff; ...">
+      <div style="padding:16px 20px; ...">
+        <h3 id="masterLinksTitle" ...>管理</h3>
+        <button onclick="closeMasterLinksModal()" ...>×</button>
+      </div>
+
+      <div id="linkedAccountsModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:500;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:8px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,0.2);">
+          <div style="padding:16px 20px;border-bottom:2px solid var(--ink);display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="font-size:15px;font-weight:700;">🔗 連携アカウント管理</h3>
+            <button onclick="closeLinkedAccountsModal()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--ink-soft);padding:0 4px;">×</button>
+          </div>
+          <div style="padding:14px 20px;" id="linkedAccountsContent">
+            <div style="text-align:center;padding:20px;color:var(--ink-faint);font-size:13px;">読み込み中...</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:14px 20px;">
+        <p id="masterLinksDesc" ...></p>
+        <div id="masterLinksContent"></div>
+        ...
+      </div>
+    </div>
+  </div>
+
+  2. #linkedAccountsModal の<div>ブロックだけ（開始の<div id="linkedAccountsModal" ...>
+     から、対応する閉じの</div>まで）を丸ごと切り取り（カット）、
+     #masterLinksModal の閉じタグ </div>（一番外側の、
+     "<div id="masterLinksModal" ...>"に対応する終わりの</div>）の
+     “直後”に貼り付ける（ペースト）。
+
+  つまり、修正後はこうなります（#linkedAccountsModal が
+  #masterLinksModal と同じ階層の、独立した要素になる）:
+-->
+  <div id="masterLinksModal" style="display:none; ...">
+    <div style="background:#fff; ...">
+      <div style="padding:16px 20px; ...">
+        <h3 id="masterLinksTitle" ...>管理</h3>
+        <button onclick="closeMasterLinksModal()" ...>×</button>
+      </div>
+
+      <div style="padding:14px 20px;">
+        <p id="masterLinksDesc" ...></p>
+        <div id="masterLinksContent"></div>
+        ...
+      </div>
+    </div>
+  </div>
+
+  <div id="linkedAccountsModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:500;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:#fff;border-radius:8px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,0.2);">
+      <div style="padding:16px 20px;border-bottom:2px solid var(--ink);display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="font-size:15px;font-weight:700;">🔗 連携アカウント管理</h3>
+        <button onclick="closeLinkedAccountsModal()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--ink-soft);padding:0 4px;">×</button>
+      </div>
+      <div style="padding:14px 20px;" id="linkedAccountsContent">
+        <div style="text-align:center;padding:20px;color:var(--ink-faint);font-size:13px;">読み込み中...</div>
+      </div>
+    </div>
+  </div>
+
+<!--
+  ============================================================
+  補足
+  ============================================================
+  ・JavaScript（openLinkedAccounts / closeLinkedAccountsModal /
+    renderLinkedAccountsModal / unlinkAccount）やCode.gs側の関数
+    （getMyLinkedAccounts / unlinkMyAccount）は変更不要です。
+    HTMLの“位置”だけの問題でした。
+  ・移動後、ブラウザをリロードして「🔗 連携アカウント」ボタンを押し、
+    モーダルが表示されることを確認してください。
+  ============================================================
+-->
