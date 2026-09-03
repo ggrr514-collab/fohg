@@ -1,86 +1,120 @@
 <!--
   ============================================================
-  日報の印刷をA4縦1枚に収める（自動縮小 ＋ 印刷レイアウトの引き締め）
+  日報の印刷: 文字を大きくし、連絡が多い日は表裏2面（2ページ）を基本にする
   ============================================================
-  【現状】
-    連絡事項が多い日は、印刷が2枚目にはみ出して見づらくなる。
+  【方針】
+  ・印刷の文字サイズを「中」から「大」にする（本文 9pt → 10.5pt など）。
+    高齢の先生にも読みやすいように、縮小して詰め込むことはしない。
+  ・1枚に収まる日はそのまま1枚。収まらない日は2ページ（表裏の両面印刷）
+    を基本にする。連絡事項の途中でページが変わっても、1件の連絡が
+    ページをまたいで切れないようにする。
+  ・2ページにわずかに収まらない日だけ、文字が読める範囲（最小85%）で
+    少し縮めて2ページに収める。それでも収まらないほど多い日は3ページ以上。
+  ・印刷に不要なもの（確認しましたボタン・人数・折りたたみ矢印・案内バー・
+    削除ボタン・「確認済みを隠す」）は印刷から外す。
+  ・週報（A4横）には影響しない。
 
-  【この修正でこうなる】
-  ・印刷（🖨️ 日報）のときに、内容の高さを測って、A4縦1枚に収まる
-    倍率まで自動で縮小します（内容が少ない日は縮小しません）。
-    縮小しても幅いっぱいに文字が流れ直すので、余白が偏りません。
-  ・縮小の下限は55%です。それでも収まらないほど多い日だけ2枚になります
-    （小さくしすぎて読めなくなるのを防ぐため）。
-  ・印刷に不要なもの（確認しましたボタン・人数・折りたたみ矢印・
-    案内バー・削除ボタンなど）を印刷から外し、提出物・授業変更・
-    アレルギーの枠も連絡事項と同じ白黒の詰めたレイアウトにします。
-  ・週報（A4横）には影響しません。
+  【両面印刷について】
+    ブラウザからは「両面印刷」を自動で指定できません。印刷ダイアログで
+    一度「両面印刷（長辺とじ）」を選ぶと、Chrome はその設定を覚えるので、
+    次回からはそのまま印刷できます。
 
   ⚠️ 重要:
   ・すべて index.html の変更です。Code.gs の変更はありません。
   ・「...」のような省略は一切使っていません。すべてそのままコピーできます。
   ・<script>や<style>タグは新しく追加しないでください
     （①は既存の <style> の中、②は既存の <script> の中に入れます）。
+  ・前の版（1枚に自動縮小する版）を既に適用している場合は、
+    末尾の【前の版を適用済みの場合】を読んでください。
   ============================================================
 -->
 
 <!--
   ==========================================================================
-  ① index.html（<style> の中）: 印刷用CSSに追加する
+  ① index.html（<style> の中）: 印刷用CSSの末尾に追加する
   ==========================================================================
-  探す（@media print の中にある .author-meta のブロック）:
+  探す（最初の @media print ブロックの末尾。「リンク全般の装飾を消す」の
+  a { } の後ろで、@media print を閉じる } まで）:
 -->
-  .author-meta {
-    font-size: 7.5pt !important;
-    margin-top: 1px !important;
-    color: #555 !important;
+  /* リンク全般の装飾を消す */
+  a {
+    text-decoration: none !important;
+    color: #000 !important;
   }
+}
 
 <!--
-  これに置き換える（元のブロックの下に追加）:
+  これに置き換える（@media print を閉じる } の前に追加）:
 -->
-  .author-meta {
-    font-size: 7.5pt !important;
-    margin-top: 1px !important;
-    color: #555 !important;
+  /* リンク全般の装飾を消す */
+  a {
+    text-decoration: none !important;
+    color: #000 !important;
   }
 
-  /* 印刷時は操作系（確認スタンプ・案内バー・折りたたみ矢印など）を隠す */
+  /* ---- 文字サイズを「大」に（縮小せず、収まらない分は2ページ目へ） ---- */
+  body { font-size: 11pt !important; line-height: 1.4 !important; }
+  .big-date { font-size: 18pt !important; }
+  .big-date .big-day { font-size: 13pt !important; }
+  .meta-item .label { font-size: 9.5pt !important; }
+  .meta-item .value { font-size: 11.5pt !important; }
+  .section-title { font-size: 11.5pt !important; page-break-after: avoid; }
+  .schedule-box .label { font-size: 10pt !important; }
+  .schedule-box ul li { font-size: 10.5pt !important; padding: 2px 0 2px 10px !important; }
+  .renraku-card { grid-template-columns: 150px 1fr !important; padding: 4px 8px !important; }
+  .rk-name { font-size: 11pt !important; }
+  .rk-body { font-size: 10.5pt !important; line-height: 1.45 !important; }
+  .author-meta { font-size: 8.5pt !important; }
+  .tag { font-size: 8pt !important; }
+  .important-tag { font-size: 8.5pt !important; }
+  .sh-name { font-size: 11pt !important; }
+  .sh-body { font-size: 10.5pt !important; }
+  .sh-time { font-size: 9pt !important; }
+  .sh-place { font-size: 9pt !important; }
+
+  /* ---- ページの分かれ方: 段落の途中では切らず、1件ごとに切る ---- */
+  .section { page-break-inside: auto !important; }
+  .renraku-card, .shucho-card, .deadline-item, .cc-item, .allergy-item, .schedule-grid, .nippo-header {
+    page-break-inside: avoid;
+  }
+
+  /* ---- 印刷時は操作系（確認スタンプ・案内バー・折りたたみ矢印など）を隠す ---- */
   .rk-confirm-row, .gr-confirm-row, #loadRetryBar, .section-collapse-arrow,
-  .cc-delete-btn, .section-zero-badge, .rk-pin-btn {
+  .cc-delete-btn, .section-zero-badge, .rk-pin-btn,
+  #sec-deadlines .section-title label {
     display: none !important;
   }
   .rk-cal-badge {
     background: #fff !important;
     color: #000 !important;
     border: 1px solid #888 !important;
-    font-size: 7.5pt !important;
+    font-size: 8.5pt !important;
     padding: 0 4px !important;
     margin-bottom: 2px !important;
   }
 
-  /* 提出物・授業変更・アレルギーも白黒の詰めたレイアウトに */
+  /* ---- 提出物・授業変更・アレルギーも白黒の見やすいレイアウトに ---- */
   .deadline-section, .class-change-section, .allergy-section { background: #fff !important; }
-  .deadline-list, .class-change-list, .allergy-list { gap: 2px !important; }
+  .deadline-list, .class-change-list, .allergy-list { gap: 3px !important; }
   .deadline-item, .cc-item, .allergy-item {
     background: #fff !important;
     border: 1px solid #000 !important;
     border-left-width: 3px !important;
     border-radius: 0 !important;
-    padding: 2px 6px !important;
-    page-break-inside: avoid;
+    padding: 3px 8px !important;
   }
-  .deadline-date, .deadline-name, .cc-item-head { font-size: 9pt !important; color: #000 !important; }
-  .deadline-content, .cc-teacher, .cc-task, .cc-note, .cc-meta, .allergy-item { font-size: 8.5pt !important; color: #000 !important; }
-  .cc-item-period { min-width: 22px !important; height: 22px !important; font-size: 9pt !important; }
-  .cc-day-label { font-size: 8pt !important; padding: 2px 0 0 !important; }
+  .deadline-date, .deadline-name, .cc-item-head { font-size: 11pt !important; color: #000 !important; }
+  .deadline-content, .cc-teacher, .cc-task, .cc-note, .allergy-item { font-size: 10.5pt !important; color: #000 !important; }
+  .cc-meta { font-size: 8.5pt !important; color: #000 !important; }
   .cc-task { background: #fff !important; border: 1px dashed #888 !important; }
-  #sec-deadlines .section-title label { display: none !important; }
+  .cc-item-period { min-width: 26px !important; height: 26px !important; font-size: 11pt !important; }
+  .cc-day-label { font-size: 9pt !important; padding: 2px 0 0 !important; }
+}
 
 
 <!--
   ==========================================================================
-  ② index.html（<script> の中）: 印刷時に1枚に収まるよう自動で縮小する
+  ② index.html（<script> の中）: 印刷の前に、2ページに収まるか確かめる
   ==========================================================================
   探す（ユーティリティの先頭にある関数。この行の「直前」に追加）:
 -->
@@ -90,13 +124,14 @@ function formatDate(d) {
   上の行の直前に、次を追加する:
 -->
 // ==================================================
-// 印刷: A4縦1枚に収まるように自動で縮小する
+// 印刷: 文字は縮めず、収まらない分は2ページ目（裏面）へ。
+// 2ページにわずかに収まらないときだけ、最小85%まで縮めて2ページに収める
 // ==================================================
 // A4縦（210mm×297mm）から余白（左右10mm・上下8mm）を引いた印字範囲の目安（96dpi換算）
 var PRINT_PAGE_WIDTH_PX = 718;    // 190mm
 var PRINT_PAGE_HEIGHT_PX = 1040;  // 281mm から少し余裕を見た値
-// これより小さくはしない（読めなくなるため。収まらない分は2枚目に送る）
-var PRINT_MIN_ZOOM = 0.55;
+var PRINT_MAX_PAGES = 2;          // 基本はここまで（表裏）
+var PRINT_MIN_ZOOM = 0.85;        // これより小さくはしない（収まらない分は3ページ目へ）
 var printFitApplied = false;
 
 // 印刷用CSS（@media print）を、一時的に画面にも適用する／戻す
@@ -125,11 +160,13 @@ function setPrintRulesOnScreen(on) {
   }
 }
 
-// 「日報🖨️」ボタンから呼ぶ。倍率を決めてから印刷ダイアログを開く
+// 「日報🖨️」ボタンから呼ぶ。必要なときだけ少し縮めてから印刷ダイアログを開く
 function printNippo() {
   var container = document.querySelector('.container');
   if (!container) { window.print(); return; }
 
+  // ページの境目で1件分の連絡が次ページに送られる分の余裕を引いておく
+  var limit = PRINT_PAGE_HEIGHT_PX * PRINT_MAX_PAGES - 80;
   var zoom = 1;
   try {
     setPrintRulesOnScreen(true);
@@ -138,8 +175,8 @@ function printNippo() {
     container.style.zoom = '1';
     for (var i = 0; i < 6; i++) {
       var h = document.body.scrollHeight;
-      if (h <= PRINT_PAGE_HEIGHT_PX) break;
-      zoom = zoom * (PRINT_PAGE_HEIGHT_PX / h) * 0.98;
+      if (h <= limit) break;
+      zoom = zoom * (limit / h) * 0.98;
       if (zoom < PRINT_MIN_ZOOM) zoom = PRINT_MIN_ZOOM;
       container.style.zoom = String(zoom);
       container.style.width = (PRINT_PAGE_WIDTH_PX / zoom) + 'px';
@@ -198,16 +235,28 @@ window.addEventListener('afterprint', resetPrintFit);
 
 <!--
   ============================================================
+  【前の版を適用済みの場合】
+  ============================================================
+  前の版（1枚に自動縮小する版）を既に index.html に入れている場合:
+  ・①は、前の版で .author-meta の下に追加したブロック（「印刷時は操作系
+    （確認スタンプ・案内バー・折りたたみ矢印など）を隠す」のコメント行から
+    「.cc-day-label { ... }」の行までの部分）を削除してから、上の①を行う。
+  ・②は、前の版の「// 印刷: A4縦1枚に収まるように自動で縮小する」から
+    「window.addEventListener('afterprint', resetPrintFit);」までを
+    まるごと削除してから、上の②を行う。
+  ・③は適用済みなので不要。
+
+  ============================================================
   適用後にやること
   ============================================================
   1. Code.gs の APP_VERSION を1つ上げて、新バージョンとしてデプロイする
-  2. 連絡事項の多い日を表示して「日報🖨️」を押し、印刷プレビューで
-     1枚に収まっていることを確認する
+  2. 連絡事項の多い日を表示して「日報🖨️」を押し、印刷ダイアログで
+     「両面印刷（長辺とじ）」を一度選んで印刷する。次回からは
+     この設定が記憶される（Chrome / Edge）。
 
-  補足:
-  ・自動縮小は「日報🖨️」ボタンから印刷したときに働きます。
-    ブラウザのメニューや Ctrl+P から印刷した場合は縮小されません。
-  ・印刷ダイアログの「倍率」を手で変える必要はありません。
-    もし手で変えたい場合は、そのままダイアログ側で変更できます。
+  確認できること:
+  ・文字が今までより一回り大きい
+  ・連絡が少ない日は1枚、多い日は2枚（両面で1枚）
+  ・連絡1件がページの境目で切れていない
   ============================================================
 -->
