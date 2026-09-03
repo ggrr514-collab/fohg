@@ -1,0 +1,326 @@
+<!--
+  ============================================================
+  サーバー高速化 第2段: めったに変わらないシートを
+  リクエストをまたいで10分間キャッシュする（CacheService）
+  ============================================================
+  【現状】 第1段で getNippo は 15〜25秒 → 5秒前後になりました。
+    残りの5秒の大半は、毎回スプレッドシートから読み直している
+    「行事取込」「教員名簿」「設定」「出張取込」「研究ライブラリ取込」
+    の読み込み時間です。これらは1日に何度も変わるものではありません。
+
+  【この修正でこうなる】
+  ・上の5シートの内容を、GAS の CacheService に最大10分間保持し、
+    次のリクエストからはシートを読まずにキャッシュから返します。
+    （誰か1人が開けば、その後10分間は全員が速くなります）
+  ・「🔄 行事予定を反映」「🔄 出張を反映」「🔄 アレルギーを反映」を
+    押したときは、キャッシュを即座に無効化します。
+  ・連絡事項ログ・日報追記・授業変更・確認スタンプ・ピン留めなど、
+    頻繁に変わるシートはキャッシュしません（今までどおり毎回読みます）。
+  ・getNippo の応答サイズをログに出すようにします（次の軽量化の判断材料）。
+
+  期待値: getNippo 5秒 → 2秒前後（キャッシュが効いているとき）。
+
+  【副作用（知っておいてほしいこと）】
+  ・教員名簿・設定・行事取込などのシートを「直接」編集した場合、
+    最大10分間は古い内容がダッシュボードに出ることがあります。
+    すぐに反映したいときは、Apps Script エディタで clearSheetCache を
+    実行するか、管理画面の「反映」ボタンのどれかを押してください。
+  ・アレルギーは、getAllergyList_ 関数のコードが手元に無いため
+    今回はキャッシュ対象に含めていません（動作は今までどおり）。
+    含めたい場合は getAllergyList_ の全文を貼ってください。
+
+  ⚠️ 重要:
+  ・第1段（server-speedup-phase1-memo.html）が適用済みであることが前提です。
+  ・すべて Code.gs の変更です。index.html の変更はありません。
+  ・「...」のような省略は一切使っていません。すべてそのままコピーできます。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① Code.gs: リクエストをまたぐキャッシュの仕組みを追加する（新規）
+  ==========================================================================
+  探す（第1段で追加した dayKey_ 関数。この関数の閉じカッコ } の直後に追加）:
+-->
+function dayKey_(d) {
+  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+}
+
+<!--
+  上の関数の直後に、次を追加する:
+-->
+
+// ------------------------------------------------------------
+// リクエストをまたぐキャッシュ（CacheService）
+// ------------------------------------------------------------
+// 1つの値は最大100KBまでしか入らないので、90KBずつに分割して保存する
+var CROSS_CACHE_CHUNK = 90000;
+
+// シートごとの保持時間（秒）。0 のシートはキャッシュしない
+function crossCacheTtl_(name) {
+  switch (name) {
+    case SHEET_NAMES.EVENT_IMPORT: return 600;
+    case SHEET_NAMES.SHUCHO_IMPORT: return 600;
+    case SHEET_NAMES.LIBRARY_IMPORT: return 600;
+    case SHEET_NAMES.TEACHERS: return 600;
+    case SHEET_NAMES.SETTINGS: return 600;
+    default: return 0;
+  }
+}
+
+// キャッシュの「世代」。clearSheetCache_ で世代を進めると、古い世代の
+// キャッシュは参照されなくなる（=無効化）
+function crossCacheGen_(cache) {
+  if (__memo.cacheGen) return __memo.cacheGen;
+  let gen = null;
+  try { gen = cache.get('sheetcache_gen'); } catch (e) { gen = null; }
+  if (!gen) {
+    // 初回は「2分前」の時刻にしておく（直後の保存が止まらないように）
+    gen = String(Date.now() - 120000);
+    try { cache.put('sheetcache_gen', gen, 21600); } catch (e) {}
+  }
+  __memo.cacheGen = gen;
+  return gen;
+}
+
+function crossCacheGet_(baseKey) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const key = baseKey + '|' + crossCacheGen_(cache);
+    const head = cache.get(key + '#h');
+    if (!head) return null;
+    const n = parseInt(head, 10);
+    if (!(n > 0)) return null;
+    const keys = [];
+    for (let i = 0; i < n; i++) keys.push(key + '#' + i);
+    const parts = cache.getAll(keys);
+    let s = '';
+    for (let i = 0; i < n; i++) {
+      const p = parts[key + '#' + i];
+      if (p === null || p === undefined) return null;
+      s += p;
+    }
+    return JSON.parse(s, function(k, v) {
+      return (v && typeof v === 'object' && typeof v.__d === 'number') ? new Date(v.__d) : v;
+    });
+  } catch (e) {
+    console.log('cache get error: ' + (e.message || e));
+    return null;
+  }
+}
+
+function crossCachePut_(baseKey, value, ttlSec) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const gen = crossCacheGen_(cache);
+    // 「反映」直後の1分間は保存しない（反映途中の古い内容が残らないように）
+    if (Date.now() - Number(gen) < 60000) return;
+    const s = JSON.stringify(value, function(k, v) {
+      return (this[k] instanceof Date) ? { __d: this[k].getTime() } : v;
+    });
+    const key = baseKey + '|' + gen;
+    const obj = {};
+    let n = 0;
+    for (let i = 0; i < s.length; i += CROSS_CACHE_CHUNK) {
+      obj[key + '#' + n] = s.substr(i, CROSS_CACHE_CHUNK);
+      n++;
+    }
+    if (n === 0 || n > 10) return;   // 空、または約900KB超のものは保持しない
+    obj[key + '#h'] = String(n);
+    cache.putAll(obj, ttlSec);
+  } catch (e) {
+    console.log('cache put error: ' + (e.message || e));
+  }
+}
+
+// キャッシュを無効化する（「反映」ボタンの各関数から呼ぶ）
+function clearSheetCache_() {
+  try { CacheService.getScriptCache().put('sheetcache_gen', String(Date.now()), 21600); } catch (e) {}
+  __memo.cacheGen = null;
+  __memo.values = {};
+  __memo.eventRowMap = null;
+  __memo.teachers = null;
+  __memo.settings = null;
+}
+
+// Apps Script エディタから手動で実行できる版（シートを直接編集したあと、すぐ反映したいとき用）
+function clearSheetCache() {
+  clearSheetCache_();
+  console.log('シートキャッシュを無効化しました');
+  return { ok: true };
+}
+
+
+<!--
+  ==========================================================================
+  ② Code.gs: getSheetValuesCached_ 関数を丸ごと置き換える
+  ==========================================================================
+  探す（第1段で追加した関数。function getSheetValuesCached_ の行から、
+  対応する閉じカッコ } まで）:
+-->
+function getSheetValuesCached_(ss, name, startRow) {
+  const key = name + '|' + startRow;
+  if (key in __memo.values) return __memo.values[key];
+  let rows = [];
+  const sh = getSheetCached_(ss, name);
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    const lastCol = sh.getLastColumn();
+    if (lastRow >= startRow && lastCol >= 1) {
+      rows = sh.getRange(startRow, 1, lastRow - startRow + 1, lastCol).getValues();
+    }
+  }
+  __memo.values[key] = rows;
+  return rows;
+}
+
+<!--
+  これに置き換える:
+-->
+function getSheetValuesCached_(ss, name, startRow) {
+  const key = name + '|' + startRow;
+  if (key in __memo.values) return __memo.values[key];
+
+  // めったに変わらないシートは、リクエストをまたぐキャッシュを先に見る
+  const ttl = crossCacheTtl_(name);
+  if (ttl > 0) {
+    const hit = crossCacheGet_('sv|' + key);
+    if (hit) {
+      __memo.values[key] = hit;
+      return hit;
+    }
+  }
+
+  let rows = [];
+  const sh = getSheetCached_(ss, name);
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    const lastCol = sh.getLastColumn();
+    if (lastRow >= startRow && lastCol >= 1) {
+      rows = sh.getRange(startRow, 1, lastRow - startRow + 1, lastCol).getValues();
+    }
+  }
+  __memo.values[key] = rows;
+  if (ttl > 0) crossCachePut_('sv|' + key, rows, ttl);
+  return rows;
+}
+
+
+<!--
+  ==========================================================================
+  ③ Code.gs: getLibraryUpdates_ 関数を丸ごと置き換える（キャッシュ経由で読む）
+  ==========================================================================
+  探す（function getLibraryUpdates_(ss, limit) { から、対応する閉じカッコ } まで）:
+-->
+function getLibraryUpdates_(ss, limit) {
+  const sh = ss.getSheetByName(SHEET_NAMES.LIBRARY_IMPORT);
+  if (!sh || sh.getLastRow() < 3) return [];
+
+  const data = sh.getRange(3, 1, sh.getLastRow() - 2, 7).getValues();
+  const list = [];
+  data.forEach(row => {
+    if (!row[0]) return;
+    if (row[6] !== true && row[6] !== 'TRUE' && row[6] !== 'true') return;
+    list.push({
+      id: row[0],
+      title: row[1] || '',
+      category: row[2] || '',
+      author: row[3] || '',
+      updatedAt: row[4] instanceof Date ? Utilities.formatDate(row[4], 'JST', 'M/d') : String(row[4] || ''),
+      updatedAtRaw: row[4] instanceof Date ? row[4].getTime() : 0,
+      url: row[5] || '#'
+    });
+  });
+
+  list.sort((a, b) => b.updatedAtRaw - a.updatedAtRaw);
+  return list.slice(0, limit || 10);
+}
+
+<!--
+  これに置き換える:
+-->
+function getLibraryUpdates_(ss, limit) {
+  const data = getSheetValuesCached_(ss, SHEET_NAMES.LIBRARY_IMPORT, 3);
+  if (!data.length) return [];
+
+  const list = [];
+  data.forEach(row => {
+    if (!row[0]) return;
+    if (row[6] !== true && row[6] !== 'TRUE' && row[6] !== 'true') return;
+    list.push({
+      id: row[0],
+      title: row[1] || '',
+      category: row[2] || '',
+      author: row[3] || '',
+      updatedAt: row[4] instanceof Date ? Utilities.formatDate(row[4], 'JST', 'M/d') : String(row[4] || ''),
+      updatedAtRaw: row[4] instanceof Date ? row[4].getTime() : 0,
+      url: row[5] || '#'
+    });
+  });
+
+  list.sort((a, b) => b.updatedAtRaw - a.updatedAtRaw);
+  return list.slice(0, limit || 10);
+}
+
+
+<!--
+  ==========================================================================
+  ④ Code.gs: 「反映」ボタンの3関数の先頭でキャッシュを無効化する（3箇所）
+  ==========================================================================
+  次の3つの関数それぞれについて、function で始まる行（開き波カッコ { の行）
+  の「直後」に、1行追加してください:
+
+    manualSyncEventFromR8
+    manualSyncShuchoFromMaster
+    manualSyncAllergyFromMaster
+
+  追加する1行（3箇所とも同じ）:
+-->
+  clearSheetCache_();
+
+<!--
+  例（manualSyncEventFromR8 の場合。引数の有無は今のままで構いません）:
+
+  function manualSyncEventFromR8() {
+    clearSheetCache_();
+
+  ↑ このように、関数の最初の処理として入れます。
+  反映の処理中（1分間）はキャッシュへの保存が止まり、反映後に最初に
+  開いた人の読み込みで新しい内容がキャッシュされます。
+-->
+
+
+<!--
+  ==========================================================================
+  ⑤ Code.gs: getNippo の応答サイズをログに出す（軽量化の判断材料）
+  ==========================================================================
+  探す（第1段⑫で getNippo に追加した行）:
+-->
+  try { result.groupRenraku = getGroupRenrakuList(dateStr); } catch (e) { console.log('groupRenraku error: ' + e.message); }
+
+<!--
+  これに置き換える（ログ出力を1行追加）:
+-->
+  try { result.groupRenraku = getGroupRenrakuList(dateStr); } catch (e) { console.log('groupRenraku error: ' + e.message); }
+  try { console.log('getNippo size: ' + JSON.stringify(result).length + ' bytes'); } catch (e) {}
+
+
+<!--
+  ============================================================
+  適用後にやること
+  ============================================================
+  1. Code.gs の APP_VERSION を1つ上げる
+  2. 新しいバージョンとしてデプロイする
+  3. ダッシュボードを2回続けて開く（または日付を2回変える）。
+     2回目以降の getNippo の所要時間を「実行数」で確認して教えてください。
+     （1回目はキャッシュを作るので5秒前後、2回目からが本番の速さです）
+  4. 同じ「実行数」のログに「getNippo size: 〇〇 bytes」が出ます。
+     その数字も教えてください。10万バイト（100000）を超えているようなら、
+     連絡事項の本文や過去分の送り方を見直す「応答の軽量化」を次に行います。
+
+  確認方法:
+  ・「🔄 行事予定を反映」を押したあと、行事の変更がダッシュボードに出る
+  ・教員名簿を直接編集したときは、最大10分待つか、エディタで
+    clearSheetCache を実行すると反映される
+  ============================================================
+-->

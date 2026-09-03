@@ -1,0 +1,313 @@
+<!--
+  ============================================================
+  端末側の軽量化: 前回の内容を端末に保存して即表示 ＋ 自動再試行
+  ============================================================
+  【現状】
+    日付切替のキャッシュ（date-switch-cache-and-prefetch.html）は
+    「ページを開いている間」だけ有効で、ページを開き直すと毎回
+    サーバーの応答を待ってから画面が出ます。
+    電波が悪いと、その最初の応答待ちで時間切れになります。
+
+  【この修正でこうなる】
+  ・取得できた内容を端末（ブラウザの localStorage）に保存し、次に
+    開いたときは、まず保存済みの内容を即表示 → 裏で最新を取得 →
+    届いたら差し替え、という動きにします。
+    電波が悪くても「前回の内容」がすぐ見え、上に黄色い案内が出ます。
+  ・応答待ちの時間切れを45秒→30秒にし、時間切れ時は自動でもう一度
+    取りに行きます（再試行ボタンを押さなくてよい）。2回目も時間切れの
+    ときだけ、今までどおり案内（保存済み内容があれば黄色いバー、
+    無ければ赤いエラー）を出します。
+  ・「反映」ボタン後などの明示的な再読み込みでも、保存済み内容を
+    先に出してから最新に差し替えます（画面が真っ白になる時間が無くなる）。
+
+  【知っておいてほしいこと】
+  ・保存されるのは直近5日分、3日以内のものだけです。
+  ・同じ端末・同じブラウザを別の先生と共用している場合、開いた直後の
+    数秒間は「前回開いた先生の画面」が見える可能性があります
+    （最新が届き次第、自分の内容に差し替わります）。
+    個人のスマホ・PCで使う分には問題ありません。
+
+  ⚠️ 重要:
+  ・すべて index.html の変更です。Code.gs の変更はありません。
+  ・date-switch-cache-and-prefetch.html が適用済みであることが前提です。
+  ・「...」のような省略は一切使っていません。すべてそのままコピーできます。
+  ・<script>や<style>タグは新しく追加しないでください。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① index.html: 時間切れを30秒にし、保存キャッシュ用の変数を追加する
+  ==========================================================================
+  探す:
+-->
+var NIPPO_LOAD_TIMEOUT_MS = 45000;   // 45秒
+
+<!--
+  これに置き換える:
+-->
+var NIPPO_LOAD_TIMEOUT_MS = 30000;   // 30秒（時間切れで自動再試行）
+var nippoAutoRetried = {};           // 自動再試行を1回行った日付
+var NIPPO_STORAGE_KEY = 'nishihara_nippo_cache_v1';
+var NIPPO_STORAGE_MAX_DATES = 5;     // 端末に保存する日付の数
+var NIPPO_STORAGE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;   // 3日より古い保存内容は使わない
+
+
+<!--
+  ==========================================================================
+  ② index.html: storeNippoCache 関数を丸ごと置き換える（端末にも保存する）
+  ==========================================================================
+  探す（function storeNippoCache(data, date) { から、対応する閉じカッコ } まで）:
+-->
+function storeNippoCache(data, date) {
+  if (!data || !data.user || !data.user.ok) return;
+  nippoCache[date || currentDate] = { data: data, at: Date.now() };
+}
+
+<!--
+  これに置き換える（関数3つ）:
+-->
+function storeNippoCache(data, date) {
+  if (!data || !data.user || !data.user.ok) return;
+  nippoCache[date || currentDate] = { data: data, at: Date.now() };
+  persistNippoCache();
+}
+
+// メモリ上のキャッシュのうち新しいものを端末に保存する
+function persistNippoCache() {
+  try {
+    var dates = Object.keys(nippoCache).sort(function(a, b) {
+      return (nippoCache[b].at || 0) - (nippoCache[a].at || 0);
+    }).slice(0, NIPPO_STORAGE_MAX_DATES);
+    var obj = {};
+    dates.forEach(function(d) {
+      obj[d] = { data: nippoCache[d].data, at: nippoCache[d].at };
+    });
+    localStorage.setItem(NIPPO_STORAGE_KEY, JSON.stringify(obj));
+  } catch (e) {
+    // 容量超過や localStorage が使えない環境では何もしない
+  }
+}
+
+// 端末に保存した内容をメモリ上のキャッシュに戻す（起動時に1回）
+function restorePersistedNippoCache() {
+  try {
+    var raw = localStorage.getItem(NIPPO_STORAGE_KEY);
+    if (!raw) return;
+    var obj = JSON.parse(raw);
+    var now = Date.now();
+    Object.keys(obj).forEach(function(d) {
+      var e = obj[d];
+      if (!e || !e.data || !e.data.user || !e.data.user.ok) return;
+      if (!(now - (e.at || 0) < NIPPO_STORAGE_MAX_AGE_MS)) return;
+      if (!nippoCache[d]) nippoCache[d] = { data: e.data, at: e.at, fromStorage: true };
+    });
+  } catch (e) {
+    // 壊れた保存内容は無視する
+  }
+}
+
+
+<!--
+  ==========================================================================
+  ③ index.html: loadNippo 関数を丸ごと置き換える（自動再試行・保存内容の即表示）
+  ==========================================================================
+  探す（function loadNippo(silent) { から、対応する閉じカッコ } まで）:
+-->
+function loadNippo(silent) {
+  var date = currentDate;
+  var seq = ++nippoLoadSeq;
+  var banner = document.querySelector('.date-banner');
+  var nippoEl = document.querySelector('.nippo');
+  var force = nippoForceNext;
+  nippoForceNext = false;
+
+  document.getElementById('errorScreen').style.display = 'none';
+  hideLoadRetryBar();
+
+  // 明示的な再読み込み（初回・反映ボタン後など）はキャッシュを捨てて最新を取る
+  if (!silent) nippoCache = {};
+
+  var cached = nippoCache[date];
+  var cachedJson = null;
+
+  if (cached && cached.data) {
+    // まずキャッシュを即表示し、裏で最新を取り直す
+    cachedJson = JSON.stringify(cached.data);
+    handleNippoLoaded(cached.data);
+  } else if (!silent) {
+    document.getElementById('loadingScreen').style.display = 'block';
+    document.getElementById('mainScreen').style.display = 'none';
+  } else if (nippoEl) {
+    // 前の日付の内容が残っていることが分かるように薄くする
+    nippoEl.style.opacity = '0.45';
+  }
+  if (banner) banner.style.opacity = '0.7';
+
+  // 時間がかかるときの案内（通信自体は打ち切らず、届けば表示する）
+  var timer = setTimeout(function() {
+    if (seq !== nippoLoadSeq) return;
+    if (cached && cached.data) {
+      showLoadRetryBar(date, '最新データの取得に時間がかかっています（表示中は少し前に取得した内容です）');
+    } else if (silent) {
+      showLoadRetryBar(date, formatDateJa(date) + ' の読み込みに時間がかかっています。もう少し待つか、再試行してください');
+    } else {
+      showError('サーバーからの応答が' + Math.round(NIPPO_LOAD_TIMEOUT_MS / 1000) + '秒以内にありませんでした。\nページを再読み込みしてください。');
+    }
+  }, NIPPO_LOAD_TIMEOUT_MS);
+
+  fetchNippo(date, function(data) {
+    clearTimeout(timer);
+    if (seq !== nippoLoadSeq) return;   // もっと新しい日付の要求があるので捨てる
+    if (banner) banner.style.opacity = '1';
+    if (nippoEl) nippoEl.style.opacity = '1';
+    document.getElementById('errorScreen').style.display = 'none';
+    hideLoadRetryBar();
+    if (!(cachedJson && JSON.stringify(data) === cachedJson)) {
+      handleNippoLoaded(data);          // キャッシュと同じ内容なら描き直さない
+    }
+    schedulePrefetch(date);
+  }, function(err) {
+    clearTimeout(timer);
+    if (seq !== nippoLoadSeq) return;
+    if (banner) banner.style.opacity = '1';
+    var msg = '通信エラー: ' + (err && err.message ? err.message : String(err));
+    if (cached && cached.data) {
+      showLoadRetryBar(date, msg + '（表示中は少し前に取得した内容です）');
+    } else if (silent) {
+      showLoadRetryBar(date, msg);
+    } else {
+      showError(msg);
+    }
+  }, force);
+}
+
+<!--
+  これに置き換える:
+-->
+function loadNippo(silent) {
+  var date = currentDate;
+  var seq = ++nippoLoadSeq;
+  var banner = document.querySelector('.date-banner');
+  var nippoEl = document.querySelector('.nippo');
+  var force = nippoForceNext;
+  nippoForceNext = false;
+
+  document.getElementById('errorScreen').style.display = 'none';
+  hideLoadRetryBar();
+
+  // 明示的な再読み込み（初回・反映ボタン後など）でも、手元にある内容は
+  // 先に表示しておき、必ず最新を取りに行って差し替える
+  if (!silent) force = true;
+
+  var cached = nippoCache[date];
+  var cachedJson = null;
+
+  if (cached && cached.data) {
+    // まず手元の内容を即表示し、裏で最新を取り直す
+    cachedJson = JSON.stringify(cached.data);
+    handleNippoLoaded(cached.data);
+    if (cached.fromStorage) {
+      showLoadRetryBar(date, '前回取得した内容を表示しています。最新の内容を取得中です');
+    }
+  } else if (!silent) {
+    document.getElementById('loadingScreen').style.display = 'block';
+    document.getElementById('mainScreen').style.display = 'none';
+  } else if (nippoEl) {
+    // 前の日付の内容が残っていることが分かるように薄くする
+    nippoEl.style.opacity = '0.45';
+  }
+  if (banner) banner.style.opacity = '0.7';
+
+  // 時間がかかるとき: 1回目は自動で取り直す。2回目も時間切れなら案内を出す
+  // （通信自体は打ち切らず、届けば表示する）
+  var timer = setTimeout(function() {
+    if (seq !== nippoLoadSeq) return;
+    if (!nippoAutoRetried[date]) {
+      nippoAutoRetried[date] = true;
+      if (cached && cached.data) {
+        showLoadRetryBar(date, '最新データの取得に時間がかかっています。自動で再試行中です（表示中は少し前に取得した内容です）');
+      } else if (silent) {
+        showLoadRetryBar(date, formatDateJa(date) + ' の読み込みに時間がかかっています。自動で再試行中です');
+      }
+      nippoRetryDate = date;
+      nippoForceNext = true;
+      loadNippo(silent);
+      return;
+    }
+    if (cached && cached.data) {
+      showLoadRetryBar(date, '最新データの取得に時間がかかっています（表示中は少し前に取得した内容です）');
+    } else if (silent) {
+      showLoadRetryBar(date, formatDateJa(date) + ' の読み込みに時間がかかっています。もう少し待つか、再試行してください');
+    } else {
+      showError('電波状況が悪いか、サーバーが混み合っています。\nページを再読み込みしてください。');
+    }
+  }, NIPPO_LOAD_TIMEOUT_MS);
+
+  fetchNippo(date, function(data) {
+    clearTimeout(timer);
+    delete nippoAutoRetried[date];
+    if (seq !== nippoLoadSeq) return;   // もっと新しい日付の要求があるので捨てる
+    if (banner) banner.style.opacity = '1';
+    if (nippoEl) nippoEl.style.opacity = '1';
+    document.getElementById('errorScreen').style.display = 'none';
+    hideLoadRetryBar();
+    if (!(cachedJson && JSON.stringify(data) === cachedJson)) {
+      handleNippoLoaded(data);          // キャッシュと同じ内容なら描き直さない
+    }
+    schedulePrefetch(date);
+  }, function(err) {
+    clearTimeout(timer);
+    if (seq !== nippoLoadSeq) return;
+    if (banner) banner.style.opacity = '1';
+    var msg = '通信エラー: ' + (err && err.message ? err.message : String(err));
+    if (cached && cached.data) {
+      showLoadRetryBar(date, msg + '（表示中は少し前に取得した内容です）');
+    } else if (silent) {
+      showLoadRetryBar(date, msg);
+    } else {
+      showError(msg);
+    }
+  }, force);
+}
+
+
+<!--
+  ==========================================================================
+  ④ index.html: 起動時に端末の保存内容を読み込む
+  ==========================================================================
+  探す（初期化の window.addEventListener('load', ...) の中）:
+-->
+    document.getElementById('dateInput').value = currentDate;
+    initFontSize();
+    loadNippo();
+
+<!--
+  これに置き換える（restorePersistedNippoCache を1行追加）:
+-->
+    document.getElementById('dateInput').value = currentDate;
+    initFontSize();
+    restorePersistedNippoCache();
+    loadNippo();
+
+
+<!--
+  ============================================================
+  適用後にやること
+  ============================================================
+  1. Code.gs の APP_VERSION を1つ上げる
+  2. 新しいバージョンとしてデプロイする
+  3. スマホで開いているダッシュボードのタブは、一度手動で再読み込み
+     してください（古い版のまま開いているタブは、通信が成功しないと
+     自動更新のきっかけが得られないため）。
+
+  確認方法:
+  ・1回開いて内容が出たあと、ブラウザを閉じてもう一度開く
+    → 読み込み画面を挟まず、すぐに前回の内容が表示され、上に
+      「前回取得した内容を表示しています。最新の内容を取得中です」
+      の黄色いバーが出て、数秒後に消える
+  ・機内モードにして開く → 前回の内容が表示され、30秒後に
+    「自動で再試行中」、60秒後に「通信エラー」の黄色いバーになる
+    （赤いエラー画面にはならない）
+  ============================================================
+-->
