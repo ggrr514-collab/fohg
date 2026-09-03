@@ -1,0 +1,341 @@
+<!--
+  ============================================================
+  日付切替を速くする（キャッシュ・先読み・タイムアウトの改善）
+  ============================================================
+  【今の問題】
+  ・日付を変えるたびにサーバーから全部取り直すので、毎回数秒〜十数秒かかる
+  ・20秒で打ち切って赤いエラーを出すが、古い日付の内容が画面に残ったまま
+    になる（日付欄は9/7なのに中身は9/5、など）
+  ・◀▶を連打すると要求が重なり、古い応答が新しい表示を上書きすることがある
+
+  【この修正でこうなる】
+  ・一度表示した日は、ブラウザ内に保持して次回は即表示。裏で最新を
+    取り直し、内容が変わっていれば描き替える（古い情報は残さない）
+  ・ある日を表示したら、前日・翌日を裏で先読み。◀▶を押した瞬間に出る
+  ・連打しても「最後に押した日付」だけを表示する
+  ・時間がかかるときは赤いエラーではなく、黄色の小さな案内＋「再試行」
+    ボタンを出し、応答が届けばそのまま表示する（待ち時間は45秒に延長）
+  ・読み込み中は前の日付の内容を薄く表示し、「まだ切り替わっていない」
+    ことが分かるようにする
+
+  ⚠️ 重要: このファイルはindex.html用のHTML/JavaScriptです。
+  <script>や<style>タグは新しく追加しないでください。
+  Code.gs側の変更はありません。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① HTML: 日付バナーの下に「再試行」用の小さな案内欄を追加する
+  ==========================================================================
+  探す（日付バナーの終わり〜日報本体の始まり）:
+-->
+        <button class="db-btn" onclick="openWeeklyReport()" title="週報">📋 週報</button>
+      </div>
+    </div>
+
+    <div class="nippo">
+
+<!--
+  これに置き換える（間に loadRetryBar の div を1つ追加）:
+-->
+        <button class="db-btn" onclick="openWeeklyReport()" title="週報">📋 週報</button>
+      </div>
+    </div>
+
+    <div id="loadRetryBar" style="display:none;background:var(--warn-soft);border:1px solid #fbbf24;color:var(--warn);padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:12px;align-items:center;gap:10px;">
+      <span id="loadRetryText" style="flex:1;"></span>
+      <button class="mini-btn" onclick="retryLoad()" style="font-size:12px;padding:3px 10px;">再試行</button>
+    </div>
+
+    <div class="nippo">
+
+
+<!--
+  ==========================================================================
+  ② JavaScript: loadNippo関数を丸ごと置き換える
+  ==========================================================================
+  探す（「// データ読み込み」の見出しの直後にある loadNippo 関数。
+  function loadNippo(silent) { から、その閉じカッコ } まで。
+  直後に function handleNippoLoaded(data) { が続いている）:
+-->
+function loadNippo(silent) {
+  if (!silent) {
+    document.getElementById('loadingScreen').style.display = 'block';
+    document.getElementById('mainScreen').style.display = 'none';
+  } else {
+    // サイレント時は日付ボタンを少し薄くして「読み込み中」のフィードバック
+    var banner = document.querySelector('.date-banner');
+    if (banner) banner.style.opacity = '0.7';
+  }
+  document.getElementById('errorScreen').style.display = 'none';
+
+  // タイムアウト（20秒）
+  var done = false;
+  var timer = setTimeout(function() {
+    if (done) return;
+    done = true;
+    var banner = document.querySelector('.date-banner');
+    if (banner) banner.style.opacity = '1';
+    showError('サーバーからの応答が20秒以内にありませんでした。\nページを再読み込みしてください。');
+  }, 20000);
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      var banner = document.querySelector('.date-banner');
+      if (banner) banner.style.opacity = '1';
+      handleNippoLoaded(data);
+    })
+    .withFailureHandler(function(err) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      var banner = document.querySelector('.date-banner');
+      if (banner) banner.style.opacity = '1';
+      showError('通信エラー: ' + (err && err.message ? err.message : String(err)));
+    })
+    .getNippo(currentDate);
+}
+
+<!--
+  これに置き換える（loadNippo本体＋補助関数。<script>タグは付けない）:
+-->
+// --------------------------------------------------
+// 日付データのキャッシュ・先読み（日付切替を速くする）
+// --------------------------------------------------
+var nippoCache = {};                 // 'yyyy-MM-dd' -> { data, at }
+var nippoInflight = {};              // 通信中の日付 -> { cbs: [...] }
+var nippoPrefetchQueue = [];
+var nippoPrefetching = false;
+var nippoLoadSeq = 0;                // 最後に要求した読み込みの番号（古い応答を捨てる用）
+var nippoRetryDate = null;
+var nippoForceNext = false;
+var NIPPO_LOAD_TIMEOUT_MS = 45000;   // 45秒
+
+// 取得したデータをキャッシュに入れる（部分更新の関数からも呼ぶ）
+function storeNippoCache(data, date) {
+  if (!data || !data.user || !data.user.ok) return;
+  nippoCache[date || currentDate] = { data: data, at: Date.now() };
+}
+
+// 同じ日付の通信が進行中なら相乗りし、二重に取りに行かない
+function fetchNippo(date, onOk, onErr, force) {
+  var entry = nippoInflight[date];
+  if (entry && !force) {
+    entry.cbs.push({ ok: onOk, err: onErr });
+    return;
+  }
+  entry = { cbs: [{ ok: onOk, err: onErr }] };
+  nippoInflight[date] = entry;
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      storeNippoCache(data, date);
+      if (nippoInflight[date] !== entry) return;   // 再試行で置き換えられた古い通信
+      delete nippoInflight[date];
+      entry.cbs.forEach(function(cb) { try { cb.ok(data); } catch (e) { console.log(e); } });
+    })
+    .withFailureHandler(function(err) {
+      if (nippoInflight[date] !== entry) return;
+      delete nippoInflight[date];
+      entry.cbs.forEach(function(cb) { try { cb.err(err); } catch (e) { console.log(e); } });
+    })
+    .getNippo(date);
+}
+
+// 前日・翌日を裏で先読み（1件ずつ順番に）
+function schedulePrefetch(baseDate) {
+  var d = new Date(baseDate);
+  var next = new Date(d); next.setDate(d.getDate() + 1);
+  var prev = new Date(d); prev.setDate(d.getDate() - 1);
+  [formatDate(next), formatDate(prev)].forEach(function(dt) {
+    if (nippoCache[dt] || nippoInflight[dt]) return;
+    if (nippoPrefetchQueue.indexOf(dt) === -1) nippoPrefetchQueue.push(dt);
+  });
+  runPrefetch();
+}
+
+function runPrefetch() {
+  if (nippoPrefetching || !nippoPrefetchQueue.length) return;
+  var dt = nippoPrefetchQueue.shift();
+  if (nippoCache[dt] || nippoInflight[dt]) { runPrefetch(); return; }
+  nippoPrefetching = true;
+  fetchNippo(dt,
+    function() { nippoPrefetching = false; runPrefetch(); },
+    function() { nippoPrefetching = false; runPrefetch(); });
+}
+
+function showLoadRetryBar(date, text) {
+  nippoRetryDate = date;
+  var bar = document.getElementById('loadRetryBar');
+  var txt = document.getElementById('loadRetryText');
+  if (txt) txt.textContent = '⚠️ ' + text;
+  if (bar) bar.style.display = 'flex';
+}
+
+function hideLoadRetryBar() {
+  var bar = document.getElementById('loadRetryBar');
+  if (bar) bar.style.display = 'none';
+}
+
+function retryLoad() {
+  if (!nippoRetryDate) return;
+  currentDate = nippoRetryDate;
+  document.getElementById('dateInput').value = currentDate;
+  nippoForceNext = true;
+  loadNippo(true);
+}
+
+function formatDateJa(dateStr) {
+  return String(dateStr || '').replace(/^\d{4}-(\d{1,2})-(\d{1,2})$/, function(_, m, d) {
+    return parseInt(m, 10) + '/' + parseInt(d, 10);
+  });
+}
+
+function loadNippo(silent) {
+  var date = currentDate;
+  var seq = ++nippoLoadSeq;
+  var banner = document.querySelector('.date-banner');
+  var nippoEl = document.querySelector('.nippo');
+  var force = nippoForceNext;
+  nippoForceNext = false;
+
+  document.getElementById('errorScreen').style.display = 'none';
+  hideLoadRetryBar();
+
+  // 明示的な再読み込み（初回・反映ボタン後など）はキャッシュを捨てて最新を取る
+  if (!silent) nippoCache = {};
+
+  var cached = nippoCache[date];
+  var cachedJson = null;
+
+  if (cached && cached.data) {
+    // まずキャッシュを即表示し、裏で最新を取り直す
+    cachedJson = JSON.stringify(cached.data);
+    handleNippoLoaded(cached.data);
+  } else if (!silent) {
+    document.getElementById('loadingScreen').style.display = 'block';
+    document.getElementById('mainScreen').style.display = 'none';
+  } else if (nippoEl) {
+    // 前の日付の内容が残っていることが分かるように薄くする
+    nippoEl.style.opacity = '0.45';
+  }
+  if (banner) banner.style.opacity = '0.7';
+
+  // 時間がかかるときの案内（通信自体は打ち切らず、届けば表示する）
+  var timer = setTimeout(function() {
+    if (seq !== nippoLoadSeq) return;
+    if (cached && cached.data) {
+      showLoadRetryBar(date, '最新データの取得に時間がかかっています（表示中は少し前に取得した内容です）');
+    } else if (silent) {
+      showLoadRetryBar(date, formatDateJa(date) + ' の読み込みに時間がかかっています。もう少し待つか、再試行してください');
+    } else {
+      showError('サーバーからの応答が' + Math.round(NIPPO_LOAD_TIMEOUT_MS / 1000) + '秒以内にありませんでした。\nページを再読み込みしてください。');
+    }
+  }, NIPPO_LOAD_TIMEOUT_MS);
+
+  fetchNippo(date, function(data) {
+    clearTimeout(timer);
+    if (seq !== nippoLoadSeq) return;   // もっと新しい日付の要求があるので捨てる
+    if (banner) banner.style.opacity = '1';
+    if (nippoEl) nippoEl.style.opacity = '1';
+    document.getElementById('errorScreen').style.display = 'none';
+    hideLoadRetryBar();
+    if (!(cachedJson && JSON.stringify(data) === cachedJson)) {
+      handleNippoLoaded(data);          // キャッシュと同じ内容なら描き直さない
+    }
+    schedulePrefetch(date);
+  }, function(err) {
+    clearTimeout(timer);
+    if (seq !== nippoLoadSeq) return;
+    if (banner) banner.style.opacity = '1';
+    var msg = '通信エラー: ' + (err && err.message ? err.message : String(err));
+    if (cached && cached.data) {
+      showLoadRetryBar(date, msg + '（表示中は少し前に取得した内容です）');
+    } else if (silent) {
+      showLoadRetryBar(date, msg);
+    } else {
+      showError(msg);
+    }
+  }, force);
+}
+
+
+<!--
+  ==========================================================================
+  ③ JavaScript: 部分更新の関数5つに、キャッシュ更新を1行ずつ追加する
+  ==========================================================================
+  投稿・編集のあとに呼ばれる「部分更新」の関数は、最新データを取り直して
+  います。その結果をキャッシュにも入れておかないと、別の日に移動して
+  戻ったときに一瞬古い内容（投稿前）が見えてしまうので、次の5箇所に
+  storeNippoCache(data); を1行ずつ追加します。
+
+  (a) refreshRenrakuOnly関数の中。探す:
+-->
+      if (nippoData) nippoData.renraku = data.renraku || [];
+<!--
+  これに置き換える:
+-->
+      storeNippoCache(data);
+      if (nippoData) nippoData.renraku = data.renraku || [];
+
+<!--
+  (b) refreshScheduleOnly関数の中。探す:
+-->
+      if (nippoData) nippoData.schedule = data.schedule;
+<!--
+  これに置き換える:
+-->
+      storeNippoCache(data);
+      if (nippoData) nippoData.schedule = data.schedule;
+
+<!--
+  (c) refreshHeaderOnly関数の中。探す:
+-->
+      if (nippoData) nippoData.header = data.header;
+<!--
+  これに置き換える:
+-->
+      storeNippoCache(data);
+      if (nippoData) nippoData.header = data.header;
+
+<!--
+  (d) refreshDeadlinesOnly関数の中。探す:
+-->
+      if (nippoData) nippoData.deadlines = data.deadlines || [];
+<!--
+  これに置き換える:
+-->
+      storeNippoCache(data);
+      if (nippoData) nippoData.deadlines = data.deadlines || [];
+
+<!--
+  (e) refreshClassChangeOnly関数の中。探す:
+-->
+      if (data && data.classChange) {
+<!--
+  これに置き換える:
+-->
+      if (data && data.classChange) {
+        storeNippoCache(data);
+
+
+<!--
+  ============================================================
+  補足
+  ============================================================
+  ・◀▶で行き来する日付はブラウザ内に保持されるので、2回目以降は即表示
+    されます。表示後に裏で最新を取り直すので、他の先生の新しい投稿も
+    数秒後に反映されます。
+  ・「今日」ボタン・トーストの「確認」・反映ボタンなど、明示的な
+    再読み込みではキャッシュを捨てて必ず最新を取ります。
+  ・先読みの分、サーバーへのアクセスは増えます（1回の日付移動につき
+    最大2件）。先生方の人数規模ならApps Scriptの上限には十分余裕が
+    あります。
+  ・サーバー側（getNippo）の処理時間そのものを短くするには、Code.gs
+    での対応（めったに変わらないシートのキャッシュなど）が別途必要です。
+  ============================================================
+-->
