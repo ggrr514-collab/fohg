@@ -1,0 +1,206 @@
+<!--
+  ============================================================
+  「自習」の連絡を、作成者以外の先生も編集できるようにする
+  ============================================================
+  【現状】
+    授業変更・自習の編集は、投稿者本人と管理者だけができます。
+    しかも編集の入口は「📋 自分の予定」の中だけで、日報の一覧には
+    「×削除」しかありません。
+
+  【この修正でこうなる】
+  ・「自習」の連絡は、ログインしている先生なら誰でも編集できます
+    （自習の時間を他教科の授業にあてる、監督者を変える、など）。
+    区分を「自習」から「変更」に切り替えて、代わりに入る先生を
+    入れることもできます。
+  ・「変更」の連絡は今までどおり、投稿者・管理者に加えて
+    「最後にその連絡を編集した人」も編集できます
+    （自習→変更に切り替えた本人が、あとで直せるように）。
+  ・日報の授業変更一覧に「✏️ 編集」ボタンが付きます
+    （編集できる連絡にだけ表示。ゲスト閲覧では表示しない）。
+  ・削除は今までどおり投稿者と管理者だけです。
+  ・誰がいつ編集したかは、今までどおり「✎ 氏名 日時」で残ります。
+
+  ⚠️ 重要:
+  ・①②は Code.gs、③〜⑦は index.html です。
+  ・「...」のような省略は一切使っていません。すべてそのままコピーできます。
+  ・<script>や<style>タグは新しく追加しないでください。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① Code.gs: updateClassChange の権限チェックをゆるめる
+  ==========================================================================
+  探す（updateClassChange 関数の中。data[i][10] を見ている方。
+  updateGroupRenraku にも似た行がありますが、そちらは data[i][6] です）:
+-->
+    // 投稿者または管理者のみ編集可
+    const teachers = getTeachersList_(ss);
+    const isAdmin = teachers.some(t => t.email === user.email && t.isAdmin);
+    if (data[i][10] !== user.email && !isAdmin) {
+      return { ok: false, error: '編集権限がありません（投稿者または管理者のみ）' };
+    }
+
+<!--
+  これに置き換える:
+-->
+    // 編集できる人: 投稿者・管理者・最後に編集した人。「自習」の連絡は全員
+    const teachers = getTeachersList_(ss);
+    const isAdmin = teachers.some(t => t.email === user.email && t.isAdmin);
+    const isCreator = data[i][10] === user.email;
+    const isLastEditor = String(data[i][14] || '') === user.email;
+    const isJishu = String(data[i][4] || '') === '自習';
+    if (!isCreator && !isAdmin && !isLastEditor && !isJishu) {
+      return { ok: false, error: '編集権限がありません（自習の連絡は全員、それ以外は投稿者・管理者・最後に編集した人のみ）' };
+    }
+
+
+<!--
+  ==========================================================================
+  ② Code.gs: getClassChangeList_ の各項目に「最終更新者メール」を含める
+  ==========================================================================
+  探す（getClassChangeList_ 関数の item を組み立てている部分）:
+-->
+      createdAt: row[12] ? Utilities.formatDate(row[12], 'JST', 'yyyy-MM-dd HH:mm') : '',
+      updatedByName: row[15] || '',
+
+<!--
+  これに置き換える（updatedByEmail を1行追加）:
+-->
+      createdAt: row[12] ? Utilities.formatDate(row[12], 'JST', 'yyyy-MM-dd HH:mm') : '',
+      updatedByEmail: row[14] || '',
+      updatedByName: row[15] || '',
+
+
+<!--
+  ==========================================================================
+  ③ index.html（<style> の中）: 編集ボタンの見た目を追加する
+  ==========================================================================
+  探す:
+-->
+.cc-delete-btn:hover { color: var(--danger); }
+
+<!--
+  これに置き換える:
+-->
+.cc-delete-btn:hover { color: var(--danger); }
+.cc-edit-btn { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 2px 6px; }
+.cc-edit-btn:hover { text-decoration: underline; }
+@media print {
+  .cc-edit-btn { display: none !important; }
+}
+
+
+<!--
+  ==========================================================================
+  ④ index.html（<style> の中）: ゲスト閲覧では編集ボタンを隠す
+  ==========================================================================
+  探す:
+-->
+.guest-mode .cc-delete-btn,
+
+<!--
+  これに置き換える:
+-->
+.guest-mode .cc-delete-btn,
+.guest-mode .cc-edit-btn,
+
+
+<!--
+  ==========================================================================
+  ⑤ index.html（<script> の中）: 一覧の項目を id で引けるように覚えておく
+  ==========================================================================
+  探す（renderClassChange 関数の先頭付近）:
+-->
+  var todayItems = data.today || [];
+  var tomorrowItems = data.tomorrow || [];
+
+<!--
+  これに置き換える:
+-->
+  var todayItems = data.today || [];
+  var tomorrowItems = data.tomorrow || [];
+
+  // 「✏️ 編集」から呼び出せるように、表示中の項目を id で覚えておく
+  classChangeItemsById = {};
+  todayItems.concat(tomorrowItems).forEach(function(item) {
+    if (item && item.id) classChangeItemsById[item.id] = item;
+  });
+
+
+<!--
+  ==========================================================================
+  ⑥ index.html（<script> の中）: 一覧に「✏️ 編集」ボタンを出す
+  ==========================================================================
+  探す（renderClassChangeItem 関数の中）:
+-->
+  // 削除ボタン: 投稿者または管理者のみ
+  var canDelete = currentUser && (currentUser.email === item.createdByEmail || currentUser.isAdmin);
+  var deleteBtn = canDelete ? '<button class="cc-delete-btn" onclick="deleteClassChange(\'' + escapeHtml(item.id) + '\')">×削除</button>' : '';
+
+<!--
+  これに置き換える:
+-->
+  // 削除ボタン: 投稿者または管理者のみ
+  var canDelete = currentUser && (currentUser.email === item.createdByEmail || currentUser.isAdmin);
+  var deleteBtn = canDelete ? '<button class="cc-delete-btn" onclick="deleteClassChange(\'' + escapeHtml(item.id) + '\')">×削除</button>' : '';
+  // 編集ボタン: 投稿者・管理者・最後に編集した人。「自習」は全員（ゲスト以外）
+  var canEdit = currentUser && !currentUser.isGuest && (
+    currentUser.email === item.createdByEmail ||
+    currentUser.isAdmin ||
+    (item.updatedByEmail && currentUser.email === item.updatedByEmail) ||
+    isJishu
+  );
+  var editBtn = canEdit ? '<button class="cc-edit-btn" onclick="editClassChangeFromList(\'' + escapeHtml(item.id) + '\')">✏️ 編集</button>' : '';
+
+<!--
+  同じ関数の中で、さらに探す（戻り値の最後の行）:
+-->
+      '<div class="cc-meta">投稿: ' + escapeHtml(item.createdByName || '') + ' ' + shortTime(item.createdAt) + updatedInfo + ' ' + deleteBtn + '</div>' +
+
+<!--
+  これに置き換える（deleteBtn の前に editBtn を追加）:
+-->
+      '<div class="cc-meta">投稿: ' + escapeHtml(item.createdByName || '') + ' ' + shortTime(item.createdAt) + updatedInfo + ' ' + editBtn + deleteBtn + '</div>' +
+
+
+<!--
+  ==========================================================================
+  ⑦ index.html（<script> の中）: 一覧から編集モーダルを開く関数を追加する
+  ==========================================================================
+  探す（この行の「直前」に追加）:
+-->
+// モーダル制御
+var ccState = { target: 'today', kubun: '変更', period: null, editId: null, editDate: null };
+
+<!--
+  上の行の直前に、次を追加する:
+-->
+// 一覧の「✏️ 編集」から、既存の編集モーダルを開く
+var classChangeItemsById = {};
+
+function editClassChangeFromList(id) {
+  var item = classChangeItemsById[id];
+  if (!item) {
+    alert('対象が見つかりません。画面を更新してからもう一度お試しください。');
+    return;
+  }
+  openClassChangeModal(item);
+}
+
+
+<!--
+  ============================================================
+  適用後にやること
+  ============================================================
+  1. Code.gs の APP_VERSION を1つ上げて、新バージョンとしてデプロイする
+
+  確認方法:
+  ・他の先生が入れた「自習」の連絡に「✏️ 編集」が出て、監督者を変えたり、
+    区分を「変更」にして代わりに入る先生を入れたりして「更新する」を
+    押すと、一覧が更新され「✎ 自分の名前 日時」が付く
+  ・他の先生が入れた「変更」の連絡には「✏️ 編集」が出ない
+    （管理者、または自分が最後に編集したものは出る）
+  ・「×削除」は今までどおり投稿者と管理者だけ
+  ============================================================
+-->
