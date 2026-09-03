@@ -1,0 +1,656 @@
+<!--
+  ============================================================
+  サーバー高速化 第1段: 1リクエスト内でシートを1回しか読まない
+  ============================================================
+  【現状】 getNippo 1回の中で、
+    行事取込 ×4回、教員名簿 ×6回、連絡事項ログ ×2回、確認スタンプ ×2回、
+    日報追記 ×2回 … と同じシートを何度も読み直しています。
+    さらに日付切替のたびに、getNippo の後に別便で getGroupRenrakuList
+    （教員名簿 ×2、連絡ログ ×1）を呼んでいます。
+
+  【この修正でこうなる】
+  ・「実行内キャッシュ」を導入し、同じシートは1リクエスト内で1回だけ読む
+    （GASは呼び出しごとに実行環境が新しくなるので、リクエストをまたいで
+    古いデータが残る心配はありません）
+  ・getCurrentUser / getTeachersList_ / getSettings_ / 確認スタンプ /
+    ピン留め も1回だけ計算して使い回す
+  ・グループ連絡を getNippo の結果に同梱し、日付切替の通信を2往復→1往復に
+  ・週報（getWeeklyReport）も、出張・行事取込の読み込みが6回→1回になる
+
+  期待値: getNippo 15秒 → 5〜7秒程度。日付切替全体では 20秒 → 6秒程度。
+  （さらに縮めるには第2段＝リクエストをまたぐキャッシュが必要。別途）
+
+  ⚠️ 重要:
+  ・①〜⑫は Code.gs、⑬だけ index.html です。
+  ・「関数を丸ごと置き換える」指示のものは、function の行から、対応する
+    閉じカッコ } までを選択して置き換えてください。
+  ・「...」のような省略は一切使っていません。すべてそのままコピーできます。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① Code.gs: 実行内キャッシュの仕組みを追加する（新規）
+  ==========================================================================
+  探す（EVENT_COL 定数の終わり）:
+
+const EVENT_COL = {
+  DATE: 1, WEEKDAY: 2, WEEK: 3, EVENT: 4, NICCHOKU: 5,
+  SEISO: 6, NIKKA: 7, BUKATSU: 32,
+  // 週報用（学年別給食・校時）
+  LUNCH1: 8, LUNCH2: 9, LUNCH3: 10,
+  G1_PERIODS: [11, 12, 13, 14, 15, 16], G1_JISU: 17,
+  G2_PERIODS: [18, 19, 20, 21, 22, 23], G2_JISU: 24,
+  G3_PERIODS: [25, 26, 27, 28, 29, 30], G3_JISU: 31
+};
+
+  この直後（}; の次の行）に、次を追加する:
+-->
+// ============================================================
+// 実行内キャッシュ（高速化）
+// ============================================================
+// 1回のリクエスト（getNippo など）の中で、同じシートを何度も読み直さない
+// ための入れ物。GASは呼び出しごとに実行環境が新しくなるので、この変数が
+// リクエストをまたいで残ることはない（古いデータが残る心配はない）。
+var __memo = { sheets: {}, values: {}, user: null, teachers: null, settings: null, confirmMap: null, pinned: {}, eventRowMap: null };
+
+// getSheetByName を1回だけにする
+function getSheetCached_(ss, name) {
+  if (!(name in __memo.sheets)) __memo.sheets[name] = ss.getSheetByName(name);
+  return __memo.sheets[name];
+}
+
+// シートの startRow 行目〜最終行を、最終列まで一括で読む。
+// 同じシート・同じ開始行なら2回目以降はキャッシュを返す。
+// シートが無い・データが無い場合は空配列を返す。
+function getSheetValuesCached_(ss, name, startRow) {
+  const key = name + '|' + startRow;
+  if (key in __memo.values) return __memo.values[key];
+  let rows = [];
+  const sh = getSheetCached_(ss, name);
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    const lastCol = sh.getLastColumn();
+    if (lastRow >= startRow && lastCol >= 1) {
+      rows = sh.getRange(startRow, 1, lastRow - startRow + 1, lastCol).getValues();
+    }
+  }
+  __memo.values[key] = rows;
+  return rows;
+}
+
+// 日付 → 'y-m-d' のキー（isSameDay_ と同じ「その日」の判定になる）
+function dayKey_(d) {
+  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+}
+
+
+<!--
+  ==========================================================================
+  ② Code.gs: getCurrentUser 関数を丸ごと置き換える
+  ==========================================================================
+  探す: function getCurrentUser() { から、その閉じカッコ } まで
+  （最後の行は
+     return { ok: false, reason: '教員名簿に登録されていません: ' + email, needsLinking: true };
+   }
+   です。直後に「アカウント紐付け」シートを取得 のコメントが続きます）
+
+  これに置き換える（結果を1リクエスト内で使い回す。判定内容は今までと同じ）:
+-->
+function getCurrentUser() {
+  if (__memo.user) return __memo.user;
+  __memo.user = computeCurrentUser_();
+  return __memo.user;
+}
+
+function computeCurrentUser_() {
+  const email = (Session.getActiveUser().getEmail() || '').toLowerCase();
+  if (!email) {
+    return { ok: false, reason: 'メールアドレスが取得できません。Google にログインしているか確認してください。' };
+  }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const teachers = getTeachersList_(ss);
+  if (!teachers.length) {
+    return { ok: false, reason: '教員名簿シートにデータがありません。IMPORTRANGEの設定を確認してください。' };
+  }
+  const toUser = function(t, em) {
+    return { ok: true, email: em, name: t.name || '', section: '', title: '', ext: '', isAdmin: t.isAdmin === true, isGuest: false };
+  };
+
+  // 教員名簿に直接登録されているアカウント
+  const direct = teachers.find(t => String(t.email || '').toLowerCase() === email);
+  if (direct) return toUser(direct, email);
+
+  // 「アカウント紐付け」で連携済みなら、本来の教員メールとして扱う
+  try {
+    const linkedEmail = resolveLinkedTeacherEmail_(ss, email);
+    if (linkedEmail) {
+      const linked = teachers.find(t => String(t.email || '').toLowerCase() === linkedEmail);
+      if (linked) return toUser(linked, linkedEmail);
+    }
+  } catch (e) {
+    console.log('アカウント紐付け確認エラー: ' + (e.message || e));
+  }
+
+  // 名簿に未登録でも、「ゲスト閲覧」設定が有効な間だけ閲覧専用で許可
+  if (isGuestModeEnabled_(ss)) {
+    return { ok: true, email: email, name: email.split('@')[0] + '（ゲスト）', section: '', title: '', ext: '', isAdmin: false, isGuest: true };
+  }
+  return { ok: false, reason: '教員名簿に登録されていません: ' + email, needsLinking: true };
+}
+
+
+<!--
+  ==========================================================================
+  ③ Code.gs: findEventRow_ 関数を丸ごと置き換える
+  ==========================================================================
+  探す: function findEventRow_(ss, date) { から閉じカッコ } まで
+
+  これに置き換える（行事取込を1回だけ読んで「日付→行」の表を作り、以後は即座に引く）:
+-->
+function findEventRow_(ss, date) {
+  if (!__memo.eventRowMap) {
+    const map = {};
+    const data = getSheetValuesCached_(ss, SHEET_NAMES.EVENT_IMPORT, 3);
+    data.forEach(row => {
+      if (!row[0]) return;
+      const d = row[0] instanceof Date ? row[0] : new Date(row[0]);
+      if (isNaN(d.getTime())) return;
+      const key = dayKey_(d);
+      if (!(key in map)) map[key] = row;   // 同じ日付が複数あれば最初の行（従来と同じ）
+    });
+    __memo.eventRowMap = map;
+  }
+  return __memo.eventRowMap[dayKey_(date)] || null;
+}
+
+
+<!--
+  ==========================================================================
+  ④ Code.gs: getHeaderOverrides_ 関数を丸ごと置き換える
+  ==========================================================================
+  探す: function getHeaderOverrides_(ss, date) { から閉じカッコ } まで
+
+  これに置き換える:
+-->
+function getHeaderOverrides_(ss, date) {
+  const result = {};
+  const data = getSheetValuesCached_(ss, SHEET_NAMES.NIPPO_EXTRA, 2);
+  data.forEach(row => {
+    if (row[3] !== 'header') return;  // 操作列
+    const field = row[4];  // 元の行事名列を項目キーとして流用
+    if (HEADER_EDITABLE_FIELDS.indexOf(field) === -1) return;
+    const rowDate = row[1] instanceof Date ? row[1] : new Date(row[1]);
+    if (isNaN(rowDate.getTime()) || !isSameDay_(rowDate, date)) return;
+    result[field] = {
+      value: row[5] || '',
+      by: row[8] || '',
+      at: row[9] instanceof Date ? Utilities.formatDate(row[9], 'JST', 'yyyy-MM-dd HH:mm') : ''
+    };
+  });
+  return result;
+}
+
+
+<!--
+  ==========================================================================
+  ⑤ Code.gs: getSchedule_ 関数の中、2箇所を書き換える
+  ==========================================================================
+  (a) 探す（getSchedule_ の中、「先に日報追記シートを読み込んでマップ化」の下）:
+
+  try {
+    const exSh = ss.getSheetByName(SHEET_NAMES.NIPPO_EXTRA);
+    if (exSh && exSh.getLastRow() >= 2) {
+      const exData = exSh.getRange(2, 1, exSh.getLastRow() - 1, 10).getValues();
+      exData.forEach((row, idx) => {
+
+  これに置き換える:
+-->
+  try {
+    const exData = getSheetValuesCached_(ss, SHEET_NAMES.NIPPO_EXTRA, 2);
+    if (exData.length) {
+      exData.forEach((row, idx) => {
+
+<!--
+  (b) 探す（getSchedule_ の中、「行事取込からマスター予定を取得」の下。
+      先頭の空白の数が他と違うことがあるので、
+      「const sh = ss.getSheetByName(SHEET_NAMES.EVENT_IMPORT);」で検索）:
+
+  try {
+     const sh = ss.getSheetByName(SHEET_NAMES.EVENT_IMPORT);
+    if (sh && sh.getLastRow() >= 3) {
+      const data = sh.getRange(3, 1, sh.getLastRow() - 2, 32).getValues();
+      data.forEach((row, idx) => {
+
+  これに置き換える:
+-->
+  try {
+    const data = getSheetValuesCached_(ss, SHEET_NAMES.EVENT_IMPORT, 3);
+    if (data.length) {
+      data.forEach((row, idx) => {
+
+
+<!--
+  ==========================================================================
+  ⑥ Code.gs: getRenrakuList_ 関数の先頭を書き換える
+  ==========================================================================
+  探す（getRenrakuList_ の最初の数行）:
+
+  const sh = ss.getSheetByName(SHEET_NAMES.RENRAKU_LOG);
+  if (!sh || sh.getLastRow() < 2) return [];
+
+  // 列数を実際のシート列数に合わせる（マイグレーション前後の互換性）
+  // S列(19)=済フラグ（方針3-3）まで含める
+  const lastCol = Math.max(19, sh.getLastColumn());
+  const data = sh.getRange(2, 1, sh.getLastRow() - 1, lastCol).getValues();
+
+  これに置き換える:
+-->
+  const data = getSheetValuesCached_(ss, SHEET_NAMES.RENRAKU_LOG, 2);
+  if (!data.length) return [];
+
+
+<!--
+  ==========================================================================
+  ⑦ Code.gs: getDeadlineList_ 関数を丸ごと置き換える
+  ==========================================================================
+  探す: function getDeadlineList_(ss) { から閉じカッコ } まで
+
+  これに置き換える:
+-->
+function getDeadlineList_(ss) {
+  const list = [];
+  const data = getSheetValuesCached_(ss, SHEET_NAMES.RENRAKU_LOG, 2);
+  if (!data.length) return list;
+
+  let currentUserName = '', currentUserEmail = '', myGroups = [], isAdmin = false;
+  try {
+    const u = getCurrentUser();
+    if (u && u.ok) {
+      currentUserName = u.name || '';
+      currentUserEmail = u.email || '';
+      const teachers = getTeachersList_(ss);
+      const me = teachers.find(t => t.email === currentUserEmail);
+      if (me) { myGroups = me.groups || []; isAdmin = !!me.isAdmin; }
+    }
+  } catch (e) {}
+
+  // 確認スタンプ（T4）: 連絡事項と同じ仕組みをそのまま流用する
+  let confirmMap = {};
+  try { confirmMap = getConfirmationsMap_(); } catch (e) { console.log('締切一覧: 確認スタンプ取得エラー: ' + (e.message || e)); }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const overdueLimit = new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000);
+
+  data.forEach(row => {
+    if (!row[0]) return;
+    if (row[12] === true) return;  // 削除済み
+
+    const calendarDateRaw = row[14];
+    if (!(calendarDateRaw instanceof Date)) return;
+    const dueDay = new Date(calendarDateRaw);
+    dueDay.setHours(0, 0, 0, 0);
+    if (dueDay < overdueLimit) return;  // 古すぎる期限切れは一覧から外す
+    if (row[18] === true) return;  // 済（「済にする」を押すと全員の一覧から消える）
+
+    const groupName = row[17] ? String(row[17]).trim() : '';
+    if (groupName) {
+      // グループ連絡: 自分の所属グループ or 管理者のみ
+      if (!isAdmin && myGroups.indexOf(groupName) === -1) return;
+    } else {
+      // 通常連絡: 宛先未指定なら全員に表示、指定があれば全員宛/自分宛のみ
+      const recArr = row[13] ? String(row[13]).split(',').map(s => s.trim()).filter(Boolean) : [];
+      if (recArr.length) {
+        const isForAll = recArr.indexOf('全員') !== -1;
+        const isAddressedToMe = recArr.indexOf(currentUserName) !== -1;
+        if (!isForAll && !isAddressedToMe) return;
+      }
+    }
+
+    const renrakuId = String(row[0]);
+    const confirmations = confirmMap[renrakuId] || [];
+
+    list.push({
+      id: renrakuId,
+      name: row[2] || '',
+      content: row[3] || '',
+      important: row[4] === true,
+      calendarDate: Utilities.formatDate(dueDay, 'JST', 'yyyy-MM-dd'),
+      group: groupName,
+      isOverdue: dueDay < today,
+      createdByEmail: row[6] || '',
+      confirmedCount: confirmations.length,
+      confirmedByMe: confirmations.some(c => c.email === currentUserEmail),
+      confirmedNames: confirmations.map(c => c.name).filter(Boolean)
+    });
+  });
+
+  list.sort((a, b) => a.calendarDate < b.calendarDate ? -1 : (a.calendarDate > b.calendarDate ? 1 : 0));
+  return list;
+}
+
+
+<!--
+  ==========================================================================
+  ⑧ Code.gs: getShuchoList_ 関数の先頭を書き換える
+  ==========================================================================
+  探す（getShuchoList_ の中、try { の直後）:
+
+    const sh = ss.getSheetByName(SHEET_NAMES.SHUCHO_IMPORT);
+    if (!sh) return list;
+    const lastRow = sh.getLastRow();
+    if (lastRow < 3) return list;
+
+    // データは3行目から（1行目は説明、2行目はヘッダー）
+    // 列構成: A=年度, B=月, C=日, D=氏名, E=用務, F=時間, G=場所
+    const data = sh.getRange(3, 1, lastRow - 2, 7).getValues();
+
+  これに置き換える:
+-->
+    // データは3行目から（1行目は説明、2行目はヘッダー）
+    // 列構成: A=年度, B=月, C=日, D=氏名, E=用務, F=時間, G=場所
+    const data = getSheetValuesCached_(ss, SHEET_NAMES.SHUCHO_IMPORT, 3);
+    if (!data.length) return list;
+
+
+<!--
+  ==========================================================================
+  ⑨ Code.gs: getSettings_ 関数を丸ごと置き換える
+  ==========================================================================
+  探す: function getSettings_(ss) { から閉じカッコ } まで
+
+  これに置き換える:
+-->
+function getSettings_(ss) {
+  if (__memo.settings) return __memo.settings;
+  const result = {};
+  const data = getSheetValuesCached_(ss, SHEET_NAMES.SETTINGS, 1);
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0]) result[data[i][0]] = data[i][1];
+  }
+  __memo.settings = result;
+  return result;
+}
+
+
+<!--
+  ==========================================================================
+  ⑩ Code.gs: getTeachersList_ 関数を丸ごと置き換える
+  ==========================================================================
+  探す: function getTeachersList_(ss) { から閉じカッコ } まで
+
+  これに置き換える:
+-->
+function getTeachersList_(ss) {
+  if (__memo.teachers) return __memo.teachers;
+  // データは3行目から（1行目は説明、2行目はヘッダー）
+  const data = getSheetValuesCached_(ss, SHEET_NAMES.TEACHERS, 3);
+  const list = data.filter(r => r[1]).map(r => {
+    const groupsRaw = r[3] || '';
+    const groups = String(groupsRaw).split(/[,、]/).map(s => s.trim()).filter(Boolean);
+    return {
+      name: r[0] || '',
+      email: r[1] || '',
+      isAdmin: r[2] === true,
+      groups: groups
+    };
+  });
+  __memo.teachers = list;
+  return list;
+}
+
+
+<!--
+  ==========================================================================
+  ⑪ Code.gs: getPinnedRenrakuIds_ と getConfirmationsMap_ を丸ごと置き換える
+  ==========================================================================
+  (a) 探す: function getPinnedRenrakuIds_(userEmail) { から閉じカッコ } まで
+  これに置き換える:
+-->
+function getPinnedRenrakuIds_(userEmail) {
+  if (__memo.pinned[userEmail]) return __memo.pinned[userEmail];
+  const sh = getRenrakuPinSheet_();
+  let ids = [];
+  if (sh.getLastRow() >= 2) {
+    const data = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+    ids = data
+      .filter(row => row[0] === userEmail && row[3] !== true)  // 解除されていないもの
+      .map(row => String(row[1] || ''));
+  }
+  __memo.pinned[userEmail] = ids;
+  return ids;
+}
+
+<!--
+  (b) 探す: function getConfirmationsMap_() { から閉じカッコ } まで
+  これに置き換える:
+-->
+function getConfirmationsMap_() {
+  if (__memo.confirmMap) return __memo.confirmMap;
+  const sh = getRenrakuConfirmSheet_();
+  const map = {};
+  if (sh.getLastRow() >= 2) {
+    const data = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
+    data.forEach(row => {
+      if (row[4] === true) return;  // 解除済みはスキップ
+      const rid = String(row[1] || '');
+      if (!rid) return;
+      if (!map[rid]) map[rid] = [];
+      map[rid].push({
+        email: row[0] || '',
+        name: row[2] || '',
+        at: row[3] instanceof Date ? Utilities.formatDate(row[3], 'JST', 'yyyy-MM-dd HH:mm') : ''
+      });
+    });
+  }
+  __memo.confirmMap = map;
+  return map;
+}
+
+
+<!--
+  ==========================================================================
+  ⑫ Code.gs: グループ連絡を getNippo に同梱する
+  ==========================================================================
+  (a) getGroupRenrakuList 関数を丸ごと置き換える
+      探す: function getGroupRenrakuList(dateStr) { から閉じカッコ } まで
+      （直後に「連絡ピン留め機能」の見出しコメントが続きます）
+      これに置き換える（読み込みをキャッシュ経由にしただけで、表示内容は同じ）:
+-->
+function getGroupRenrakuList(dateStr) {
+  const user = getCurrentUser();
+  if (!user.ok) return { ok: false, error: user.reason };
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // 自分の所属グループと管理者フラグを取得
+  const teachers = getTeachersList_(ss);
+  const me = teachers.find(t => t.email === user.email);
+  const myGroups = me ? (me.groups || []) : [];
+  const isAdmin = me ? me.isAdmin : false;
+
+  // 全グループのリスト（教員名簿から）
+  const allGroups = {};
+  teachers.forEach(t => {
+    (t.groups || []).forEach(g => {
+      allGroups[g] = true;
+    });
+  });
+
+  const data = getSheetValuesCached_(ss, SHEET_NAMES.RENRAKU_LOG, 2);
+  if (!data.length) {
+    // データがなくても、教員名簿のグループは表示する
+    const emptyResult = Object.keys(allGroups).map(g => ({
+      group: g,
+      items: [],
+      isMine: myGroups.indexOf(g) !== -1,
+      canPost: isAdmin || myGroups.indexOf(g) !== -1
+    })).sort((a, b) => {
+      if (a.isMine !== b.isMine) return a.isMine ? -1 : 1;
+      return a.group < b.group ? -1 : 1;
+    });
+    return { ok: true, groups: emptyResult, myGroups: myGroups, isAdmin: isAdmin };
+  }
+
+  const targetDay = new Date(parseDate_(dateStr));
+  targetDay.setHours(0, 0, 0, 0);
+
+  // 自分のピン留めID取得
+  const pinnedIds = getPinnedRenrakuIds_(user.email);
+
+  // 確認スタンプ（T4）: 一括取得して各連絡に付与
+  let confirmMap = {};
+  try { confirmMap = getConfirmationsMap_(); } catch (e) { console.log('確認スタンプ取得エラー: ' + (e.message || e)); }
+
+  // グループごとに集計
+  const groupMap = {};
+  data.forEach(row => {
+    if (!row[0]) return;
+    if (row[12] === true) return;  // 削除済みスキップ
+
+    const groupName = String(row[17] || '').trim();
+    if (!groupName) return;  // グループ指定のない連絡は対象外
+
+    const postDate = row[1];
+    if (!(postDate instanceof Date)) return;
+
+    const renrakuId = String(row[0]);
+    const isPinned = pinnedIds.indexOf(renrakuId) !== -1;
+    const resolved = row[18] === true;  // 済フラグ（方針3-3・T2）
+
+    // 表示判定: 投稿日=表示対象日 / 投稿日<表示対象日<=表示終了日 / ピン留め中
+    let shouldShow = false;
+    let isContinuous = false;
+    let isPinDisplayed = false;
+
+    if (isSameDay_(postDate, targetDay)) {
+      shouldShow = true;
+    } else if (resolved) {
+      // 済にした後は、投稿日以外への継続表示（ピン留め・掲載期限）を打ち切る
+      shouldShow = false;
+    } else if (isPinned) {
+      // 自分がピン留めしているなら、投稿日以降は常に表示
+      const postDay = new Date(postDate);
+      postDay.setHours(0, 0, 0, 0);
+      if (postDay < targetDay) {
+        shouldShow = true;
+        isPinDisplayed = true;
+      }
+    } else {
+      const displayUntilRaw = row[16];
+      if (displayUntilRaw instanceof Date) {
+        const postDay = new Date(postDate);
+        postDay.setHours(0, 0, 0, 0);
+        const untilDay = new Date(displayUntilRaw);
+        untilDay.setHours(0, 0, 0, 0);
+        if (postDay < targetDay && targetDay <= untilDay) {
+          shouldShow = true;
+          isContinuous = true;
+        }
+      }
+    }
+
+    if (!shouldShow) return;
+
+    if (!groupMap[groupName]) groupMap[groupName] = [];
+
+    const calendarDate = row[14] || '';
+    const displayUntilRaw = row[16] || '';
+    const groupConfirmations = confirmMap[renrakuId] || [];
+
+    const groupUpdatedAtRaw = row[11];
+    groupMap[groupName].push({
+      id: renrakuId,
+      date: Utilities.formatDate(postDate, 'JST', 'yyyy-MM-dd'),
+      name: row[2] || '',
+      content: row[3] || '',
+      important: row[4] === true,
+      tags: row[5] ? String(row[5]).split(',').map(t => t.trim()).filter(Boolean) : [],
+      createdByEmail: row[6] || '',
+      createdByName: row[7] || '',
+      createdAt: row[8] ? Utilities.formatDate(row[8], 'JST', 'yyyy-MM-dd HH:mm') : '',
+      updatedByName: row[10] || '',
+      updatedAt: groupUpdatedAtRaw instanceof Date ? Utilities.formatDate(groupUpdatedAtRaw, 'JST', 'yyyy-MM-dd HH:mm') : '',
+      isEdited: groupUpdatedAtRaw instanceof Date && row[8] instanceof Date && groupUpdatedAtRaw.getTime() !== row[8].getTime(),
+      group: groupName,
+      calendarDate: calendarDate instanceof Date ? Utilities.formatDate(calendarDate, 'JST', 'yyyy-MM-dd') : '',
+      displayUntil: displayUntilRaw instanceof Date ? Utilities.formatDate(displayUntilRaw, 'JST', 'yyyy-MM-dd') : '',
+      isContinuous: isContinuous,
+      isPinned: isPinned,
+      isPinDisplayed: isPinDisplayed,
+      resolved: resolved,
+      confirmedCount: groupConfirmations.length,
+      confirmedByMe: groupConfirmations.some(c => c.email === user.email),
+      confirmedNames: groupConfirmations.map(c => c.name).filter(Boolean)
+    });
+  });
+
+  // 結果配列: 自分のグループを先頭に、その後アルファベット順
+  const result = Object.keys(allGroups).map(groupName => {
+    const items = (groupMap[groupName] || []).sort((a, b) => a.createdAt < b.createdAt ? 1 : -1);
+    return {
+      group: groupName,
+      items: items,
+      isMine: myGroups.indexOf(groupName) !== -1,
+      canPost: isAdmin || myGroups.indexOf(groupName) !== -1
+    };
+  }).sort((a, b) => {
+    if (a.isMine !== b.isMine) return a.isMine ? -1 : 1;
+    return a.group < b.group ? -1 : 1;
+  });
+
+  return { ok: true, groups: result, myGroups: myGroups, isAdmin: isAdmin };
+}
+
+<!--
+  (b) getNippo 関数の中に1行追加する
+      探す（getNippo の終わりの方）:
+
+  try { result.allergy = getAllergyList_(ss, date); } catch (e) { console.log('allergy   error: ' + e.message); }
+
+      この直後に、次の1行を追加する:
+-->
+  try { result.groupRenraku = getGroupRenrakuList(dateStr); } catch (e) { console.log('groupRenraku error: ' + e.message); }
+
+
+<!--
+  ==========================================================================
+  ⑬ index.html: getNippo に同梱されたグループ連絡をそのまま使う
+  ==========================================================================
+  探す（handleNippoLoaded 関数の中）:
+
+  renderAllergy(data.allergy);
+  loadGroupRenraku();  // グループ連絡をロード
+
+  これに置き換える（同梱されていればそれを描画、無ければ従来通り別便で取得）:
+-->
+  renderAllergy(data.allergy);
+  if (data.groupRenraku && data.groupRenraku.ok) {
+    renderGroupRenraku(data.groupRenraku.groups || [], data.groupRenraku.myGroups || [], data.groupRenraku.isAdmin || false);
+  } else {
+    loadGroupRenraku();  // グループ連絡をロード
+  }
+
+
+<!--
+  ============================================================
+  適用後にすること
+  ============================================================
+  1. Code.gs の APP_VERSION を '1' → '2' に変えて、新バージョンとして
+     再デプロイする（開いたままの先生の画面が3分以内に自動で再読み込み
+     されます。index.html も変わっているので必ず行ってください）
+  2. 「実行数」で getNippo の所要時間を見て、どのくらい縮んだか教えて
+     ください。次の第2段（リクエストをまたぐキャッシュ）を入れるかどうか
+     の判断材料にします。
+
+  ============================================================
+  補足（動作が変わらないことの確認ポイント）
+  ============================================================
+  ・投稿・編集・削除・ピン留め・確認スタンプなど、書き込み系の関数は
+    一切変えていません（読み込み専用の関数だけをキャッシュ経由にした）
+  ・書き込んだ直後に画面が更新される流れ（部分更新）は、別のリクエスト
+    として実行されるので、必ず最新のシート内容を読みます
+  ・ゲスト閲覧・アカウント連携の判定内容も従来と同じです
+  ============================================================
+-->
