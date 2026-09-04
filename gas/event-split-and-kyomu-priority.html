@@ -1,0 +1,283 @@
+<!--
+  ============================================================
+  ① 行事取込の予定が「・」「、」で細切れになる不具合の修正
+  ② 連絡事項の優先順に「教務主任」を加える
+  ============================================================
+
+  【①でこうなる】
+    行事取込シートの「行事」欄は、これまで「・」と「、」で別々の予定に
+    分けていました。しかし実際の行事欄では「・」「、」はほとんどが
+    1つの予定の中の文字で、予定と予定の区切りは「全角スペース」か
+    「改行」です（例: 「生徒会役員選挙　選挙管理委員会③(開票)　歯科健診9:00～(2-1・2、1年)」）。
+    そのため「歯科健診9:00～(2-1・2、1年)」が3つに割れたり、
+    「１・２年成績交換」が「１」と「２年成績交換」に割れたりしていました。
+
+    修正後は次のように分けます。
+    ・区切りは「全角スペース」「改行」「半角スペース」だけ
+    ・カッコ（ ( ) （ ） [ ] 「 」 【 】 など）の中にあるスペースでは分けない
+    ・「・」「、」では分けない
+
+    例: 「生徒会役員選挙　選挙管理委員会③(開票)　歯科健診9:00～(2-1・2、1年)」
+        → 「生徒会役員選挙」「選挙管理委員会③(開票)」「歯科健診9:00～(2-1・2、1年)」の3件
+        「3年三者面談、１・２年二者面談期間」 → そのまま1件
+        「教育課程・行事検討委員会①」 → そのまま1件
+        「1学期始業式・第43回入学式」 → そのまま1件（「・」では分けないため）
+
+    これまで全角スペースで区切られた予定は1行にまとまって表示されていましたが、
+    修正後は1件ずつ別の行になります。「予定の編集（✏️）」「非表示（✕）」も
+    1件ずつできるようになります。
+
+  【②でこうなる】
+    連絡事項の「優先順」が、上から次の順になります。
+      1. 校長の重要
+      2. 教頭の重要
+      3. 教務主任の重要
+      4. 校長
+      5. 教頭
+      6. 教務主任
+      7. 他の教員の重要
+      8. 他の教員
+      9. 昨日以前から継続表示中の重要（ピン留めによる表示も含む）
+     10. その他の継続表示中の連絡
+    同じ区分の中では、新しい投稿が上です。
+
+  【誰が教務主任かの指定】
+    「設定」シートに次の1行を追加してください（A列がキー、B列が値）。
+      A列: 教務主任   B列: 教員名簿と同じ氏名（または教員名簿のメールアドレス）
+    例: A列「教務主任」 B列「北條」（教員名簿の氏名欄と同じ書き方にしてください）
+    「校長」「教頭」の行は前回のままで大丈夫です。
+    ※ 設定シートは10分間キャッシュされます。追加してすぐ反映したいときは
+      Apps Script エディタで clearSheetCache を実行してください。
+
+  ⚠️ 重要:
+  ・①〜④は Code.gs、⑤は index.html です。
+  ・「...」のような省略は一切使っていません。すべてそのままコピーできます。
+  ・<script>や<style>タグは新しく追加しないでください。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① Code.gs: 行事名を分ける関数を追加する（新規）
+  ==========================================================================
+  探す（getSchedule_ 関数の先頭。この2行の「直前」に追加）:
+-->
+// 本日・明日の予定
+function getSchedule_(ss, date) {
+
+<!--
+  上の2行の直前に、次を追加する:
+-->
+// 行事取込の「行事」欄を、1件ずつの予定に分ける
+//   ・区切りは 改行・全角スペース・半角スペース
+//   ・カッコ（ ( ) （ ） [ ] 「 」 【 】 など）の中にあるスペースでは分けない
+//   ・「・」「、」では分けない（「歯科健診(2-1・2、1年)」「１・２年成績交換」
+//     「教育課程・行事検討委員会」などは1つの予定なので）
+function splitEventNames_(eventName) {
+  const text = String(eventName || '').replace(/\r/g, '').trim();
+  if (!text) return [];
+  const opens = '(（[［【「『〔';
+  const closes = ')）]］】」』〕';
+  const items = [];
+  let cur = '';
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charAt(i);
+    if (opens.indexOf(ch) >= 0) {
+      depth++;
+    } else if (closes.indexOf(ch) >= 0 && depth > 0) {
+      depth--;
+    }
+    if (depth === 0 && (ch === '\n' || ch === '　' || ch === ' ')) {
+      items.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  items.push(cur);
+  return items.map(s => s.trim()).filter(Boolean);
+}
+
+
+<!--
+  ==========================================================================
+  ② Code.gs: getSchedule_ の中で、新しい分け方を使う
+  ==========================================================================
+  探す（getSchedule_ 関数の中。items.forEach の次の行が try { になっている方）:
+-->
+          const items = eventName.split(/[・、]/).map(s => s.trim()).filter(Boolean);
+          items.forEach(name => {
+            try {
+
+<!--
+  これに置き換える:
+-->
+          const items = splitEventNames_(eventName);
+          items.forEach(name => {
+            try {
+
+
+<!--
+  ==========================================================================
+  ③ Code.gs: syncAllEventMastersToCalendar の中でも、同じ分け方を使う
+  ==========================================================================
+  探す（syncAllEventMastersToCalendar 関数の中。items.forEach の次の行が
+  「// マスター由来の予定は」のコメントになっている方）:
+-->
+        const items = eventName.split(/[・、]/).map(s => s.trim()).filter(Boolean);
+        items.forEach(name => {
+          // マスター由来の予定は「日付+予定名」で一意キーを作る
+
+<!--
+  これに置き換える:
+-->
+        const items = splitEventNames_(eventName);
+        items.forEach(name => {
+          // マスター由来の予定は「日付+予定名」で一意キーを作る
+
+
+<!--
+  ==========================================================================
+  ④ Code.gs: 校長・教頭・教務主任の判定と優先順位（2つの関数をまるごと置き換え）
+  ==========================================================================
+  探す（getRenrakuList_ 関数の直前にある2つの関数。「// 設定シートの「校長」「教頭」から」
+  のコメント行から、renrakuPriority_ 関数を閉じる } まで）:
+-->
+// 設定シートの「校長」「教頭」から、該当する氏名・メールの集合を作る
+// （値は氏名でもメールでもよい。カンマ区切りで複数可）
+function getRenrakuRoleSets_(ss) {
+  let settings = {};
+  let teachers = [];
+  try { settings = getSettings_(ss) || {}; } catch (e) { settings = {}; }
+  try { teachers = getTeachersList_(ss) || []; } catch (e) { teachers = []; }
+
+  const build = function(key) {
+    const set = {};
+    const raw = String(settings[key] || '').trim().toLowerCase();
+    if (!raw) return set;
+    raw.split(/[,、\s]+/).filter(Boolean).forEach(v => {
+      set[v] = true;
+      teachers.forEach(t => {
+        const nm = String(t.name || '').trim().toLowerCase();
+        const em = String(t.email || '').trim().toLowerCase();
+        if (nm === v || em === v) {
+          if (nm) set[nm] = true;
+          if (em) set[em] = true;
+        }
+      });
+    });
+    return set;
+  };
+  return { principal: build('校長'), vice: build('教頭') };
+}
+
+// 連絡1件の優先順位（小さいほど上に表示）
+//   1 校長の重要  2 教頭の重要  3 校長  4 教頭
+//   5 他の教員の重要  6 他の教員
+//   7 継続表示中の重要  8 その他の継続表示中
+function renrakuPriority_(item, roles) {
+  const keys = [item.createdByEmail, item.createdByName, item.name]
+    .map(v => String(v || '').trim().toLowerCase())
+    .filter(Boolean);
+  const isPrincipal = keys.some(k => roles.principal[k] === true);
+  const isVice = !isPrincipal && keys.some(k => roles.vice[k] === true);
+  const isContinued = item.isContinuous === true || item.isPinDisplayed === true;
+
+  if (isContinued) return item.important ? 7 : 8;
+  if (isPrincipal) return item.important ? 1 : 3;
+  if (isVice) return item.important ? 2 : 4;
+  return item.important ? 5 : 6;
+}
+
+<!--
+  これに置き換える:
+-->
+// 設定シートの「校長」「教頭」「教務主任」から、該当する氏名・メールの集合を作る
+// （値は氏名でもメールでもよい。カンマ区切りで複数可）
+function getRenrakuRoleSets_(ss) {
+  let settings = {};
+  let teachers = [];
+  try { settings = getSettings_(ss) || {}; } catch (e) { settings = {}; }
+  try { teachers = getTeachersList_(ss) || []; } catch (e) { teachers = []; }
+
+  const build = function(key) {
+    const set = {};
+    const raw = String(settings[key] || '').trim().toLowerCase();
+    if (!raw) return set;
+    raw.split(/[,、\s]+/).filter(Boolean).forEach(v => {
+      set[v] = true;
+      teachers.forEach(t => {
+        const nm = String(t.name || '').trim().toLowerCase();
+        const em = String(t.email || '').trim().toLowerCase();
+        if (nm === v || em === v) {
+          if (nm) set[nm] = true;
+          if (em) set[em] = true;
+        }
+      });
+    });
+    return set;
+  };
+  return { principal: build('校長'), vice: build('教頭'), kyomu: build('教務主任') };
+}
+
+// 連絡1件の優先順位（小さいほど上に表示）
+//   1 校長の重要  2 教頭の重要  3 教務主任の重要
+//   4 校長  5 教頭  6 教務主任
+//   7 他の教員の重要  8 他の教員
+//   9 継続表示中の重要（ピン留め表示を含む）  10 その他の継続表示中
+function renrakuPriority_(item, roles) {
+  const keys = [item.createdByEmail, item.createdByName, item.name]
+    .map(v => String(v || '').trim().toLowerCase())
+    .filter(Boolean);
+  const isPrincipal = keys.some(k => roles.principal[k] === true);
+  const isVice = !isPrincipal && keys.some(k => roles.vice[k] === true);
+  const isKyomu = !isPrincipal && !isVice && keys.some(k => roles.kyomu[k] === true);
+  const isContinued = item.isContinuous === true || item.isPinDisplayed === true;
+
+  if (isContinued) return item.important ? 9 : 10;
+  if (isPrincipal) return item.important ? 1 : 4;
+  if (isVice) return item.important ? 2 : 5;
+  if (isKyomu) return item.important ? 3 : 6;
+  return item.important ? 7 : 8;
+}
+
+
+<!--
+  ==========================================================================
+  ⑤ index.html: 並び替えの選択肢の名前を直す
+  ==========================================================================
+  探す:
+-->
+              <option value="priority">優先順（校長・教頭・重要）</option>
+
+<!--
+  これに置き換える:
+-->
+              <option value="priority">優先順（校長・教頭・教務主任・重要）</option>
+
+
+<!--
+  ============================================================
+  適用後にやること
+  ============================================================
+  1. 「設定」シートに「教務主任」の行を追加する（上の説明を参照）
+  2. Apps Script エディタで clearSheetCache を実行する
+     （設定と行事取込のキャッシュをすぐ反映するため）
+  3. Code.gs の APP_VERSION を1つ上げて、新バージョンとしてデプロイする
+
+  確認方法:
+  ・本日の予定で「歯科健診9:00～(2-1・2、1年)」が1行で表示される
+  ・全角スペースで区切った行事が、1件ずつ別の行に表示される
+  ・教務主任が投稿した連絡が、校長・教頭の次、他の教員より上に来る
+
+  ご注意（①の分け方が変わることによる影響）:
+  ・予定の「編集（✏️）」「非表示（✕）」は予定名をキーにして覚えているので、
+    以前に編集・非表示にした行事は、分け方が変わった分だけ元に戻って
+    見えることがあります。その場合はもう一度編集・非表示にしてください。
+  ・共有カレンダーへの行事同期（syncAllEventMastersToCalendar）も予定名を
+    キーにしています。すでに「2」「1年)」のような細切れの名前で作られた
+    カレンダーの予定は自動では消えないので、共有カレンダーから手で削除して
+    ください（今後30日分だけが対象です）。
+  ============================================================
+-->
