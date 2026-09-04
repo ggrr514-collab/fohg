@@ -1,0 +1,1086 @@
+<!--
+  ============================================================
+  特別教室の利用予定（予約表）をダッシュボードに追加する
+  ============================================================
+  【できること】
+  ・「🔄 授業変更・自習」の下に「🏫 特別教室の利用予定」の欄が付きます。
+    行が教室（7つ）、列が「朝・1〜6・昼・放課後」の予約表です。
+  ・空いているマスを押すと予約の入力画面が開きます（教室・校時・日付は
+    入った状態）。入力は「学年・クラス」「用途」「備考」だけです。
+  ・予約済みのマスには「2-1 体育」のように短く表示され、押すと内容が
+    見られます。編集はログインしている先生なら誰でもできます。
+    削除は予約した本人と管理者だけです。
+  ・同じ日・同じ教室・同じ校時に2件は入りません（誰の予約と重なったかが
+    表示されます）。学年全体で使うときは学年・クラス欄に「2年」や
+    「2-1, 2-2, 2-3」と書いて1件にしてください。
+  ・「本日 / 明日（次の登校日）」の切り替え、「📅 週間予約表」（先の週の
+    予約表を開いてどのマスからでも予約できる）、「📋 自分の予約」
+    （自分が入れた今後の予約の一覧・編集・削除）が付きます。
+  ・スマホと印刷では、表ではなく「1h 体育館 2-1 体育」の一覧形式になります。
+  ・予約が0件の日は他の欄と同じく自動で折りたたまれます。
+
+  【教室の名前を変えたいとき】
+    最初は次の7教室です。
+      体育館, 武道場, 多目的室（旧武道場）, 小会議室, 学校図書館, Solaるーむ, 会議室（1階）
+    変えたいときは「設定」シートに次の行を追加します（A列がキー、B列が値）。
+      A列: 特別教室   B列: 体育館, 武道場, 多目的室（旧武道場）, 小会議室, 学校図書館, Solaるーむ, 会議室（1階）
+    カンマ区切りで、表に出したい順に書きます。追加した後は
+    Apps Script エディタで clearSheetCache を実行してください。
+
+  【データの保存先】
+    「特別教室予約」シートが自動で作られます（最初の予約時）。
+    手で作る必要はありません。
+
+  ⚠️ 重要:
+  ・①②は Code.gs、③〜⑧は index.html です。
+  ・「...」のような省略は一切使っていません。すべてそのままコピーできます。
+  ・<script>や<style>タグは新しく追加しないでください
+    （③は既存の <style> の中、⑥〜⑧は既存の <script> の中に入れます）。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① Code.gs: 特別教室予約の関数一式を追加する（新規）
+  ==========================================================================
+  探す（グループ連絡機能の見出し。この3行の「直前」に追加）:
+-->
+// ============================================================
+// 学年・分掌別 グループ連絡機能
+// ============================================================
+
+<!--
+  上の3行の直前に、次を追加する:
+-->
+// ============================================================
+// 特別教室の利用予定（予約表）
+// ============================================================
+// シート「特別教室予約」: 1件1行
+//   A=ID  B=日付  C=教室  D=校時  E=学年・クラス  F=用途  G=備考
+//   H=予約者メール  I=予約者氏名  J=投稿日時  K=削除
+//   L=最終更新者メール  M=最終更新者氏名  N=最終更新日時
+const ROOM_BOOKING_SHEET_NAME = '特別教室予約';
+const ROOM_BOOKING_SLOTS = ['朝', '1', '2', '3', '4', '5', '6', '昼', '放課後'];
+const ROOM_BOOKING_DEFAULT_ROOMS = ['体育館', '武道場', '多目的室（旧武道場）', '小会議室', '学校図書館', 'Solaるーむ', '会議室（1階）'];
+
+// 教室の一覧（設定シートの「特別教室」があればそれ、なければ既定の7教室）
+function getRoomBookingRooms_(ss) {
+  let raw = '';
+  try { raw = String((getSettings_(ss) || {})['特別教室'] || '').trim(); } catch (e) { raw = ''; }
+  if (!raw) return ROOM_BOOKING_DEFAULT_ROOMS.slice();
+  const list = raw.split(/[,、\n]/).map(s => s.trim()).filter(Boolean);
+  return list.length ? list : ROOM_BOOKING_DEFAULT_ROOMS.slice();
+}
+
+// 予約シートを取得（なければ作成）
+function getRoomBookingSheet_(ss) {
+  let sh = ss.getSheetByName(ROOM_BOOKING_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(ROOM_BOOKING_SHEET_NAME);
+    sh.getRange(1, 1, 1, 14).setValues([['ID', '日付', '教室', '校時', '学年・クラス', '用途', '備考', '予約者メール', '予約者氏名', '投稿日時', '削除', '最終更新者メール', '最終更新者氏名', '最終更新日時']]);
+    sh.getRange(1, 1, 1, 14).setFontWeight('bold').setBackground('#2c5f8d').setFontColor('#ffffff');
+    sh.setFrozenRows(1);
+    // 校時（"1"）とクラス（"2-1"）が日付や数値に化けないように文字列列にする
+    sh.getRange(2, 4, sh.getMaxRows() - 1, 2).setNumberFormat('@');
+  }
+  return sh;
+}
+
+// シートの1行 → 画面用の項目
+function roomBookingRowToItem_(row) {
+  const d = row[1] instanceof Date ? row[1] : new Date(row[1]);
+  if (isNaN(d.getTime())) return null;
+  const createdAt = row[9];
+  const updatedAt = row[13];
+  return {
+    id: String(row[0]),
+    date: Utilities.formatDate(d, 'JST', 'yyyy-MM-dd'),
+    dateDisplay: Utilities.formatDate(d, 'JST', 'M/d') + '(' + getWeekdayJp_(d) + ')',
+    room: String(row[2] || '').trim(),
+    slot: String(row[3] || '').trim(),
+    classes: String(row[4] || '').trim(),
+    purpose: String(row[5] || '').trim(),
+    note: String(row[6] || '').trim(),
+    createdByEmail: row[7] || '',
+    createdByName: row[8] || '',
+    createdAt: createdAt instanceof Date ? Utilities.formatDate(createdAt, 'JST', 'yyyy-MM-dd HH:mm') : '',
+    updatedByEmail: row[11] || '',
+    updatedByName: row[12] || '',
+    updatedAt: updatedAt instanceof Date ? Utilities.formatDate(updatedAt, 'JST', 'yyyy-MM-dd HH:mm') : '',
+    isEdited: updatedAt instanceof Date && createdAt instanceof Date && updatedAt.getTime() !== createdAt.getTime()
+  };
+}
+
+// 校時順 → 教室順に並べる
+function sortRoomBookingItems_(items, rooms) {
+  items.sort((a, b) => {
+    const sa = ROOM_BOOKING_SLOTS.indexOf(a.slot);
+    const sb = ROOM_BOOKING_SLOTS.indexOf(b.slot);
+    if (sa !== sb) return sa - sb;
+    const ra = rooms.indexOf(a.room);
+    const rb = rooms.indexOf(b.room);
+    if (ra !== rb) return ra - rb;
+    return a.createdAt < b.createdAt ? -1 : 1;
+  });
+  return items;
+}
+
+// 日報用: 表示中の日と次の登校日の予約
+function getRoomBookingList_(ss, baseDate) {
+  const rooms = getRoomBookingRooms_(ss);
+  const tomorrow = getNextSchoolDay_(ss, baseDate);
+  const result = {
+    rooms: rooms,
+    slots: ROOM_BOOKING_SLOTS,
+    today: [],
+    tomorrow: [],
+    todayDate: Utilities.formatDate(baseDate, 'JST', 'yyyy-MM-dd'),
+    tomorrowDate: Utilities.formatDate(tomorrow, 'JST', 'yyyy-MM-dd')
+  };
+  const data = getSheetValuesCached_(ss, ROOM_BOOKING_SHEET_NAME, 2);
+  data.forEach(row => {
+    if (!row[0]) return;
+    if (row[10] === true) return;
+    const item = roomBookingRowToItem_(row);
+    if (!item) return;
+    const d = row[1] instanceof Date ? row[1] : new Date(row[1]);
+    if (isSameDay_(d, baseDate)) result.today.push(item);
+    else if (isSameDay_(d, tomorrow)) result.tomorrow.push(item);
+  });
+  sortRoomBookingItems_(result.today, rooms);
+  sortRoomBookingItems_(result.tomorrow, rooms);
+  return result;
+}
+
+// 週間予約表用: 指定日を含む週（月〜土）の予約
+function getRoomBookingsForWeek(baseDateStr) {
+  const user = getCurrentUser();
+  if (!user.ok) return { ok: false, error: user.reason };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rooms = getRoomBookingRooms_(ss);
+  const monday = getMonday_(parseDate_(baseDateStr));
+  const days = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+    let row = null;
+    try { row = findEventRow_(ss, d); } catch (e) { row = null; }
+    const dow = d.getDay();
+    const isSchoolDay = row ? rowHasClasses_(row) : (dow !== 0 && dow !== 6);
+    days.push({
+      date: Utilities.formatDate(d, 'JST', 'yyyy-MM-dd'),
+      display: Utilities.formatDate(d, 'JST', 'M/d'),
+      weekday: getWeekdayJp_(d),
+      isSchoolDay: isSchoolDay
+    });
+  }
+  const start = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate());
+  const end = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 5, 23, 59, 59);
+
+  const items = [];
+  const data = getSheetValuesCached_(ss, ROOM_BOOKING_SHEET_NAME, 2);
+  data.forEach(row => {
+    if (!row[0]) return;
+    if (row[10] === true) return;
+    const d = row[1] instanceof Date ? row[1] : new Date(row[1]);
+    if (isNaN(d.getTime()) || d < start || d > end) return;
+    const item = roomBookingRowToItem_(row);
+    if (item) items.push(item);
+  });
+  sortRoomBookingItems_(items, rooms);
+  return {
+    ok: true,
+    mondayDate: Utilities.formatDate(monday, 'JST', 'yyyy-MM-dd'),
+    rangeDisplay: days[0].display + '〜' + days[days.length - 1].display,
+    rooms: rooms,
+    slots: ROOM_BOOKING_SLOTS,
+    days: days,
+    items: items
+  };
+}
+
+// 同じ日・教室・校時の予約が既にあるか（excludeId は自分自身を除くため）
+function findRoomBookingConflict_(sh, date, room, slot, excludeId) {
+  if (sh.getLastRow() < 2) return null;
+  const data = sh.getRange(2, 1, sh.getLastRow() - 1, 11).getValues();
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    if (!row[0]) continue;
+    if (row[10] === true) continue;
+    if (excludeId && String(row[0]) === excludeId) continue;
+    if (String(row[2] || '').trim() !== room) continue;
+    if (String(row[3] || '').trim() !== slot) continue;
+    const d = row[1] instanceof Date ? row[1] : new Date(row[1]);
+    if (!isSameDay_(d, date)) continue;
+    return { name: row[8] || '', classes: String(row[4] || ''), purpose: String(row[5] || '') };
+  }
+  return null;
+}
+
+// 入力内容の共通チェック
+function validateRoomBookingPayload_(ss, payload) {
+  if (!payload) return { error: '入力内容がありません' };
+  if (!payload.date) return { error: '日付を指定してください' };
+  const date = parseDate_(payload.date);
+  if (isNaN(date.getTime())) return { error: '日付の形式が正しくありません' };
+  const room = String(payload.room || '').trim();
+  const slot = String(payload.slot || '').trim();
+  const rooms = getRoomBookingRooms_(ss);
+  if (rooms.indexOf(room) === -1) return { error: '教室を選んでください' };
+  if (ROOM_BOOKING_SLOTS.indexOf(slot) === -1) return { error: '校時を選んでください' };
+  const purpose = String(payload.purpose || '').trim();
+  if (!purpose) return { error: '用途を入力してください' };
+  return {
+    date: date, room: room, slot: slot, purpose: purpose,
+    classes: String(payload.classes || '').trim(),
+    note: String(payload.note || '').trim()
+  };
+}
+
+function conflictMessage_(c) {
+  return '同じ日・同じ教室・同じ校時に、' + (c.name || '他の先生') + '先生の予約（' +
+    [c.classes, c.purpose].filter(Boolean).join(' ') + '）が既にあります';
+}
+
+/**
+ * 特別教室を予約
+ * payload: { date, room, slot, classes, purpose, note }
+ */
+function addRoomBooking(payload) {
+  const check = requireEditUser_();
+  if (check.error) return check.error;
+  const user = check.user;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const v = validateRoomBookingPayload_(ss, payload);
+  if (v.error) return { ok: false, error: v.error };
+
+  const sh = getRoomBookingSheet_(ss);
+  const conflict = findRoomBookingConflict_(sh, v.date, v.room, v.slot, null);
+  if (conflict) return { ok: false, error: conflictMessage_(conflict) };
+
+  const id = generateId_('B');
+  const now = new Date();
+  sh.appendRow([id, v.date, v.room, v.slot, v.classes, v.purpose, v.note, user.email, user.name, now, false, '', '', '']);
+  return { ok: true, id: id };
+}
+
+/**
+ * 予約を編集（ログインしている先生なら誰でも可）
+ * payload: { id, date, room, slot, classes, purpose, note }
+ */
+function updateRoomBooking(payload) {
+  const check = requireEditUser_();
+  if (check.error) return check.error;
+  const user = check.user;
+  if (!payload || !payload.id) return { ok: false, error: 'IDが指定されていません' };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const v = validateRoomBookingPayload_(ss, payload);
+  if (v.error) return { ok: false, error: v.error };
+
+  const sh = getRoomBookingSheet_(ss);
+  const data = sh.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) !== String(payload.id)) continue;
+    if (data[i][10] === true) return { ok: false, error: 'この予約は削除されています' };
+
+    const conflict = findRoomBookingConflict_(sh, v.date, v.room, v.slot, String(payload.id));
+    if (conflict) return { ok: false, error: conflictMessage_(conflict) };
+
+    const now = new Date();
+    sh.getRange(i + 1, 2, 1, 6).setValues([[v.date, v.room, v.slot, v.classes, v.purpose, v.note]]);
+    sh.getRange(i + 1, 12, 1, 3).setValues([[user.email, user.name, now]]);
+    return { ok: true };
+  }
+  return { ok: false, error: '対象の予約が見つかりません: ' + payload.id };
+}
+
+/**
+ * 予約を削除（予約した本人または管理者のみ）
+ */
+function deleteRoomBooking(id) {
+  const check = requireEditUser_();
+  if (check.error) return check.error;
+  const user = check.user;
+  if (!id) return { ok: false, error: 'IDが指定されていません' };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = getRoomBookingSheet_(ss);
+  const data = sh.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) !== String(id)) continue;
+    const teachers = getTeachersList_(ss);
+    const isAdmin = teachers.some(t => t.email === user.email && t.isAdmin);
+    if (data[i][7] !== user.email && !isAdmin) {
+      return { ok: false, error: '削除できるのは予約した本人と管理者だけです（内容の変更は誰でもできます）' };
+    }
+    sh.getRange(i + 1, 11).setValue(true);
+    sh.getRange(i + 1, 12, 1, 3).setValues([[user.email, user.name, new Date()]]);
+    return { ok: true };
+  }
+  return { ok: false, error: '対象の予約が見つかりません: ' + id };
+}
+
+/**
+ * 自分が入れた今日以降の予約
+ */
+function getMyFutureRoomBookings() {
+  const user = getCurrentUser();
+  if (!user.ok) return { ok: false, error: user.reason };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rooms = getRoomBookingRooms_(ss);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const list = [];
+  const data = getSheetValuesCached_(ss, ROOM_BOOKING_SHEET_NAME, 2);
+  data.forEach(row => {
+    if (!row[0]) return;
+    if (row[10] === true) return;
+    if (row[7] !== user.email) return;
+    const d = row[1] instanceof Date ? row[1] : new Date(row[1]);
+    if (isNaN(d.getTime())) return;
+    const dayOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    if (dayOnly < today) return;
+    const item = roomBookingRowToItem_(row);
+    if (item) list.push(item);
+  });
+  list.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    const sa = ROOM_BOOKING_SLOTS.indexOf(a.slot);
+    const sb = ROOM_BOOKING_SLOTS.indexOf(b.slot);
+    if (sa !== sb) return sa - sb;
+    return rooms.indexOf(a.room) - rooms.indexOf(b.room);
+  });
+  return { ok: true, list: list };
+}
+
+
+<!--
+  ==========================================================================
+  ② Code.gs: getNippo で予約表のデータも返す
+  ==========================================================================
+  探す（getNippo 関数の中）:
+-->
+  try { result.deadlines = getDeadlineList_(ss); } catch (e) { console.log('deadlines error: ' + e.message); }
+
+<!--
+  これに置き換える（1行追加）:
+-->
+  try { result.deadlines = getDeadlineList_(ss); } catch (e) { console.log('deadlines error: ' + e.message); }
+  try { result.roomBooking = getRoomBookingList_(ss, date); } catch (e) { console.log('roomBooking error: ' + e.message); }
+
+
+<!--
+  ==========================================================================
+  ③ index.html（<style> の中）: 予約表の見た目を追加する
+  ==========================================================================
+  探す（この行の「直前」に追加）:
+-->
+/* モーダル内のボタン群 */
+
+<!--
+  上の行の直前に、次を追加する:
+-->
+/* 特別教室の利用予定（予約表） */
+.room-booking-section { background: linear-gradient(135deg, #f3f8f4 0%, #e1efe4 100%); }
+.rb-view-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.rb-view-btn { background: #fff; border: none; padding: 3px 10px; cursor: pointer; font-size: 11px; color: var(--ink-soft); font-family: inherit; }
+.rb-view-btn.rb-view-active { background: var(--accent); color: #fff; font-weight: 600; }
+.rb-grid-wrap { overflow-x: auto; background: #fff; border: 1px solid var(--line); border-radius: 5px; }
+.rb-grid { border-collapse: collapse; width: 100%; font-size: 12px; table-layout: fixed; min-width: 620px; }
+.rb-grid th, .rb-grid td { border: 1px solid var(--line-soft); padding: 0; height: 34px; vertical-align: middle; }
+.rb-grid thead th { background: var(--muted); font-size: 11px; font-weight: 700; color: var(--ink-soft); text-align: center; height: 26px; }
+.rb-grid th.rb-room-head { width: 138px; text-align: left; padding: 0 8px; background: var(--muted); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rb-cell { text-align: center; cursor: pointer; position: relative; }
+.rb-cell.rb-empty:hover { background: var(--accent-soft); }
+.rb-cell-add { color: var(--line); font-size: 14px; }
+.rb-cell.rb-empty:hover .rb-cell-add { color: var(--accent); }
+.rb-cell.rb-booked { background: #dcefe1; }
+.rb-cell.rb-booked:hover { background: #c8e5cf; }
+.rb-cell.rb-booked.rb-mine { background: #d8e8f7; }
+.rb-cell.rb-booked.rb-mine:hover { background: #c5dcf2; }
+.rb-cell-main { display: block; font-weight: 700; font-size: 11.5px; line-height: 1.2; padding: 2px 3px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rb-cell-sub { display: block; font-size: 10px; color: var(--ink-soft); line-height: 1.2; padding: 0 3px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rb-list { display: none; }
+.rb-list-item { background: #fff; border: 1px solid var(--line); border-left: 3px solid #4f8a5f; border-radius: 4px; padding: 5px 10px; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; font-size: 12.5px; cursor: pointer; }
+.rb-list-item.rb-mine { border-left-color: var(--accent); }
+.rb-list-slot { background: var(--ink); color: #fff; font-size: 11px; font-weight: 700; min-width: 30px; text-align: center; border-radius: 3px; padding: 1px 4px; flex-shrink: 0; }
+.rb-list-room { font-weight: 700; flex-shrink: 0; }
+.rb-list-body { flex: 1; min-width: 0; }
+.rb-list-by { font-size: 10.5px; color: var(--ink-faint); flex-shrink: 0; }
+.rb-empty-msg { font-size: 12px; color: var(--ink-faint); text-align: center; padding: 10px; }
+.rb-legend { font-size: 10.5px; color: var(--ink-faint); margin-top: 4px; }
+.rb-slot-grid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; }
+.rb-slot-btn { background: #fff; border: 1px solid var(--line); padding: 7px 0; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit; color: var(--ink); }
+.rb-slot-btn:hover { border-color: var(--accent); }
+.rb-slot-btn.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+.rb-week-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+.rb-week-tab { background: #fff; border: 1px solid var(--line); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-family: inherit; color: var(--ink); }
+.rb-week-tab.rb-week-off { color: var(--ink-faint); background: var(--muted); }
+.rb-week-tab.rb-week-active { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.rb-week-tab .rb-week-count { font-size: 10px; margin-left: 3px; opacity: 0.8; }
+.rb-my-item { background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.guest-mode .rb-cell-add,
+.guest-mode #rbDeleteBtn,
+.guest-mode #rbSubmitBtn {
+  display: none !important;
+}
+@media (max-width: 640px) {
+  .rb-grid-wrap { display: none; }
+  .rb-list { display: block; }
+  .rb-slot-grid { grid-template-columns: repeat(5, 1fr); }
+}
+@media print {
+  .room-booking-section { background: #fff !important; }
+  .rb-grid-wrap, .rb-view-switch, .rb-legend { display: none !important; }
+  .rb-list { display: block !important; }
+  .rb-list-item { border: 1px solid #000 !important; border-left-width: 3px !important; border-radius: 0 !important; padding: 3px 8px !important; font-size: 10.5pt !important; color: #000 !important; page-break-inside: avoid; }
+  .rb-list-slot { background: #fff !important; color: #000 !important; border: 1px solid #000 !important; font-size: 9.5pt !important; }
+  .rb-list-by { color: #000 !important; font-size: 8.5pt !important; }
+  #roomBookingModal, #roomWeekModal, #myRoomBookingModal { display: none !important; }
+}
+
+
+<!--
+  ==========================================================================
+  ④ index.html: 「授業変更・自習」の下に予約表の欄を追加する
+  ==========================================================================
+  探す（授業変更・自習セクションの末尾）:
+-->
+        <div class="section-content">
+          <div id="classChangeList" class="class-change-list"></div>
+        </div>
+      </div>
+
+<!--
+  これに置き換える（下に新しいセクションを追加）:
+-->
+        <div class="section-content">
+          <div id="classChangeList" class="class-change-list"></div>
+        </div>
+      </div>
+
+      <div class="section room-booking-section collapsible" id="sec-roombooking">
+        <div class="section-title" onclick="onSectionTitleClick(event, 'sec-roombooking')">
+          <div><span class="section-collapse-arrow">▼</span>🏫 特別教室の利用予定 <span class="badge-count" id="roomBookingCount">0</span></div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <span class="rb-view-switch" onclick="event.stopPropagation();">
+              <button class="rb-view-btn rb-view-active" id="rbViewToday" onclick="setRoomBookingView('today')">本日</button>
+              <button class="rb-view-btn" id="rbViewTomorrow" onclick="setRoomBookingView('tomorrow')">明日</button>
+            </span>
+            <button class="section-mgmt-btn" onclick="event.stopPropagation();openRoomWeekModal()">📅 週間予約表</button>
+            <button class="section-mgmt-btn" onclick="event.stopPropagation();openMyRoomBookingModal()">📋 自分の予約</button>
+            <button class="section-mgmt-btn" onclick="event.stopPropagation();openRoomBookingModal(null, null)">＋ 予約</button>
+          </div>
+        </div>
+        <div class="section-content">
+          <div id="roomBookingGrid"></div>
+        </div>
+      </div>
+
+
+<!--
+  ==========================================================================
+  ⑤ index.html: 予約の入力・週間予約表・自分の予約のモーダルを追加する
+  ==========================================================================
+  探す（この行の「直前」に追加）:
+-->
+<!-- 授業変更・自習 追加モーダル -->
+
+<!--
+  上の行の直前に、次を追加する:
+-->
+<!-- 特別教室 予約モーダル -->
+<div id="roomBookingModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:520;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:8px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,0.2);">
+    <div style="padding:16px 20px;border-bottom:2px solid var(--ink);display:flex;justify-content:space-between;align-items:center;">
+      <h3 id="rbModalTitle" style="font-size:15px;font-weight:700;">🏫 特別教室を予約</h3>
+      <button onclick="closeRoomBookingModal()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--ink-soft);padding:0 4px;">×</button>
+    </div>
+    <div style="padding:16px 20px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+        <div style="flex:1;min-width:150px;">
+          <div style="font-size:11px;color:var(--ink-soft);margin-bottom:4px;">📅 日付:</div>
+          <input type="date" id="rbDate" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:3px;font-family:inherit;font-size:13px;box-sizing:border-box;">
+        </div>
+        <div style="flex:1;min-width:180px;">
+          <div style="font-size:11px;color:var(--ink-soft);margin-bottom:4px;">🏫 教室:</div>
+          <select id="rbRoom" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:3px;font-family:inherit;font-size:13px;box-sizing:border-box;"></select>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px;color:var(--ink-soft);margin-bottom:4px;">⏰ 校時:</div>
+        <div class="rb-slot-grid" id="rbSlotGrid"></div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px;color:var(--ink-soft);margin-bottom:4px;">👥 学年・クラス（任意）:</div>
+        <input type="text" id="rbClasses" placeholder="例: 2-1 / 2年 / 2-1, 2-2 / 職員" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:3px;font-family:inherit;font-size:13px;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px;color:var(--ink-soft);margin-bottom:4px;">📝 用途:</div>
+        <input type="text" id="rbPurpose" placeholder="例: 体育 / 学年集会 / 保護者会 / 部活動" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:3px;font-family:inherit;font-size:13px;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11px;color:var(--ink-soft);margin-bottom:4px;">💬 備考（任意）:</div>
+        <textarea id="rbNote" placeholder="準備物、使い方の注意など" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:3px;font-family:inherit;font-size:13px;box-sizing:border-box;min-height:40px;resize:vertical;"></textarea>
+      </div>
+      <div id="rbMeta" style="font-size:11px;color:var(--ink-faint);margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:12px;flex-wrap:wrap;">
+        <button id="rbDeleteBtn" onclick="deleteRoomBookingFromModal()" style="display:none;background:#fff;border:1px solid var(--line);color:var(--danger);padding:8px 14px;border-radius:4px;cursor:pointer;font-size:13px;">× 削除</button>
+        <div style="display:flex;gap:8px;margin-left:auto;">
+          <button onclick="closeRoomBookingModal()" style="background:#fff;border:1px solid var(--line);color:var(--ink-soft);padding:8px 16px;border-radius:4px;cursor:pointer;font-size:13px;">キャンセル</button>
+          <button id="rbSubmitBtn" onclick="submitRoomBooking()" style="background:var(--accent);color:#fff;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;">予約する</button>
+        </div>
+      </div>
+      <div id="rbResult" style="margin-top:10px;font-size:12px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 特別教室 週間予約表モーダル -->
+<div id="roomWeekModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:500;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:8px;width:100%;max-width:960px;max-height:92vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,0.2);">
+    <div style="padding:14px 20px;border-bottom:2px solid var(--ink);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <h3 style="font-size:15px;font-weight:700;">📅 特別教室 週間予約表 <span id="rbWeekRange" style="font-size:12px;font-weight:400;color:var(--ink-soft);margin-left:6px;"></span></h3>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="section-mgmt-btn" onclick="changeRoomWeek(-1)">◀ 前週</button>
+        <button class="section-mgmt-btn" onclick="changeRoomWeek(0)">今週</button>
+        <button class="section-mgmt-btn" onclick="changeRoomWeek(1)">翌週 ▶</button>
+        <button onclick="closeRoomWeekModal()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--ink-soft);padding:0 4px;">×</button>
+      </div>
+    </div>
+    <div style="padding:14px 20px;">
+      <div class="rb-week-tabs" id="rbWeekTabs"></div>
+      <div id="rbWeekGrid"><div class="rb-empty-msg">読み込み中...</div></div>
+      <div class="rb-legend">空いているマスを押すと予約できます。予約済みのマスを押すと内容の確認・変更ができます。</div>
+    </div>
+  </div>
+</div>
+
+<!-- 特別教室 自分の予約モーダル -->
+<div id="myRoomBookingModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:500;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:8px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,0.2);">
+    <div style="padding:16px 20px;border-bottom:2px solid var(--ink);display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:15px;font-weight:700;">📋 自分が入れた特別教室の予約</h3>
+      <button onclick="closeMyRoomBookingModal()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--ink-soft);padding:0 4px;">×</button>
+    </div>
+    <div style="padding:16px 20px;">
+      <p style="font-size:11px;color:var(--ink-soft);margin-bottom:12px;line-height:1.5;">今日以降の、あなたが予約した特別教室の一覧です。ここから直接編集・削除できます。</p>
+      <div id="myRoomBookingList"><div class="rb-empty-msg">読み込み中...</div></div>
+    </div>
+  </div>
+</div>
+
+
+<!--
+  ==========================================================================
+  ⑥ index.html（<script> の中）: 日報の読み込み時に予約表も描画する
+  ==========================================================================
+  探す（handleNippoLoaded 関数の中）:
+-->
+  renderAllergy(data.allergy);
+
+<!--
+  これに置き換える（1行追加）:
+-->
+  renderAllergy(data.allergy);
+  renderRoomBooking(data.roomBooking);
+
+
+<!--
+  ==========================================================================
+  ⑦ index.html（<script> の中）: 予約が0件なら欄を折りたたむ
+  ==========================================================================
+  探す（updateSectionCollapseState 関数の中）:
+-->
+  // 4. 学年・分掌の連絡
+  setSectionCollapsed('sec-group', getGroupRenrakuCount() === 0);
+
+<!--
+  これに置き換える:
+-->
+  // 3-2. 特別教室の利用予定
+  setSectionCollapsed('sec-roombooking', getRoomBookingCount() === 0);
+  // 4. 学年・分掌の連絡
+  setSectionCollapsed('sec-group', getGroupRenrakuCount() === 0);
+
+
+<!--
+  ==========================================================================
+  ⑧ index.html（<script> の中）: 予約表の処理一式を追加する（新規）
+  ==========================================================================
+  探す（この3行の「直前」に追加）:
+-->
+// ==================================================
+// セクション折りたたみ機能
+// ==================================================
+
+<!--
+  上の3行の直前に、次を追加する:
+-->
+// ==================================================
+// 特別教室の利用予定（予約表）
+// ==================================================
+var ROOM_BOOKING_SLOTS_FALLBACK = ['朝', '1', '2', '3', '4', '5', '6', '昼', '放課後'];
+var roomBookingData = null;          // getNippo の roomBooking
+var roomBookingView = 'today';       // 'today' | 'tomorrow'
+var roomBookingItemsById = {};       // 表示中の予約（日報・週間・自分の予約）を id で引く
+var rbModalState = { editId: null, editItem: null };
+var roomWeekState = { mondayDate: null, selectedDate: null, data: null };
+
+function roomSlotLabel(slot) {
+  if (slot === '放課後') return '放';
+  return slot;
+}
+function roomSlotLongLabel(slot) {
+  if (/^[0-9]$/.test(slot)) return slot + 'h';
+  return slot;
+}
+
+function getRoomBookingCount() {
+  if (!roomBookingData) return 0;
+  return (roomBookingData.today || []).length + (roomBookingData.tomorrow || []).length;
+}
+
+function rememberRoomBookingItems(items) {
+  (items || []).forEach(function(it) {
+    if (it && it.id) roomBookingItemsById[it.id] = it;
+  });
+}
+
+function isMyRoomBooking(item) {
+  return !!(currentUser && item && item.createdByEmail && item.createdByEmail === currentUser.email);
+}
+
+function renderRoomBooking(data) {
+  roomBookingData = data || { rooms: [], slots: ROOM_BOOKING_SLOTS_FALLBACK, today: [], tomorrow: [] };
+  rememberRoomBookingItems(roomBookingData.today);
+  rememberRoomBookingItems(roomBookingData.tomorrow);
+
+  var countEl = document.getElementById('roomBookingCount');
+  if (countEl) countEl.textContent = getRoomBookingCount();
+
+  var tomorrowBtn = document.getElementById('rbViewTomorrow');
+  if (tomorrowBtn) tomorrowBtn.textContent = nippoTomorrowIsNextDay ? '明日' : '次の登校日';
+  var todayBtn = document.getElementById('rbViewToday');
+  if (todayBtn) todayBtn.classList.toggle('rb-view-active', roomBookingView === 'today');
+  if (tomorrowBtn) tomorrowBtn.classList.toggle('rb-view-active', roomBookingView === 'tomorrow');
+
+  var items = roomBookingView === 'tomorrow' ? (roomBookingData.tomorrow || []) : (roomBookingData.today || []);
+  var dateStr = roomBookingView === 'tomorrow' ? (roomBookingData.tomorrowDate || nippoTomorrowDate || currentDate) : (roomBookingData.todayDate || currentDate);
+  var container = document.getElementById('roomBookingGrid');
+  if (!container) return;
+  container.innerHTML =
+    buildRoomBookingGridHtml(roomBookingData.rooms || [], roomBookingData.slots || ROOM_BOOKING_SLOTS_FALLBACK, items, dateStr) +
+    buildRoomBookingListHtml(items) +
+    '<div class="rb-legend">空いているマスを押すと予約できます。予約済みのマスを押すと内容の確認・変更ができます（青は自分の予約）。</div>';
+}
+
+function setRoomBookingView(view) {
+  roomBookingView = view;
+  renderRoomBooking(roomBookingData);
+}
+
+// 教室×校時の表
+function buildRoomBookingGridHtml(rooms, slots, items, dateStr) {
+  var map = {};
+  (items || []).forEach(function(it) { map[it.room + '|' + it.slot] = it; });
+  var isGuest = !!(currentUser && currentUser.isGuest);
+  var html = '<div class="rb-grid-wrap"><table class="rb-grid"><thead><tr><th class="rb-room-head"></th>';
+  slots.forEach(function(s) { html += '<th>' + escapeHtml(roomSlotLabel(s)) + '</th>'; });
+  html += '</tr></thead><tbody>';
+  rooms.forEach(function(room) {
+    html += '<tr><th class="rb-room-head" title="' + escapeHtml(room) + '">' + escapeHtml(room) + '</th>';
+    slots.forEach(function(slot) {
+      var it = map[room + '|' + slot];
+      if (it) {
+        var title = [it.classes, it.purpose].filter(Boolean).join(' ') + '（' + (it.createdByName || '') + '）' + (it.note ? '\n' + it.note : '');
+        html += '<td class="rb-cell rb-booked' + (isMyRoomBooking(it) ? ' rb-mine' : '') + '" data-id="' + escapeHtml(it.id) + '" onclick="onRoomCellClick(this)" title="' + escapeHtml(title) + '">' +
+          '<span class="rb-cell-main">' + escapeHtml(it.classes || it.purpose) + '</span>' +
+          '<span class="rb-cell-sub">' + escapeHtml(it.classes ? it.purpose : (it.createdByName || '')) + '</span>' +
+          '</td>';
+      } else if (isGuest) {
+        html += '<td class="rb-cell rb-empty"></td>';
+      } else {
+        html += '<td class="rb-cell rb-empty" data-date="' + escapeHtml(dateStr) + '" data-room="' + escapeHtml(room) + '" data-slot="' + escapeHtml(slot) + '" onclick="onRoomCellClick(this)" title="' + escapeHtml(room + ' ' + roomSlotLongLabel(slot) + ' を予約') + '"><span class="rb-cell-add">＋</span></td>';
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+// スマホ・印刷用の一覧
+function buildRoomBookingListHtml(items) {
+  if (!items || !items.length) {
+    return '<div class="rb-list"><div class="rb-empty-msg">予約はありません</div></div>';
+  }
+  var html = '<div class="rb-list">';
+  items.forEach(function(it) {
+    html += '<div class="rb-list-item' + (isMyRoomBooking(it) ? ' rb-mine' : '') + '" data-id="' + escapeHtml(it.id) + '" onclick="onRoomCellClick(this)">' +
+      '<span class="rb-list-slot">' + escapeHtml(roomSlotLongLabel(it.slot)) + '</span>' +
+      '<span class="rb-list-room">' + escapeHtml(it.room) + '</span>' +
+      '<span class="rb-list-body">' + escapeHtml([it.classes, it.purpose].filter(Boolean).join(' ')) + (it.note ? ' <span style="color:var(--ink-soft);">（' + escapeHtml(it.note) + '）</span>' : '') + '</span>' +
+      '<span class="rb-list-by">' + escapeHtml(it.createdByName || '') + '</span>' +
+      '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+// マスを押したとき: 予約済みなら内容を開く、空きなら新規予約
+function onRoomCellClick(el) {
+  var id = el.getAttribute('data-id');
+  if (id) {
+    var item = roomBookingItemsById[id];
+    if (!item) { alert('対象が見つかりません。画面を更新してからもう一度お試しください。'); return; }
+    if (currentUser && currentUser.isGuest) {
+      alert(item.dateDisplay + ' ' + roomSlotLongLabel(item.slot) + ' ' + item.room + '\n' + [item.classes, item.purpose].filter(Boolean).join(' ') + '\n予約者: ' + (item.createdByName || '') + (item.note ? '\n備考: ' + item.note : ''));
+      return;
+    }
+    openRoomBookingModal(item, null);
+    return;
+  }
+  if (currentUser && currentUser.isGuest) return;
+  openRoomBookingModal(null, {
+    date: el.getAttribute('data-date') || currentDate,
+    room: el.getAttribute('data-room') || '',
+    slot: el.getAttribute('data-slot') || ''
+  });
+}
+
+// 予約モーダル（editItem があれば編集、preset があれば日付・教室・校時を入れて新規）
+function openRoomBookingModal(editItem, preset) {
+  var rooms = (roomBookingData && roomBookingData.rooms && roomBookingData.rooms.length) ? roomBookingData.rooms : [];
+  var slots = (roomBookingData && roomBookingData.slots && roomBookingData.slots.length) ? roomBookingData.slots : ROOM_BOOKING_SLOTS_FALLBACK;
+  rbModalState = { editId: editItem ? editItem.id : null, editItem: editItem || null };
+
+  var roomSel = document.getElementById('rbRoom');
+  var roomHtml = '';
+  rooms.forEach(function(r) { roomHtml += '<option value="' + escapeHtml(r) + '">' + escapeHtml(r) + '</option>'; });
+  roomSel.innerHTML = roomHtml || '<option value="">（教室が設定されていません）</option>';
+
+  var slotGrid = document.getElementById('rbSlotGrid');
+  var slotHtml = '';
+  slots.forEach(function(s) {
+    slotHtml += '<button type="button" class="rb-slot-btn" data-slot="' + escapeHtml(s) + '" onclick="selectRoomSlot(this)">' + escapeHtml(roomSlotLabel(s)) + '</button>';
+  });
+  slotGrid.innerHTML = slotHtml;
+
+  var date = currentDate, room = rooms[0] || '', slot = '';
+  var classes = '', purpose = '', note = '';
+  if (editItem) {
+    date = editItem.date; room = editItem.room; slot = editItem.slot;
+    classes = editItem.classes || ''; purpose = editItem.purpose || ''; note = editItem.note || '';
+  } else if (preset) {
+    date = preset.date || currentDate;
+    room = preset.room || room;
+    slot = preset.slot || '';
+  }
+
+  document.getElementById('rbModalTitle').textContent = editItem ? '✏️ 特別教室の予約を変更' : '🏫 特別教室を予約';
+  document.getElementById('rbSubmitBtn').textContent = editItem ? '更新する' : '予約する';
+  document.getElementById('rbSubmitBtn').disabled = false;
+  document.getElementById('rbDate').value = date;
+  document.getElementById('rbDate').min = editItem ? '' : formatDate(new Date());
+  roomSel.value = room;
+  document.querySelectorAll('#rbSlotGrid .rb-slot-btn').forEach(function(b) {
+    b.classList.toggle('selected', b.getAttribute('data-slot') === slot);
+  });
+  document.getElementById('rbClasses').value = classes;
+  document.getElementById('rbPurpose').value = purpose;
+  document.getElementById('rbNote').value = note;
+  document.getElementById('rbResult').textContent = '';
+
+  var meta = document.getElementById('rbMeta');
+  var delBtn = document.getElementById('rbDeleteBtn');
+  if (editItem) {
+    var metaText = '予約: ' + (editItem.createdByName || '') + ' ' + shortTime(editItem.createdAt);
+    if (editItem.isEdited) metaText += '　✎ ' + (editItem.updatedByName || '') + ' ' + shortTime(editItem.updatedAt);
+    meta.textContent = metaText;
+    var canDelete = currentUser && (currentUser.email === editItem.createdByEmail || currentUser.isAdmin);
+    delBtn.style.display = canDelete ? '' : 'none';
+  } else {
+    meta.textContent = '';
+    delBtn.style.display = 'none';
+  }
+  document.getElementById('roomBookingModal').style.display = 'flex';
+}
+
+function closeRoomBookingModal() {
+  document.getElementById('roomBookingModal').style.display = 'none';
+}
+
+function selectRoomSlot(btn) {
+  document.querySelectorAll('#rbSlotGrid .rb-slot-btn').forEach(function(b) { b.classList.remove('selected'); });
+  btn.classList.add('selected');
+}
+
+function submitRoomBooking() {
+  var date = document.getElementById('rbDate').value;
+  var room = document.getElementById('rbRoom').value;
+  var slotBtn = document.querySelector('#rbSlotGrid .rb-slot-btn.selected');
+  var slot = slotBtn ? slotBtn.getAttribute('data-slot') : '';
+  var purpose = document.getElementById('rbPurpose').value.trim();
+  if (!date) { alert('日付を指定してください'); return; }
+  if (!room) { alert('教室を選んでください'); return; }
+  if (!slot) { alert('校時を選んでください'); return; }
+  if (!purpose) { alert('用途を入力してください'); return; }
+
+  var payload = {
+    date: date, room: room, slot: slot,
+    classes: document.getElementById('rbClasses').value.trim(),
+    purpose: purpose,
+    note: document.getElementById('rbNote').value.trim()
+  };
+  var isEdit = !!rbModalState.editId;
+  if (isEdit) payload.id = rbModalState.editId;
+
+  var btn = document.getElementById('rbSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = isEdit ? '更新中...' : '予約中...';
+
+  function done(res) {
+    btn.disabled = false;
+    btn.textContent = isEdit ? '更新する' : '予約する';
+    if (res && res.ok) {
+      document.getElementById('rbResult').innerHTML = '<span style="color:var(--accent);">✓ ' + (isEdit ? '更新' : '予約') + 'しました</span>';
+      setTimeout(function() {
+        closeRoomBookingModal();
+        afterRoomBookingChanged(date, isEdit && rbModalState.editItem ? rbModalState.editItem.date : null);
+      }, 400);
+    } else {
+      document.getElementById('rbResult').innerHTML = '<span style="color:var(--danger);">' + escapeHtml(res && res.error ? res.error : '不明なエラー') + '</span>';
+    }
+  }
+  function fail(err) {
+    btn.disabled = false;
+    btn.textContent = isEdit ? '更新する' : '予約する';
+    document.getElementById('rbResult').innerHTML = '<span style="color:var(--danger);">通信エラー: ' + escapeHtml(err && err.message ? err.message : String(err)) + '</span>';
+  }
+  if (isEdit) {
+    google.script.run.withSuccessHandler(done).withFailureHandler(fail).updateRoomBooking(payload);
+  } else {
+    google.script.run.withSuccessHandler(done).withFailureHandler(fail).addRoomBooking(payload);
+  }
+}
+
+function deleteRoomBookingFromModal() {
+  if (!rbModalState.editId) return;
+  if (!confirm('この予約を削除しますか？')) return;
+  var id = rbModalState.editId;
+  var date = rbModalState.editItem ? rbModalState.editItem.date : null;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) {
+        closeRoomBookingModal();
+        afterRoomBookingChanged(date, null);
+      } else {
+        alert('エラー: ' + (res && res.error ? res.error : '不明'));
+      }
+    })
+    .withFailureHandler(function(err) { alert('通信エラー: ' + (err && err.message ? err.message : String(err))); })
+    .deleteRoomBooking(id);
+}
+
+// 予約の追加・変更・削除のあと、開いている画面を読み直す
+function afterRoomBookingChanged(date1, date2) {
+  var shown = [currentDate];
+  if (roomBookingData) {
+    if (roomBookingData.todayDate) shown.push(roomBookingData.todayDate);
+    if (roomBookingData.tomorrowDate) shown.push(roomBookingData.tomorrowDate);
+  } else if (nippoTomorrowDate) {
+    shown.push(nippoTomorrowDate);
+  }
+  if ((date1 && shown.indexOf(date1) !== -1) || (date2 && shown.indexOf(date2) !== -1)) {
+    refreshRoomBookingOnly();
+  }
+  if (document.getElementById('roomWeekModal').style.display === 'flex' && roomWeekState.mondayDate) {
+    loadRoomWeek(roomWeekState.selectedDate || roomWeekState.mondayDate);
+  }
+  if (document.getElementById('myRoomBookingModal').style.display === 'flex') {
+    loadMyRoomBookings();
+  }
+}
+
+// 予約表だけ部分更新
+function refreshRoomBookingOnly() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      if (!data || !data.user || !data.user.ok) return;
+      storeNippoCache(data);
+      if (nippoData) nippoData.roomBooking = data.roomBooking;
+      renderRoomBooking(data.roomBooking);
+      updateSectionCollapseState();
+    })
+    .withFailureHandler(function(err) {
+      console.log('refreshRoomBookingOnly failed: ' + (err.message || err));
+    })
+    .getNippo(currentDate);
+}
+
+// ---- 週間予約表 ----
+function openRoomWeekModal() {
+  document.getElementById('roomWeekModal').style.display = 'flex';
+  loadRoomWeek(currentDate);
+}
+
+function closeRoomWeekModal() {
+  document.getElementById('roomWeekModal').style.display = 'none';
+}
+
+function changeRoomWeek(deltaWeeks) {
+  var base;
+  if (deltaWeeks === 0) {
+    base = formatDate(new Date());
+  } else {
+    var d = new Date(roomWeekState.mondayDate || currentDate);
+    d.setDate(d.getDate() + deltaWeeks * 7);
+    base = formatDate(d);
+  }
+  loadRoomWeek(base);
+}
+
+function loadRoomWeek(baseDateStr) {
+  var grid = document.getElementById('rbWeekGrid');
+  grid.style.opacity = '0.5';
+  google.script.run
+    .withSuccessHandler(function(res) {
+      grid.style.opacity = '1';
+      if (!res || !res.ok) {
+        grid.innerHTML = '<div class="rb-empty-msg">エラー: ' + escapeHtml(res && res.error ? res.error : '不明') + '</div>';
+        return;
+      }
+      roomWeekState.data = res;
+      roomWeekState.mondayDate = res.mondayDate;
+      var inWeek = res.days.some(function(d) { return d.date === baseDateStr; });
+      roomWeekState.selectedDate = inWeek ? baseDateStr : res.mondayDate;
+      rememberRoomBookingItems(res.items);
+      renderRoomWeek();
+    })
+    .withFailureHandler(function(err) {
+      grid.style.opacity = '1';
+      grid.innerHTML = '<div class="rb-empty-msg">通信エラー: ' + escapeHtml(err && err.message ? err.message : String(err)) + '</div>';
+    })
+    .getRoomBookingsForWeek(baseDateStr);
+}
+
+function selectRoomWeekDay(dateStr) {
+  roomWeekState.selectedDate = dateStr;
+  renderRoomWeek();
+}
+
+function renderRoomWeek() {
+  var res = roomWeekState.data;
+  if (!res) return;
+  document.getElementById('rbWeekRange').textContent = res.rangeDisplay || '';
+  var counts = {};
+  (res.items || []).forEach(function(it) { counts[it.date] = (counts[it.date] || 0) + 1; });
+
+  var tabsHtml = '';
+  res.days.forEach(function(d, idx) {
+    var isSat = idx === 5;
+    if (isSat && !d.isSchoolDay && !counts[d.date]) return;
+    var cls = 'rb-week-tab' + (d.date === roomWeekState.selectedDate ? ' rb-week-active' : '') + (!d.isSchoolDay ? ' rb-week-off' : '');
+    tabsHtml += '<button type="button" class="' + cls + '" onclick="selectRoomWeekDay(' + jsArg(d.date) + ')">' +
+      escapeHtml(d.display + '(' + d.weekday + ')') + (!d.isSchoolDay ? ' 休' : '') +
+      (counts[d.date] ? '<span class="rb-week-count">' + counts[d.date] + '件</span>' : '') +
+      '</button>';
+  });
+  document.getElementById('rbWeekTabs').innerHTML = tabsHtml;
+
+  var items = (res.items || []).filter(function(it) { return it.date === roomWeekState.selectedDate; });
+  document.getElementById('rbWeekGrid').innerHTML =
+    buildRoomBookingGridHtml(res.rooms || [], res.slots || ROOM_BOOKING_SLOTS_FALLBACK, items, roomWeekState.selectedDate) +
+    buildRoomBookingListHtml(items);
+}
+
+// ---- 自分の予約 ----
+function openMyRoomBookingModal() {
+  document.getElementById('myRoomBookingModal').style.display = 'flex';
+  loadMyRoomBookings();
+}
+
+function closeMyRoomBookingModal() {
+  document.getElementById('myRoomBookingModal').style.display = 'none';
+}
+
+function loadMyRoomBookings() {
+  var container = document.getElementById('myRoomBookingList');
+  container.innerHTML = '<div class="rb-empty-msg">読み込み中...</div>';
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.ok) {
+        container.innerHTML = '<div class="rb-empty-msg" style="color:var(--danger);">エラー: ' + escapeHtml(res && res.error ? res.error : '不明') + '</div>';
+        return;
+      }
+      rememberRoomBookingItems(res.list);
+      renderMyRoomBookingList(res.list || []);
+    })
+    .withFailureHandler(function(err) {
+      container.innerHTML = '<div class="rb-empty-msg" style="color:var(--danger);">通信エラー: ' + escapeHtml(err && err.message ? err.message : String(err)) + '</div>';
+    })
+    .getMyFutureRoomBookings();
+}
+
+function renderMyRoomBookingList(list) {
+  var container = document.getElementById('myRoomBookingList');
+  if (!list.length) {
+    container.innerHTML = '<div class="rb-empty-msg">今日以降の予約はありません</div>';
+    return;
+  }
+  var html = '';
+  list.forEach(function(it) {
+    html += '<div class="rb-my-item">' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:13px;font-weight:600;">' + escapeHtml(it.dateDisplay) + ' <span class="rb-list-slot">' + escapeHtml(roomSlotLongLabel(it.slot)) + '</span> ' + escapeHtml(it.room) + '</div>' +
+        '<div style="font-size:12px;color:var(--ink);margin-top:2px;">' + escapeHtml([it.classes, it.purpose].filter(Boolean).join(' ')) + '</div>' +
+        (it.note ? '<div style="font-size:11px;color:var(--ink-soft);margin-top:2px;">💬 ' + escapeHtml(it.note) + '</div>' : '') +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">' +
+        '<button class="mini-btn" style="color:var(--accent);padding:3px 8px;font-size:11px;" onclick="editMyRoomBooking(' + jsArg(it.id) + ')">✏️ 編集</button>' +
+        '<button class="mini-btn" style="color:var(--danger);padding:3px 8px;font-size:11px;" onclick="deleteMyRoomBooking(' + jsArg(it.id) + ')">× 削除</button>' +
+      '</div>' +
+      '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function editMyRoomBooking(id) {
+  var item = roomBookingItemsById[id];
+  if (!item) { alert('対象が見つかりません'); return; }
+  openRoomBookingModal(item, null);
+}
+
+function deleteMyRoomBooking(id) {
+  var item = roomBookingItemsById[id];
+  if (!confirm('この予約を削除しますか？')) return;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) {
+        afterRoomBookingChanged(item ? item.date : null, null);
+      } else {
+        alert('エラー: ' + (res && res.error ? res.error : '不明'));
+      }
+    })
+    .withFailureHandler(function(err) { alert('通信エラー: ' + (err && err.message ? err.message : String(err))); })
+    .deleteRoomBooking(id);
+}
+
+
+<!--
+  ============================================================
+  適用後にやること
+  ============================================================
+  1. Code.gs の APP_VERSION を1つ上げて、新バージョンとしてデプロイする
+  2. （必要なら）「設定」シートに「特別教室」の行を追加して教室名を調整し、
+     Apps Script エディタで clearSheetCache を実行する
+
+  確認方法:
+  ・「🔄 授業変更・自習」の下に「🏫 特別教室の利用予定」の欄が出る
+    （予約が0件のあいだは折りたたまれているので、見出しを押して開く）
+  ・空いているマスを押す → 教室と校時が入った予約画面が開く → 用途を入れて
+    「予約する」→ マスに「2-1 体育」のように表示される
+  ・同じマスに別の先生が予約しようとすると「〇〇先生の予約が既にあります」と出る
+  ・「📅 週間予約表」で翌週以降の予約ができ、「📋 自分の予約」に一覧が出る
+  ・スマホで見ると表ではなく一覧形式、印刷でも一覧形式になる
+  ============================================================
+-->
