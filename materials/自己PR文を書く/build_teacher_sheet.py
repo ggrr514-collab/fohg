@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """教員用評価シート.xlsx を生成するスクリプト"""
+import math
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.utils import get_column_letter
 
 FONT_NAME = "游ゴシック"
 
@@ -23,6 +25,43 @@ UNIT_GOAL = ("自分の体験（具体）とそこから得た力や成長（抽
              "評価する力を身に付ける。")
 
 
+def _display_width(ch):
+    return 2 if ord(ch) > 255 else 1
+
+
+def _text_width(s):
+    return sum(_display_width(ch) for ch in s)
+
+
+def _get_col_width(ws, col_idx, default=8.43):
+    letter = get_column_letter(col_idx)
+    dim = ws.column_dimensions.get(letter)
+    if dim and dim.width:
+        return dim.width
+    return default
+
+
+def estimate_required_height(text, width_units, font_size=10, line_factor=1.7, padding=10):
+    """テキストの折り返し行数を見積もり、必要な行高さ（pt）を返す。日本語フォントは
+    Calibri基準の列幅より収まりが悪いため、余裕を持たせて保守的な係数を使う。"""
+    if not text:
+        return 0
+    chars_per_line_half = max(4, width_units / 2.5) * 2  # 半角換算の1行あたり文字数
+    total_lines = 0
+    for para in str(text).split("\n"):
+        if para == "":
+            total_lines += 1
+        else:
+            w = _text_width(para)
+            total_lines += max(1, math.ceil(w / chars_per_line_half))
+    return total_lines * font_size * line_factor + padding
+
+
+def _bump_height(ws, r, height):
+    current = ws.row_dimensions[r].height
+    ws.row_dimensions[r].height = height if current is None else max(current, height)
+
+
 def mg(ws, r1, c1, r2, c2, value, font=None, fill=None, align=None, border=None):
     ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
     cell = ws.cell(row=r1, column=c1)
@@ -36,7 +75,41 @@ def mg(ws, r1, c1, r2, c2, value, font=None, fill=None, align=None, border=None)
         for row in ws.iter_rows(min_row=r1, max_row=r2, min_col=c1, max_col=c2):
             for c in row:
                 c.border = border
+    if isinstance(value, str) and value and not value.startswith("="):
+        width_units = sum(_get_col_width(ws, c) for c in range(c1, c2 + 1))
+        font_size = font.size if font and font.size else 11
+        needed = estimate_required_height(value, width_units, font_size=font_size)
+        span_rows = r2 - r1 + 1
+        needed_per_row = needed / span_rows
+        for rr in range(r1, r2 + 1):
+            current = ws.row_dimensions[rr].height
+            if current is None or current < needed_per_row:
+                ws.row_dimensions[rr].height = needed_per_row
     return cell
+
+
+def autofit_row_heights(ws):
+    """マージされていない単独セルについても、テキスト量から必要な行高さを見積もって
+    不足分を引き上げる（mg()経由のセルは既に個別処理済み）。"""
+    merged_cells = set()
+    for merged_range in ws.merged_cells.ranges:
+        for row in range(merged_range.min_row, merged_range.max_row + 1):
+            for col in range(merged_range.min_col, merged_range.max_col + 1):
+                merged_cells.add((row, col))
+
+    for row in ws.iter_rows():
+        for cell in row:
+            if (cell.row, cell.column) in merged_cells:
+                continue
+            value = cell.value
+            if not isinstance(value, str) or not value or value.startswith("="):
+                continue
+            font_size = cell.font.size if cell.font and cell.font.size else 11
+            width_units = _get_col_width(ws, cell.column)
+            needed = estimate_required_height(value, width_units, font_size=font_size)
+            current = ws.row_dimensions[cell.row].height
+            if current is None or current < needed:
+                ws.row_dimensions[cell.row].height = needed
 
 
 wb = Workbook()
@@ -64,11 +137,11 @@ for i, w in enumerate(WIDTHS, start=1):
 mg(ws1, 1, 1, 1, TOTAL_COLS, "自己PR文を書く ―回答入力・評価シート―",
    Font(name=FONT_NAME, size=14, bold=True, color="FFFFFF"), NAVY,
    Alignment(horizontal="center", vertical="center"))
-ws1.row_dimensions[1].height = 26
+_bump_height(ws1, 1, 26)
 
 mg(ws1, 2, 1, 2, TOTAL_COLS, "単元目標：" + UNIT_GOAL,
    Font(name=FONT_NAME, size=10, bold=True), BLUE, wrap)
-ws1.row_dimensions[2].height = 30
+_bump_height(ws1, 2, 30)
 
 for col, h in enumerate(HEADERS, start=1):
     c = ws1.cell(row=3, column=col, value=h)
@@ -76,7 +149,7 @@ for col, h in enumerate(HEADERS, start=1):
     c.fill = NAVY
     c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     c.border = box
-ws1.row_dimensions[3].height = 40
+_bump_height(ws1, 3, 40)
 
 DATA_START, DATA_END = 4, 43
 dv_grade = DataValidation(type="list", formula1='"S,A,B,C,D"', allow_blank=True)
@@ -98,7 +171,7 @@ for r in range(DATA_START, DATA_END + 1):
             c.fill = GREEN_F
         elif col in INPUT_COLS:
             c.fill = INPUT
-    ws1.row_dimensions[r].height = 32
+    _bump_height(ws1, r, 32)
     for col in AI_EVAL_COLS + TEACHER_COLS:
         dv_grade.add(ws1.cell(row=r, column=col))
 
@@ -128,6 +201,7 @@ for col, v in enumerate(example_row, start=1):
 
 ws1.freeze_panes = "A4"
 
+autofit_row_heights(ws1)
 print("Sheet1 done")
 
 # ============================================================
@@ -140,8 +214,8 @@ ws2.column_dimensions["B"].width = 50
 
 mg(ws2, 1, 1, 1, 2, "AI設定", Font(name=FONT_NAME, size=14, bold=True, color="FFFFFF"), NAVY,
    Alignment(horizontal="center", vertical="center"))
-ws2.row_dimensions[1].height = 26
-ws2.row_dimensions[2].height = 8
+_bump_height(ws2, 1, 26)
+_bump_height(ws2, 2, 8)
 
 settings = [
     (3, "AIモデル", "gemini-2.0-flash"),
@@ -164,15 +238,16 @@ for row, label, value in settings:
     c2.fill = INPUT
     c2.border = box
     c2.alignment = Alignment(vertical="center", wrap_text=True)
-    ws2.row_dimensions[row].height = 20
+    _bump_height(ws2, row, 20)
 
 mg(ws2, 14, 1, 16, 2,
    "※ Gemini APIキーは、このシートには入力しません。GASの「プロジェクトの設定」→"
    "「スクリプト プロパティ」で GEMINI_API_KEY を設定してください。",
    Font(name=FONT_NAME, size=9.5, italic=True, color="C00000"), None, wrap)
 for i in range(3):
-    ws2.row_dimensions[14 + i].height = 18
+    _bump_height(ws2, 14 + i, 18)
 
+autofit_row_heights(ws2)
 print("Sheet2 done")
 
 wb.save("/home/user/fohg/materials/自己PR文を書く/教員用評価シート.xlsx")
