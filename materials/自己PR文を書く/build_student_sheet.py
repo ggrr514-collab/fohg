@@ -78,9 +78,9 @@ def input_row(ws, r, span=(1, 3), height=90, counter_target=None):
     return r + 1
 
 
-UNIT_GOAL = ("自分の体験（具体）とそこから得た力や成長（抽象）とのつながりを整理し、"
-             "高校入試の自己評価資料という目的に応じて、伝えたいことを明確にした自己PR文を"
-             "書くことができる。")
+UNIT_GOAL = ("自分の体験（具体）とそこから得た力や成長（抽象）とのつながりを整理して自己PR文を"
+             "書くとともに、グループでの発表を聞き合う中で、聴き取った内容を具体的な観点から"
+             "評価する力を身に付ける。")
 
 wb = Workbook()
 
@@ -147,32 +147,37 @@ about_text = (
     "令和9年度埼玉県公立高等学校入学者選抜から、すべての受検生に「面接」が実施されることになりまし"
     "た。出願のときには「自己評価資料」を提出します。そこには、これまでの自分の体験を振り返り、"
     "力を注いだことや努力したこと、高校入学後や将来取り組んでみたいこと、自己PRなどを、自分の言葉"
-    "で書きます。\n"
+    "で書きます。面接当日は、その内容をもとに「My Voice」として自分の言葉で語ります。\n"
     "県の資料には、「実績そのものではなく、そこに至るまでの過程（プロセス）や意欲、身に付いた力な"
     "どを多面的に評価する」「文章・文字の巧拙は評価の対象外」「内容に正解はない」と書かれています。"
     "立派な実績を並べる必要はありません。小さな出来事でも、そこから自分が何を感じ、何を学んだかを"
-    "自分の言葉で伝えることが大切です。この単元では、そのための自己PR文の書き方を学びます。"
+    "自分の言葉で伝えることが大切です。\n"
+    "この単元では、第1時で自己PR文の書き方を学び、第2時ではグループの中で自己PR文をもとに発表し"
+    "合い、友達の話を具体的な観点で聞き取り評価する活動を行います。話す力だけでなく、相手の話を"
+    "正確に受け止めて評価する「聞く力」もあわせて育てます。"
 )
-mg(ws1, r, 1, r + 5, 6, about_text, Font(name=FONT_NAME, size=10.5), None, wrap)
-for i in range(6):
+mg(ws1, r, 1, r + 6, 6, about_text, Font(name=FONT_NAME, size=10.5), None, wrap)
+for i in range(7):
     ws1.row_dimensions[r + i].height = 24
-r += 6
+r += 7
 ws1.row_dimensions[r].height = 8
 r += 1
 
 r = section_header(ws1, r, "■ 授業の流れ", NAVY, span=(1, 6))
 schedule = [
     ("第1時", "① 自己PR文とは何かを知る　② 発問①：印象に残る体験を具体的に書く"
-              "　③ 発問②：その体験から得た学びを自分の言葉でまとめる　④ AIと壁打ちして加筆する"),
-    ("第2時", "① 自己PR文の条件を確認する　② 構想メモを作る　③ AIと壁打ちして構成を確かめる"
-              "　④ 自己PR文を書く（字数に制限はない）　⑤ AIに添削してもらい推敲する"
-              "　⑥ AI評価と自己評価を比べて振り返る"),
+              "　③ 発問②：その体験から得た学びを自分の言葉でまとめる　④ AIと壁打ちして加筆する"
+              "　⑤ 構想メモを作る　⑥「作文例」を参考に自己PR文（300〜500字）を書く"
+              "　⑦ AIに添削してもらい推敲する"),
+    ("第2時", "① 面接の「My Voice」と、聞くことの大切さを知る　② 3〜4人グループで自己PR文を発表"
+              "し合う　③ 聞き手は質問をし、発表者は答える　④ 聞き手は観点に沿って聞き取り評価を"
+              "書く（発表そのものは評価しない）　⑤ 振り返りを書く"),
 ]
 for title, detail in schedule:
     mg(ws1, r, 1, r, 2, title, Font(name=FONT_NAME, size=11, bold=True), GRAY,
        Alignment(horizontal="center", vertical="center"))
     mg(ws1, r, 3, r, 6, detail, Font(name=FONT_NAME, size=10.5), None, wrap)
-    ws1.row_dimensions[r].height = 48
+    ws1.row_dimensions[r].height = 62
     r += 1
 ws1.row_dimensions[r].height = 8
 r += 1
@@ -202,7 +207,7 @@ mg(ws2, 1, 1, 1, 5, "評価基準（ルーブリック）", Font(name=FONT_NAME,
    None, Alignment(horizontal="center", vertical="center"))
 ws2.row_dimensions[1].height = 28
 mg(ws2, 2, 1, 2, 5, UNIT_GOAL, Font(name=FONT_NAME, size=10.5, bold=True), BLUE, wrap)
-ws2.row_dimensions[2].height = 24
+ws2.row_dimensions[2].height = 30
 ws2.row_dimensions[3].height = 8
 
 r = 4
@@ -229,7 +234,7 @@ for label, text, fill in chishiki:
 ws2.row_dimensions[r].height = 8
 r += 1
 
-r = section_header(ws2, r, "■ 思考・判断・表現（5段階）", NAVY, span=(1, 5))
+r = section_header(ws2, r, "■ 思考・判断・表現①（書くこと・5段階／第1時）", NAVY, span=(1, 5))
 mg(ws2, r, 1, r, 5,
    "評価規準：目的（高校入試の自己評価資料）に応じて、社会生活の中から題材を決め、伝えたいことを"
    "明確にして書いているか。",
@@ -259,6 +264,53 @@ mg(ws2, r, 1, r + 2, 5,
    "★ B と A の分かれ目\n"
    "必須条件①「具体的な体験」と必須条件②「そこから得た学び」の【両方】に触れていなければ、A以上には"
    "なりません。片方だけならB、両方とも曖昧・欠けていればC、題材が定まっていなければDです。",
+   Font(name=FONT_NAME, size=11, bold=True, color="C00000"),
+   PatternFill("solid", fgColor="FDEDEC"), wrap, box)
+for i in range(3):
+    ws2.row_dimensions[r + i].height = 22
+r += 3
+ws2.row_dimensions[r].height = 10
+r += 1
+
+r = section_header(ws2, r, "■ 思考・判断・表現②（聞くこと・5段階／第2時）", NAVY, span=(1, 5))
+mg(ws2, r, 1, r, 5,
+   "評価規準：話の展開を予測しながら聞き、聴き取った内容や表現の仕方を、観点に沿って具体的に評価して"
+   "いるか。",
+   Font(name=FONT_NAME, size=10.5, italic=True), None, wrap)
+ws2.row_dimensions[r].height = 22
+r += 1
+
+mg(ws2, r, 1, r, 5,
+   "評価の観点：①体験の具体性　②学びの独自性　③質問への応答からの理解の深まり",
+   Font(name=FONT_NAME, size=10, italic=True, color="1F3864"), None, wrap)
+ws2.row_dimensions[r].height = 18
+r += 1
+
+kiku = [
+    ("S", "3つの観点すべてについて、話し手の言葉を具体的な根拠として挙げながら評価し、自分なりの"
+          "気づきや考えも述べている。", PatternFill("solid", fgColor="F9E79F")),
+    ("A", "3つの観点のうち少なくとも2つについて、話し手の言葉を具体的な根拠として挙げながら評価"
+          "している。", GREEN_F),
+    ("B", "観点には触れているが、根拠がやや一般的（「わかりやすかった」「よかった」など）にとど"
+          "まっている。", ORANGE_F),
+    ("C", "観点に基づかない感想（「面白かった」「すごいと思った」など）のみで、評価として成立して"
+          "いない。", GRAY),
+    ("D", "記述がない、または発表内容と無関係な記述にとどまっている。",
+     PatternFill("solid", fgColor="F2D7D5")),
+]
+for label, text, fill in kiku:
+    mg(ws2, r, 1, r, 1, label, Font(name=FONT_NAME, size=13, bold=True), fill,
+       Alignment(horizontal="center", vertical="center"), box)
+    mg(ws2, r, 2, r, 5, text, Font(name=FONT_NAME, size=10.5), None, wrap, box)
+    ws2.row_dimensions[r].height = 34
+    r += 1
+ws2.row_dimensions[r].height = 8
+r += 1
+
+mg(ws2, r, 1, r + 2, 5,
+   "★ B と A の分かれ目\n"
+   "話し手の言葉を引用・要約するなど、具体的な根拠を伴って評価しているかどうかが分かれ目です。根拠"
+   "のない感想はB以下、根拠を伴う具体的な評価はA以上とします。",
    Font(name=FONT_NAME, size=11, bold=True, color="C00000"),
    PatternFill("solid", fgColor="FDEDEC"), wrap, box)
 for i in range(3):
@@ -316,7 +368,7 @@ r = ai_tip_row(ws3, r,
 ws3.row_dimensions[r].height = 10
 r += 1
 
-r = section_header(ws3, r, "■ 第2時：自己PR文を書こう", ORANGE_F, span=(1, 3), font_color="7D6608")
+r = section_header(ws3, r, "■ 自己PR文を書こう（第1時）", ORANGE_F, span=(1, 3), font_color="7D6608")
 ws3.row_dimensions[r].height = 6
 r += 1
 
@@ -329,20 +381,21 @@ r += 1
 mg(ws3, r, 1, r, 3,
    "必須条件　① 具体的な体験（エピソード）が書かれていること　"
    "② その体験から得た学び・成長した力が、体験と結びつけて書かれていること　"
-   "字数：制限なし（伝えたいことが十分に書けるまで、必要なだけ書いてよい）",
+   "字数：300〜500字",
    Font(name=FONT_NAME, size=10.5, italic=True), None, wrap)
-ws3.row_dimensions[r].height = 46
+ws3.row_dimensions[r].height = 34
 r += 1
 
 r = label_row(ws3, r, "構想メモ（体験→学び→高校生活への意欲を簡単に整理しよう）", height=20)
 r = input_row(ws3, r, height=70)
 r = ai_tip_row(ws3, r,
                "構想メモができたら、AIプロンプトシートの壁打ち②に貼り付け、必須条件①②が満たされて"
-               "いそうかアドバイスをもらおう。AIに代わりに書いてもらうのはNG。")
+               "いそうかアドバイスをもらおう。AIに代わりに書いてもらうのはNG。「作文例」シートも"
+               "参考にしよう。")
 ws3.row_dimensions[r].height = 6
 r += 1
 
-r = label_row(ws3, r, "自己PR文（字数に制限はありません）", height=20, fill=ORANGE_F)
+r = label_row(ws3, r, "自己PR文（300〜500字）", height=20, fill=ORANGE_F)
 ESSAY_CELL_ROW = r
 r = input_row(ws3, r, height=220, counter_target=True)
 r = ai_tip_row(ws3, r,
@@ -352,47 +405,52 @@ r = ai_tip_row(ws3, r,
 ws3.row_dimensions[r].height = 10
 r += 1
 
-r = section_header(ws3, r, "■ AI評価と自己評価", PURPLE_F, span=(1, 3), font_color="4A235A")
+# --- 第2時：グループで発表を聞き合おう ---
+r = section_header(ws3, r, "■ 第2時：グループで発表を聞き合おう", PURPLE_F, span=(1, 3),
+                    font_color="4A235A")
 ws3.row_dimensions[r].height = 6
 r += 1
 
-mg(ws3, r, 1, r, 2, "AI評価（S〜D）", Font(name=FONT_NAME, size=11, bold=True), GRAY, wrap)
-AI_EVAL_ROW = r
-c = ws3.cell(row=r, column=3)
-c.fill = PURPLE_F
-c.border = box
-c.alignment = Alignment(horizontal="center", vertical="center")
-ws3.row_dimensions[r].height = 22
+mg(ws3, r, 1, r, 3,
+   "3〜4人グループで、一人ずつ自己PR文を発表しよう。発表を聞いたら質問をし、答えてもらおう。"
+   "あなたの発表そのものは評価されません。ここでは「聞き手」として、友達の発表をどれだけ具体的に"
+   "受け止められたかを評価します。",
+   Font(name=FONT_NAME, size=10, italic=True), None, wrap)
+ws3.row_dimensions[r].height = 44
 r += 1
 
-mg(ws3, r, 1, r, 2, "自己評価（S〜D）", Font(name=FONT_NAME, size=11, bold=True), GRAY, wrap)
-SELF_EVAL_ROW = r
-c = ws3.cell(row=r, column=3)
-c.fill = GREEN_F
-c.border = box
-c.alignment = Alignment(horizontal="center", vertical="center")
-dv_grade = DataValidation(type="list", formula1='"S,A,B,C,D"', allow_blank=True)
-ws3.add_data_validation(dv_grade)
-dv_grade.add(c)
-ws3.row_dimensions[r].height = 22
+mg(ws3, r, 1, r, 3,
+   "聞き取り評価の観点　① 体験の具体性（いつ・どこで・何があったか）"
+   "　② 学びの独自性（その人にしか言えない気づきか）"
+   "　③ 応答からの理解の深まり（質問への答えで理解が深まったか）",
+   RED_FONT, None, wrap)
+ws3.row_dimensions[r].height = 46
 r += 1
-
-r = ai_tip_row(ws3, r,
-               "AI評価と自己評価を比べてみよう。同じだった？　違った場合、なぜその違いが生まれたのか"
-               "を考えることが、自分の書き方の癖に気づく学びになるよ。")
 ws3.row_dimensions[r].height = 6
 r += 1
 
-r = label_row(ws3, r, "評価差考察（AI評価と自己評価の違い・気づいたこと）", height=20)
-DIFF_ROW = r
-r = input_row(ws3, r, height=60)
-ws3.row_dimensions[r].height = 10
-r += 1
+LISTEN_ROWS = []
+for i in range(1, 4):
+    mg(ws3, r, 1, r, 1, f"発表者{['①','②','③'][i-1]}の名前", Font(name=FONT_NAME, size=10, bold=True),
+       GRAY, Alignment(vertical="center"))
+    mg(ws3, r, 2, r, 3, None, Font(name=FONT_NAME, size=11), INPUT, wrap, box)
+    name_row = r
+    ws3.row_dimensions[r].height = 20
+    r += 1
+
+    r = label_row(ws3, r,
+                   "聞き取り評価（観点①②③と、質問への応答を踏まえて、具体的に書こう）", height=32)
+    comment_row = r
+    r = input_row(ws3, r, height=70)
+    LISTEN_ROWS.append((name_row, comment_row))
+    ws3.row_dimensions[r].height = 8
+    r += 1
 
 r = section_header(ws3, r, "■ 振り返り", GREEN_F, span=(1, 3), font_color="196F3D")
 ws3.row_dimensions[r].height = 6
 r += 1
-r = label_row(ws3, r, "この単元を通して考えたこと・学んだことを書こう", height=20)
+r = label_row(ws3, r, "グループでの活動を通して、聞くことについて考えたこと・学んだことを書こう",
+               height=32)
 REFLECT_ROW = r
 r = input_row(ws3, r, height=70)
 
@@ -400,9 +458,9 @@ print("Sheet3 done. Cell map:")
 print("Q1_CELL =", f"A{Q1_CELL_ROW}")
 print("Q2_CELL =", f"A{Q2_CELL_ROW}")
 print("ESSAY_CELL =", f"A{ESSAY_CELL_ROW}")
-print("AI_EVAL_CELL =", f"C{AI_EVAL_ROW}")
-print("SELF_EVAL_CELL =", f"C{SELF_EVAL_ROW}")
-print("DIFF_CELL =", f"A{DIFF_ROW}")
+for i, (name_row, comment_row) in enumerate(LISTEN_ROWS, start=1):
+    print(f"LISTEN{i}_NAME_CELL =", f"B{name_row}")
+    print(f"LISTEN{i}_COMMENT_CELL =", f"A{comment_row}")
 print("REFLECT_CELL =", f"A{REFLECT_ROW}")
 
 # ============================================================
@@ -448,8 +506,7 @@ r = section_header(ws4, r, "② 壁打ち②（構想チェック）― 第2時�
 
 prompt2 = (
     "あなたは中学3年生の作文相談にのる先生です。中学3年生にわかりやすい言葉で答えてください。\n"
-    "私は、高校入試で提出する「自己評価資料」の自己PR欄を書こうとしています（字数に制限はありませ"
-    "ん）。\n"
+    "私は、高校入試で提出する「自己評価資料」の自己PR欄（300〜500字）を書こうとしています。\n"
     "場面：志望する高校に提出する自己評価資料の自己PR欄\n"
     "必須条件：① 具体的な体験（エピソード）が書かれていること　② その体験から得た学び・成長した力"
     "が、体験と結びつけて書かれていること\n\n"
@@ -468,12 +525,12 @@ r = section_header(ws4, r, "③ 添削（まとめ活動アドバイス）― �
 
 prompt3 = (
     "あなたは中学3年生の作文相談にのる先生です。中学3年生にわかりやすい言葉で答えてください。\n"
-    "以下は、私が書いた高校入試の自己PR文（自己評価資料の自己PR欄、字数に制限はありません）です。\n\n"
+    "以下は、私が書いた高校入試の自己PR文（自己評価資料の自己PR欄、300〜500字）です。\n\n"
     "【私の自己PR文】\n★ここに自己PR文を貼り付け★\n\n"
     "次のチェックリストを確認し、書き直した文章は書かず、ヒントだけを400字以内で教えてください。\n"
     "□ 具体的な体験（エピソード）が書かれているか\n"
     "□ その体験から得た学び・成長した力が、体験と結びつけて書かれているか\n"
-    "□ 長すぎたり短すぎたりせず、内容に見合った分量になっているか\n"
+    "□ 300〜500字に収まっているか\n"
     "□ 読み手（高校の先生）に伝わる言葉になっているか"
 )
 mg(ws4, r, 1, r, 1, prompt3, Font(name=FONT_NAME, size=10.5), INPUT, wrap, box)
@@ -482,92 +539,86 @@ ws4.row_dimensions[r].height = 230
 print("Sheet4 done")
 
 # ============================================================
-# Sheet5: 模範作文
+# Sheet5: 作文例
 # ============================================================
-ws5 = wb.create_sheet("模範作文")
+ws5 = wb.create_sheet("作文例")
 ws5.sheet_view.showGridLines = False
 ws5.column_dimensions["A"].width = 95
 
-mg(ws5, 1, 1, 1, 1, "模範作文（この単元で目指す自己PR文の例）",
+mg(ws5, 1, 1, 1, 1, "作文例（自己PR文の書き方を考えるヒント）",
    Font(name=FONT_NAME, size=15, bold=True, color="1F3864"), None,
    Alignment(horizontal="center", vertical="center"))
 ws5.row_dimensions[1].height = 28
 
 mg(ws5, 2, 1, 2, 1,
-   "これはあくまで一つの例です。テーマも書き方も人それぞれ。字数に決まりはありません。"
-   "自分の体験に置きかえて、どんなところが「良い書き方」なのかを見つけてみよう。",
+   "これから紹介するのは「模範解答」ではなく、あくまで3つの「作文例」です。優劣はありません。"
+   "それぞれ良いところが違うので、自分の体験に置きかえながら、どんな書き方が自分に合うか考えて"
+   "みよう。",
    Font(name=FONT_NAME, size=10.5, italic=True), None, wrap)
-ws5.row_dimensions[2].height = 34
+ws5.row_dimensions[2].height = 40
 ws5.row_dimensions[3].height = 8
 
 r = 4
-r = section_header(ws5, r, "■ 模範作文（望ましい例）", NAVY, span=(1, 1))
 
-model_essay = (
-    "私は文化祭のクラス合唱で、大の苦手だった音楽のパートリーダーを務めました。立候補した理由は単純"
-    "で、誰もやりたがらなかったからです。しかし、いざ始めてみると、練習初日から声がまとまらず、教室"
-    "の空気が重くなっていくのが分かりました。歌が苦手な人ほど声を出すのをためらい、私自身もどう声を"
-    "かけていいか分からず、ただ焦るばかりでした。\n"
-    "このままではいけないと思い、私は全員の音を一人ずつ聞いて回ることにしました。すると、音程がずれ"
-    "ている人の多くは、実は「どこの音を出せばいいか分からない」だけだと気づきました。そこで、苦手な"
-    "部分だけを取り出し、フレーズを短く区切って繰り返し練習する方法を提案しました。最初は面倒くさが"
-    "る声もありましたが、少しずつ声がそろい始めると、練習に来る人も増えていきました。\n"
-    "この経験を通して、私は「問題を大きいまま抱え込まず、小さく分解して一つずつ向き合う力」が身につ"
-    "いたと感じています。苦手なことから逃げずに、原因を見極めて工夫すれば、状況は変えられるのだと実"
-    "感しました。高校でも、難しい課題に直面したときほど、この経験を思い出し、一度立ち止まって整理し"
-    "てから取り組んでいきたいです。"
-)
-mg(ws5, r, 1, r, 1, model_essay, Font(name=FONT_NAME, size=11), LIGHT_BLUE, wrap, box)
-ws5.row_dimensions[r].height = 320
-r += 1
-mg(ws5, r, 1, r, 1, "（約480字。ただし、これより短くても長くても構いません。）",
-   Font(name=FONT_NAME, size=9, italic=True, color="808080"), None, wrap)
-ws5.row_dimensions[r].height = 16
-r += 1
-ws5.row_dimensions[r].height = 10
-r += 1
-
-r = section_header(ws5, r, "■ なぜこれが良い例なのか", GREEN_F, span=(1, 1), font_color="196F3D")
-points = (
-    "・「声がまとまらず教室の空気が重くなった」など、その場にいたからこそ分かる具体的な場面が描かれ"
-    "ている（必須条件①）。\n"
-    "・体験を「困難の発見→原因の分析→工夫の実行」という流れで描くことで、結果だけでなく過程（プロ"
-    "セス）が伝わる。\n"
-    "・「問題を大きいまま抱え込まず、小さく分解して一つずつ向き合う力」のように、一般的な言葉ではな"
-    "く自分にしか言えない表現で学びをまとめている（必須条件②）。\n"
-    "・最後に、その学びを高校生活にどう生かしたいかまで触れており、目的（自己PR）に応じた締めくくり"
-    "になっている。"
-)
-mg(ws5, r, 1, r, 1, points, Font(name=FONT_NAME, size=10.5), None, wrap)
-ws5.row_dimensions[r].height = 130
-r += 1
-ws5.row_dimensions[r].height = 10
-r += 1
-
-r = section_header(ws5, r, "■ 見比べてみよう（惜しい例）", ORANGE_F, span=(1, 1), font_color="7D6608")
-
-weak_examples = [
-    ("惜しい例①（体験はあるが、学びが一般的）",
-     "私は文化祭のクラス合唱でパートリーダーを務めました。最初はうまくいきませんでしたが、みんなで"
-     "協力して最後まで頑張りました。この経験から、努力することの大切さを学びました。",
-     "→ 具体的な場面（①）はあるが、「努力することの大切さ」は誰にでも当てはまる一般論。自分にしか"
-     "言えない学び（②）になっていない。"),
-    ("惜しい例②（学びはあるが、体験が抽象的）",
-     "私は合唱の練習で、問題を分解して考える力が身につきました。この力を高校生活でも生かしたいです。",
-     "→ 学び（②）は書かれているが、「合唱の練習で」だけでは、いつ・どこで・何があったのかという具体"
-     "的な体験（①）が読み手に伝わらない。"),
+examples = [
+    ("作文例①　文化祭のクラス合唱でパートリーダーを務めた話",
+     "私は文化祭のクラス合唱で、大の苦手だった音楽のパートリーダーを務めました。立候補した理由は"
+     "単純で、誰もやりたがらなかったからです。しかし、いざ始めてみると、練習初日から声がまとまら"
+     "ず、教室の空気が重くなっていくのが分かりました。歌が苦手な人ほど声を出すのをためらい、私自"
+     "身もどう声をかけていいか分からず、ただ焦るばかりでした。\n"
+     "このままではいけないと思い、私は全員の音を一人ずつ聞いて回ることにしました。すると、音程が"
+     "ずれている人の多くは、実は「どこの音を出せばいいか分からない」だけだと気づきました。そこで、"
+     "苦手な部分だけを取り出し、フレーズを短く区切って繰り返し練習する方法を提案しました。少しずつ"
+     "声がそろい始めると、練習に来る人も増えていきました。\n"
+     "この経験を通して、私は「問題を大きいまま抱え込まず、小さく分解して一つずつ向き合う力」が身に"
+     "ついたと感じています。高校でも、難しい課題に直面したときほど、この経験を思い出し、一度立ち"
+     "止まって整理してから取り組んでいきたいです。",
+     "・「声がまとまらず教室の空気が重くなった」など、その場にいたからこそ分かる具体的な場面が描か"
+     "れている。\n"
+     "・体験を「困難の発見→原因の分析→工夫の実行」という流れで描いており、結果だけでなく過程（プ"
+     "ロセス）が伝わる。\n"
+     "・「問題を大きいまま抱え込まず、小さく分解して一つずつ向き合う力」のように、一般的な言葉では"
+     "なく自分にしか言えない表現で学びをまとめている。"),
+    ("作文例②　誰にも読まれない学校新聞を作り続けた話",
+     "私は生徒会の広報委員として、毎月学校新聞を作っています。正直に言うと、去年までは「誰も読ん"
+     "でいないのでは」と感じていました。実際、配っても素通りされることが多く、やる気を失いかけた"
+     "こともあります。\n"
+     "それでも私は、記事の書き方を変えてみることにしました。行事の結果だけを伝えるのではなく、大"
+     "会前の生徒の練習風景や、準備でがんばった裏側を取材して書くようにしたのです。すると、「あの"
+     "記事、読んだよ」と声をかけてくれる同級生が少しずつ増えていきました。\n"
+     "この経験から、私は「反応がなくても、伝え方を工夫し続ければ、必ず誰かに届く」ということを学"
+     "びました。高校でも、すぐに結果が出ないことに直面したとき、あきらめずに工夫を重ねていきたい"
+     "です。",
+     "・「誰にも読まれていないかもしれない」という、あまり格好よくない本音から書き始めており、無理"
+     "に実績を飾っていない。\n"
+     "・「反応がなくても、伝え方を工夫し続ければ、必ず誰かに届く」という学びが、単なる「頑張った」"
+     "で終わらず、自分の行動指針として言語化できている。"),
+    ("作文例③　数学が苦手で、毎朝10分だけ計算問題を解くようにした話",
+     "私は数学がとても苦手で、テストのたびに平均点を大きく下回っていました。塾に通う時間もなかっ"
+     "たので、まずは朝、学校に行く前の10分間だけ、計算問題を解くことに決めました。最初は面倒に感"
+     "じ、続かない日もありましたが、友人に頼んで一緒に問題を出し合うようにしてから、習慣として定"
+     "着しました。\n"
+     "半年続けた結果、点数が大きく上がったわけではありませんが、「わからない部分がどこか」を自分"
+     "で言えるようになりました。この経験から、私は「小さくても続けられる工夫を見つける力」が身に"
+     "ついたと感じています。高校でも、苦手なことから逃げず、続けられる方法を自分で考えていきたい"
+     "です。",
+     "・「点数が大きく上がったわけではない」と正直に書いており、大きな成果がなくても、体験と学びが"
+     "具体的であれば十分に説得力のある自己PRになることを示している。\n"
+     "・「小さくても続けられる工夫を見つける力」という学びが、体験（10分間の積み重ね、友人との工"
+     "夫）と具体的に結びついている。"),
 ]
-for title, text, comment in weak_examples:
-    mg(ws5, r, 1, r, 1, title, Font(name=FONT_NAME, size=10.5, bold=True), GRAY, wrap)
-    ws5.row_dimensions[r].height = 20
+
+for title, essay, points in examples:
+    r = section_header(ws5, r, f"■ {title}", NAVY, span=(1, 1))
+    mg(ws5, r, 1, r, 1, essay, Font(name=FONT_NAME, size=11), LIGHT_BLUE, wrap, box)
+    ws5.row_dimensions[r].height = 220
     r += 1
-    mg(ws5, r, 1, r, 1, text, Font(name=FONT_NAME, size=10.5), INPUT, wrap, box)
-    ws5.row_dimensions[r].height = 60
+    r = section_header(ws5, r, "この作文例の良いところ", GREEN_F, span=(1, 1), font_color="196F3D",
+                        size=10.5)
+    mg(ws5, r, 1, r, 1, points, Font(name=FONT_NAME, size=10.5), None, wrap)
+    ws5.row_dimensions[r].height = 70
     r += 1
-    mg(ws5, r, 1, r, 1, comment, Font(name=FONT_NAME, size=9.5, italic=True, color="C00000"), None, wrap)
-    ws5.row_dimensions[r].height = 34
-    r += 1
-    ws5.row_dimensions[r].height = 8
+    ws5.row_dimensions[r].height = 14
     r += 1
 
 print("Sheet5 done")

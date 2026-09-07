@@ -18,9 +18,9 @@ wrap = Alignment(wrap_text=True, vertical="top")
 thin = Side(style="thin", color="BFBFBF")
 box = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-UNIT_GOAL = ("自分の体験（具体）とそこから得た力や成長（抽象）とのつながりを整理し、"
-             "高校入試の自己評価資料という目的に応じて、伝えたいことを明確にした自己PR文を"
-             "書くことができる。")
+UNIT_GOAL = ("自分の体験（具体）とそこから得た力や成長（抽象）とのつながりを整理して自己PR文を"
+             "書くとともに、グループでの発表を聞き合う中で、聴き取った内容を具体的な観点から"
+             "評価する力を身に付ける。")
 
 
 def mg(ws, r1, c1, r2, c2, value, font=None, fill=None, align=None, border=None):
@@ -48,20 +48,25 @@ ws1 = wb.active
 ws1.title = "回答入力"
 ws1.sheet_view.showGridLines = False
 
-HEADERS = ["クラス", "出席番号", "氏名", "発問①\n（体験）", "発問②\n（学び）",
-           "自己PR文\n（まとめ活動）", "AI評価\n(S〜D)", "AIコメント",
-           "教師最終評価\n(S〜D)", "自己評価\n(S〜D)", "評価差考察", "振り返り"]
-WIDTHS = [8, 8, 10, 26, 26, 32, 8, 30, 10, 8, 24, 24]
+HEADERS = ["クラス", "出席番号", "氏名",
+           "発問①\n（体験）", "発問②\n（学び）", "自己PR文\n（作文）",
+           "自己PR文\nAI評価(S〜D)", "自己PR文\nAIコメント", "自己PR文\n教師最終評価(S〜D)",
+           "聞き取り評価①\n（発表者・内容）", "聞き取り評価②\n（発表者・内容）",
+           "聞き取り評価③\n（発表者・内容）",
+           "聞き取り評価\nAI評価(S〜D)", "聞き取り評価\nAIコメント", "聞き取り評価\n教師最終評価(S〜D)",
+           "振り返り"]
+WIDTHS = [8, 8, 10, 24, 24, 30, 10, 26, 12, 26, 26, 26, 10, 26, 12, 22]
+TOTAL_COLS = len(HEADERS)
 
 for i, w in enumerate(WIDTHS, start=1):
     ws1.column_dimensions[ws1.cell(row=1, column=i).column_letter].width = w
 
-mg(ws1, 1, 1, 1, 12, "自己PR文を書く ―回答入力・評価シート―",
+mg(ws1, 1, 1, 1, TOTAL_COLS, "自己PR文を書く ―回答入力・評価シート―",
    Font(name=FONT_NAME, size=14, bold=True, color="FFFFFF"), NAVY,
    Alignment(horizontal="center", vertical="center"))
 ws1.row_dimensions[1].height = 26
 
-mg(ws1, 2, 1, 2, 12, "単元目標：" + UNIT_GOAL,
+mg(ws1, 2, 1, 2, TOTAL_COLS, "単元目標：" + UNIT_GOAL,
    Font(name=FONT_NAME, size=10, bold=True), BLUE, wrap)
 ws1.row_dimensions[2].height = 30
 
@@ -71,26 +76,31 @@ for col, h in enumerate(HEADERS, start=1):
     c.fill = NAVY
     c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     c.border = box
-ws1.row_dimensions[3].height = 32
+ws1.row_dimensions[3].height = 40
 
 DATA_START, DATA_END = 4, 43
 dv_grade = DataValidation(type="list", formula1='"S,A,B,C,D"', allow_blank=True)
 ws1.add_data_validation(dv_grade)
 
+AI_EVAL_COLS = (7, 13)      # G:自己PR文AI評価 M:聞き取り評価AI評価
+TEACHER_COLS = (9, 15)      # I:自己PR文教師評価 O:聞き取り評価教師評価
+INPUT_COLS = (4, 5, 6, 8, 10, 11, 12, 14, 16)
+
 for r in range(DATA_START, DATA_END + 1):
-    for col in range(1, 13):
+    for col in range(1, TOTAL_COLS + 1):
         c = ws1.cell(row=r, column=col)
         c.border = box
         c.font = Font(name=FONT_NAME, size=10)
         c.alignment = wrap
-        if col in (7, 9, 10):  # G:AI評価 I:教師評価 J:自己評価
-            c.fill = PURPLE_F if col == 7 else (GREEN_F if col == 10 else GRAY)
-        elif col in (4, 5, 6, 8, 11, 12):
+        if col in AI_EVAL_COLS:
+            c.fill = PURPLE_F
+        elif col in TEACHER_COLS:
+            c.fill = GREEN_F
+        elif col in INPUT_COLS:
             c.fill = INPUT
-    ws1.row_dimensions[r].height = 30
-    dv_grade.add(ws1.cell(row=r, column=7))
-    dv_grade.add(ws1.cell(row=r, column=9))
-    dv_grade.add(ws1.cell(row=r, column=10))
+    ws1.row_dimensions[r].height = 32
+    for col in AI_EVAL_COLS + TEACHER_COLS:
+        dv_grade.add(ws1.cell(row=r, column=col))
 
 # 記入例（1行のみ、実データではないことが分かるよう色で明示）
 example_row = [
@@ -102,8 +112,14 @@ example_row = [
     "して繰り返し練習する方法を提案しました。この経験から、私は「問題の本質を見極めて、小さく分"
     "解して向き合う力」が身についたと感じています。高校でも、難しい課題ほど一度立ち止まって整理"
     "してから取り組みたいです。",
-    "S", "体験と学びの両方が具体的で、独自の言葉で表現されている。",
-    "S", "S", "AI評価と自己評価が一致した。", "自分の言葉で書けたことが自信になった。",
+    "S", "体験と学びの両方が具体的で、独自の言葉で表現されている。", "S",
+    "鈴木さん：練習で声が小さかった人に個別に声をかけていたのが良かった。誰が苦手か具体的に"
+    "分かって伝わった。",
+    "佐藤さん：委員会活動で決め方に困ったとき、多数決ではなく一人ずつ意見を聞いたと言っていて、"
+    "配慮の具体例が分かりやすかった。",
+    "",
+    "S", "話し手の言葉を引用しながら、2人分とも具体的な根拠を挙げて評価できている。", "S",
+    "友達の発表を聞いて、自分にはなかった視点に気づけた。",
 ]
 for col, v in enumerate(example_row, start=1):
     c = ws1.cell(row=DATA_START, column=col, value=v)
@@ -130,11 +146,12 @@ ws2.row_dimensions[2].height = 8
 settings = [
     (3, "AIモデル", "gemini-2.0-flash"),
     (4, "Temperature", 0.1),
-    (6, "評価対象", "自己PR文（回答入力シートF列）"),
-    (7, "知識・技能", "3段階（A/B/C）"),
-    (8, "思考・判断・表現", "5段階（S/A/B/C/D）"),
-    (10, "データ範囲", "回答入力シート 4行目〜43行目"),
-    (11, "ClassroomフォルダID", "（ここにフォルダIDを入力）"),
+    (6, "評価対象①", "自己PR文（回答入力シートF列、書くこと）"),
+    (7, "評価対象②", "聞き取り評価①〜③（回答入力シートJ〜L列、聞くこと）"),
+    (8, "知識・技能", "3段階（A/B/C）"),
+    (9, "思考・判断・表現（書くこと／聞くこと）", "各5段階（S/A/B/C/D）"),
+    (11, "データ範囲", "回答入力シート 4行目〜43行目"),
+    (12, "ClassroomフォルダID", "（ここにフォルダIDを入力）"),
 ]
 for row, label, value in settings:
     c1 = ws2.cell(row=row, column=1, value=label)
@@ -149,12 +166,12 @@ for row, label, value in settings:
     c2.alignment = Alignment(vertical="center", wrap_text=True)
     ws2.row_dimensions[row].height = 20
 
-mg(ws2, 13, 1, 15, 2,
+mg(ws2, 14, 1, 16, 2,
    "※ Gemini APIキーは、このシートには入力しません。GASの「プロジェクトの設定」→"
    "「スクリプト プロパティ」で GEMINI_API_KEY を設定してください。",
    Font(name=FONT_NAME, size=9.5, italic=True, color="C00000"), None, wrap)
 for i in range(3):
-    ws2.row_dimensions[13 + i].height = 18
+    ws2.row_dimensions[14 + i].height = 18
 
 print("Sheet2 done")
 
