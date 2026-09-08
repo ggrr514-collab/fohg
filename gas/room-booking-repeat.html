@@ -1,0 +1,668 @@
+<!--
+  ============================================================
+  特別教室の予約: 「指定した日まで毎週同じ曜日・校時」の繰り返し予約
+  ============================================================
+  【前提】
+    room-booking.html（特別教室の予約表）を適用済みであること。
+    このパッチは、その適用後の Code.gs / index.html に対する差分です。
+
+  【できること】
+  ・予約画面に「🔁 毎週同じ曜日・校時で繰り返す」のチェックが付きます。
+    チェックすると「この日まで」の日付欄が出て、何回分になるかが表示されます。
+    最長で1年先（53回）までです。
+  ・「予約する」を押すと、開始日から指定日まで1週間おきに予約が入ります。
+    休業日（行事取込で授業のない日）と、既に他の予約が入っているマスは飛ばし、
+    「〇件を予約しました。登録できなかった日: 9/24（休業日）、10/1（北條先生の予約あり）」
+    のように結果が表示されます。
+  ・繰り返しで入れた予約には 🔁 の印が付きます。1回ずつの内容変更は
+    今までどおりです（その回だけ変わります）。
+  ・繰り返しの予約を開くと「🔁 今後の分もすべて削除」ボタンが付きます
+    （その日以降の同じ繰り返しをまとめて削除。過去の分は残ります）。
+    削除できるのは予約した本人と管理者です。
+  ・「特別教室予約」シートに O列「繰り返しID」が増えます（自動で付きます）。
+
+  ⚠️ 重要:
+  ・①〜⑤は Code.gs、⑥〜⑬は index.html です。
+  ・「...」のような省略は一切使っていません。すべてそのままコピーできます。
+  ・<script>や<style>タグは新しく追加しないでください。
+  ============================================================
+-->
+
+<!--
+  ==========================================================================
+  ① Code.gs: 予約シートに「繰り返しID」列を持たせる（関数をまるごと置き換え）
+  ==========================================================================
+  探す:
+-->
+// 予約シートを取得（なければ作成）
+function getRoomBookingSheet_(ss) {
+  let sh = ss.getSheetByName(ROOM_BOOKING_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(ROOM_BOOKING_SHEET_NAME);
+    sh.getRange(1, 1, 1, 14).setValues([['ID', '日付', '教室', '校時', '学年・クラス', '用途', '備考', '予約者メール', '予約者氏名', '投稿日時', '削除', '最終更新者メール', '最終更新者氏名', '最終更新日時']]);
+    sh.getRange(1, 1, 1, 14).setFontWeight('bold').setBackground('#2c5f8d').setFontColor('#ffffff');
+    sh.setFrozenRows(1);
+    // 校時（"1"）とクラス（"2-1"）が日付や数値に化けないように文字列列にする
+    sh.getRange(2, 4, sh.getMaxRows() - 1, 2).setNumberFormat('@');
+  }
+  return sh;
+}
+
+<!--
+  これに置き換える:
+-->
+// 予約シートを取得（なければ作成）
+//   O列「繰り返しID」: 毎週の繰り返しで入れた予約に共通のID（単発の予約は空）
+function getRoomBookingSheet_(ss) {
+  let sh = ss.getSheetByName(ROOM_BOOKING_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(ROOM_BOOKING_SHEET_NAME);
+    sh.getRange(1, 1, 1, 15).setValues([['ID', '日付', '教室', '校時', '学年・クラス', '用途', '備考', '予約者メール', '予約者氏名', '投稿日時', '削除', '最終更新者メール', '最終更新者氏名', '最終更新日時', '繰り返しID']]);
+    sh.getRange(1, 1, 1, 15).setFontWeight('bold').setBackground('#2c5f8d').setFontColor('#ffffff');
+    sh.setFrozenRows(1);
+    // 校時（"1"）とクラス（"2-1"）が日付や数値に化けないように文字列列にする
+    sh.getRange(2, 4, sh.getMaxRows() - 1, 2).setNumberFormat('@');
+  } else if (!String(sh.getRange(1, 15).getValue() || '').trim()) {
+    // 繰り返し機能より前に作られたシートには O列の見出しを足す
+    sh.getRange(1, 15).setValue('繰り返しID').setFontWeight('bold').setBackground('#2c5f8d').setFontColor('#ffffff');
+  }
+  return sh;
+}
+
+
+<!--
+  ==========================================================================
+  ② Code.gs: 画面用の項目に「繰り返しID」を含める
+  ==========================================================================
+  探す（roomBookingRowToItem_ 関数の最後の項目）:
+-->
+    isEdited: updatedAt instanceof Date && createdAt instanceof Date && updatedAt.getTime() !== createdAt.getTime()
+
+<!--
+  これに置き換える（1行追加。isEdited の行末にカンマが付きます）:
+-->
+    isEdited: updatedAt instanceof Date && createdAt instanceof Date && updatedAt.getTime() !== createdAt.getTime(),
+    seriesId: String(row[14] || '').trim()
+
+
+<!--
+  ==========================================================================
+  ③ Code.gs: 重なりの判定を、読み込んだデータに対しても使えるようにする
+  ==========================================================================
+  探す（findRoomBookingConflict_ 関数の先頭3行）:
+-->
+function findRoomBookingConflict_(sh, date, room, slot, excludeId) {
+  if (sh.getLastRow() < 2) return null;
+  const data = sh.getRange(2, 1, sh.getLastRow() - 1, 11).getValues();
+
+<!--
+  これに置き換える:
+-->
+function findRoomBookingConflict_(sh, date, room, slot, excludeId) {
+  if (sh.getLastRow() < 2) return null;
+  return findRoomBookingConflictIn_(sh.getRange(2, 1, sh.getLastRow() - 1, 11).getValues(), date, room, slot, excludeId);
+}
+
+// 読み込み済みのデータ（2行目以降の配列）に対する重なりの判定
+function findRoomBookingConflictIn_(data, date, room, slot, excludeId) {
+  if (!data || !data.length) return null;
+
+
+<!--
+  ==========================================================================
+  ④ Code.gs: 予約の追加を、繰り返しに対応させる（関数をまるごと置き換え）
+  ==========================================================================
+  探す（addRoomBooking 関数の全体。先頭のコメントから閉じカッコまで）:
+-->
+/**
+ * 特別教室を予約
+ * payload: { date, room, slot, classes, purpose, note }
+ */
+function addRoomBooking(payload) {
+  const check = requireEditUser_();
+  if (check.error) return check.error;
+  const user = check.user;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const v = validateRoomBookingPayload_(ss, payload);
+  if (v.error) return { ok: false, error: v.error };
+
+  const sh = getRoomBookingSheet_(ss);
+  const conflict = findRoomBookingConflict_(sh, v.date, v.room, v.slot, null);
+  if (conflict) return { ok: false, error: conflictMessage_(conflict) };
+
+  const id = generateId_('B');
+  const now = new Date();
+  sh.appendRow([id, v.date, v.room, v.slot, v.classes, v.purpose, v.note, user.email, user.name, now, false, '', '', '']);
+  return { ok: true, id: id };
+}
+
+<!--
+  これに置き換える:
+-->
+/**
+ * 特別教室を予約
+ * payload: { date, room, slot, classes, purpose, note, repeatUntil }
+ *   repeatUntil（任意）: この日まで毎週同じ曜日・校時で繰り返す（yyyy-MM-dd）
+ * 戻り値: { ok, id, created, skipped: [{ date, reason }], seriesId }
+ */
+const ROOM_BOOKING_REPEAT_MAX_WEEKS = 53;
+
+function addRoomBooking(payload) {
+  const check = requireEditUser_();
+  if (check.error) return check.error;
+  const user = check.user;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const v = validateRoomBookingPayload_(ss, payload);
+  if (v.error) return { ok: false, error: v.error };
+
+  const sh = getRoomBookingSheet_(ss);
+  const now = new Date();
+
+  // 繰り返しの終了日
+  let repeatUntil = null;
+  if (payload && payload.repeatUntil) {
+    repeatUntil = parseDate_(payload.repeatUntil);
+    if (isNaN(repeatUntil.getTime())) return { ok: false, error: '繰り返しの終了日の形式が正しくありません' };
+    repeatUntil = new Date(repeatUntil.getFullYear(), repeatUntil.getMonth(), repeatUntil.getDate());
+    if (repeatUntil <= v.date) repeatUntil = null;   // 開始日と同じか前なら単発扱い
+  }
+
+  // 単発の予約
+  if (!repeatUntil) {
+    const conflict = findRoomBookingConflict_(sh, v.date, v.room, v.slot, null);
+    if (conflict) return { ok: false, error: conflictMessage_(conflict) };
+    const id = generateId_('B');
+    sh.appendRow([id, v.date, v.room, v.slot, v.classes, v.purpose, v.note, user.email, user.name, now, false, '', '', '', '']);
+    return { ok: true, id: id, created: 1, skipped: [], seriesId: '' };
+  }
+
+  // 毎週の繰り返し: 開始日から1週間おきに終了日まで
+  const dates = [];
+  for (let i = 0; i < ROOM_BOOKING_REPEAT_MAX_WEEKS; i++) {
+    const d = new Date(v.date.getFullYear(), v.date.getMonth(), v.date.getDate() + i * 7);
+    if (d > repeatUntil) break;
+    dates.push(d);
+  }
+  if (!dates.length) return { ok: false, error: '繰り返しの日付がありません' };
+
+  const existing = sh.getLastRow() >= 2 ? sh.getRange(2, 1, sh.getLastRow() - 1, 11).getValues() : [];
+  const seriesId = generateId_('S');
+  const rows = [];
+  const skipped = [];
+  dates.forEach(d => {
+    const dateStr = Utilities.formatDate(d, 'JST', 'yyyy-MM-dd');
+    let eventRow = null;
+    try { eventRow = findEventRow_(ss, d); } catch (e) { eventRow = null; }
+    if (eventRow && !rowHasClasses_(eventRow)) {
+      skipped.push({ date: dateStr, reason: '休業日' });
+      return;
+    }
+    const conflict = findRoomBookingConflictIn_(existing, d, v.room, v.slot, null);
+    if (conflict) {
+      skipped.push({ date: dateStr, reason: (conflict.name || '他の先生') + '先生の予約あり' });
+      return;
+    }
+    rows.push([generateId_('B'), d, v.room, v.slot, v.classes, v.purpose, v.note, user.email, user.name, now, false, '', '', '', seriesId]);
+  });
+
+  if (rows.length) {
+    const startRow = sh.getLastRow() + 1;
+    const need = startRow + rows.length - 1 - sh.getMaxRows();
+    if (need > 0) sh.insertRowsAfter(sh.getMaxRows(), need);
+    sh.getRange(startRow, 4, rows.length, 2).setNumberFormat('@');
+    sh.getRange(startRow, 1, rows.length, 15).setValues(rows);
+  }
+  return {
+    ok: true,
+    id: rows.length ? rows[0][0] : null,
+    created: rows.length,
+    skipped: skipped,
+    seriesId: rows.length ? seriesId : ''
+  };
+}
+
+
+<!--
+  ==========================================================================
+  ⑤ Code.gs: 削除を「この回だけ / 今後すべて」に対応させる（関数をまるごと置き換え）
+  ==========================================================================
+  探す（deleteRoomBooking 関数の全体。先頭のコメントから閉じカッコまで）:
+-->
+/**
+ * 予約を削除（予約した本人または管理者のみ）
+ */
+function deleteRoomBooking(id) {
+  const check = requireEditUser_();
+  if (check.error) return check.error;
+  const user = check.user;
+  if (!id) return { ok: false, error: 'IDが指定されていません' };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = getRoomBookingSheet_(ss);
+  const data = sh.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) !== String(id)) continue;
+    const teachers = getTeachersList_(ss);
+    const isAdmin = teachers.some(t => t.email === user.email && t.isAdmin);
+    if (data[i][7] !== user.email && !isAdmin) {
+      return { ok: false, error: '削除できるのは予約した本人と管理者だけです（内容の変更は誰でもできます）' };
+    }
+    sh.getRange(i + 1, 11).setValue(true);
+    sh.getRange(i + 1, 12, 1, 3).setValues([[user.email, user.name, new Date()]]);
+    return { ok: true };
+  }
+  return { ok: false, error: '対象の予約が見つかりません: ' + id };
+}
+
+<!--
+  これに置き換える:
+-->
+/**
+ * 予約を削除（予約した本人または管理者のみ）
+ *   scope が 'series' のときは、同じ繰り返しの「その日以降」の予約をまとめて削除する
+ */
+function deleteRoomBooking(id, scope) {
+  const check = requireEditUser_();
+  if (check.error) return check.error;
+  const user = check.user;
+  if (!id) return { ok: false, error: 'IDが指定されていません' };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = getRoomBookingSheet_(ss);
+  const data = sh.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) !== String(id)) continue;
+    const teachers = getTeachersList_(ss);
+    const isAdmin = teachers.some(t => t.email === user.email && t.isAdmin);
+    if (data[i][7] !== user.email && !isAdmin) {
+      return { ok: false, error: '削除できるのは予約した本人と管理者だけです（内容の変更は誰でもできます）' };
+    }
+    const now = new Date();
+    const seriesId = String(data[i][14] || '').trim();
+
+    if (scope === 'series' && seriesId) {
+      const base = data[i][1] instanceof Date ? data[i][1] : new Date(data[i][1]);
+      const baseDay = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+      let deleted = 0;
+      for (let j = 1; j < data.length; j++) {
+        if (String(data[j][14] || '').trim() !== seriesId) continue;
+        if (data[j][10] === true) continue;
+        const d = data[j][1] instanceof Date ? data[j][1] : new Date(data[j][1]);
+        if (isNaN(d.getTime()) || d < baseDay) continue;   // 過去の分は残す
+        sh.getRange(j + 1, 11).setValue(true);
+        sh.getRange(j + 1, 12, 1, 3).setValues([[user.email, user.name, now]]);
+        deleted++;
+      }
+      return { ok: true, deleted: deleted };
+    }
+
+    sh.getRange(i + 1, 11).setValue(true);
+    sh.getRange(i + 1, 12, 1, 3).setValues([[user.email, user.name, now]]);
+    return { ok: true, deleted: 1 };
+  }
+  return { ok: false, error: '対象の予約が見つかりません: ' + id };
+}
+
+
+<!--
+  ==========================================================================
+  ⑥ index.html: 予約モーダルの日付欄が変わったら回数の表示を更新する
+  ==========================================================================
+  探す（予約モーダルの中）:
+-->
+          <input type="date" id="rbDate" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:3px;font-family:inherit;font-size:13px;box-sizing:border-box;">
+
+<!--
+  これに置き換える:
+-->
+          <input type="date" id="rbDate" onchange="updateRoomRepeatInfo()" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:3px;font-family:inherit;font-size:13px;box-sizing:border-box;">
+
+
+<!--
+  ==========================================================================
+  ⑦ index.html: 予約モーダルに「毎週繰り返す」の欄を追加する
+  ==========================================================================
+  探す（予約モーダルの中。この行の「直前」に追加）:
+-->
+      <div id="rbMeta" style="font-size:11px;color:var(--ink-faint);margin-bottom:10px;"></div>
+
+<!--
+  上の行の直前に、次を追加する:
+-->
+      <div id="rbRepeatWrap" style="margin-bottom:10px;background:var(--paper);border:1px dashed var(--line);border-radius:4px;padding:8px 10px;">
+        <label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="rbRepeat" onchange="toggleRoomRepeat(this.checked)"> 🔁 毎週同じ曜日・校時で繰り返す</label>
+        <div id="rbRepeatBody" style="display:none;margin-top:6px;">
+          <div style="font-size:11px;color:var(--ink-soft);margin-bottom:2px;">この日まで（最長1年）:</div>
+          <input type="date" id="rbRepeatUntil" onchange="updateRoomRepeatInfo()" style="padding:5px 8px;border:1px solid var(--line);border-radius:3px;font-family:inherit;font-size:13px;">
+          <div id="rbRepeatInfo" style="font-size:11.5px;color:var(--accent-deep);font-weight:600;margin-top:4px;"></div>
+          <div style="font-size:10.5px;color:var(--ink-faint);margin-top:4px;line-height:1.4;">休業日（行事取込で授業のない日）と、既に他の予約があるマスは飛ばして、結果をお知らせします。</div>
+        </div>
+      </div>
+
+
+<!--
+  ==========================================================================
+  ⑧ index.html: 「今後の分もすべて削除」ボタンを追加する
+  ==========================================================================
+  探す（予約モーダルの中）:
+-->
+        <button id="rbDeleteBtn" onclick="deleteRoomBookingFromModal()" style="display:none;background:#fff;border:1px solid var(--line);color:var(--danger);padding:8px 14px;border-radius:4px;cursor:pointer;font-size:13px;">× 削除</button>
+
+<!--
+  これに置き換える:
+-->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button id="rbDeleteBtn" onclick="deleteRoomBookingFromModal()" style="display:none;background:#fff;border:1px solid var(--line);color:var(--danger);padding:8px 14px;border-radius:4px;cursor:pointer;font-size:13px;">× 削除</button>
+          <button id="rbDeleteSeriesBtn" onclick="deleteRoomBookingSeriesFromModal()" style="display:none;background:#fff;border:1px solid var(--line);color:var(--danger);padding:8px 14px;border-radius:4px;cursor:pointer;font-size:13px;">🔁 今後の分もすべて削除</button>
+        </div>
+
+
+<!--
+  ==========================================================================
+  ⑨ index.html（<script> の中）: 表のマスに 🔁 の印を付ける
+  ==========================================================================
+  探す（buildRoomBookingGridHtml 関数の中）:
+-->
+          '<span class="rb-cell-sub">' + escapeHtml(it.classes ? it.purpose : (it.createdByName || '')) + '</span>' +
+
+<!--
+  これに置き換える:
+-->
+          '<span class="rb-cell-sub">' + (it.seriesId ? '🔁' : '') + escapeHtml(it.classes ? it.purpose : (it.createdByName || '')) + '</span>' +
+
+
+<!--
+  ==========================================================================
+  ⑩ index.html（<script> の中）: 一覧にも 🔁 の印を付ける
+  ==========================================================================
+  探す（buildRoomBookingListHtml 関数の中）:
+-->
+      '<span class="rb-list-by">' + escapeHtml(it.createdByName || '') + '</span>' +
+
+<!--
+  これに置き換える:
+-->
+      '<span class="rb-list-by">' + (it.seriesId ? '🔁 ' : '') + escapeHtml(it.createdByName || '') + '</span>' +
+
+
+<!--
+  ==========================================================================
+  ⑪ index.html（<script> の中）: 予約モーダルを開くときに繰り返し欄を整える
+  ==========================================================================
+  探す（openRoomBookingModal 関数の末尾）:
+-->
+  var meta = document.getElementById('rbMeta');
+  var delBtn = document.getElementById('rbDeleteBtn');
+  if (editItem) {
+    var metaText = '予約: ' + (editItem.createdByName || '') + ' ' + shortTime(editItem.createdAt);
+    if (editItem.isEdited) metaText += '　✎ ' + (editItem.updatedByName || '') + ' ' + shortTime(editItem.updatedAt);
+    meta.textContent = metaText;
+    var canDelete = currentUser && (currentUser.email === editItem.createdByEmail || currentUser.isAdmin);
+    delBtn.style.display = canDelete ? '' : 'none';
+  } else {
+    meta.textContent = '';
+    delBtn.style.display = 'none';
+  }
+  document.getElementById('roomBookingModal').style.display = 'flex';
+}
+
+<!--
+  これに置き換える:
+-->
+  var meta = document.getElementById('rbMeta');
+  var delBtn = document.getElementById('rbDeleteBtn');
+  var delSeriesBtn = document.getElementById('rbDeleteSeriesBtn');
+  var repeatWrap = document.getElementById('rbRepeatWrap');
+  document.getElementById('rbRepeat').checked = false;
+  document.getElementById('rbRepeatUntil').value = '';
+  document.getElementById('rbRepeatBody').style.display = 'none';
+  document.getElementById('rbRepeatInfo').textContent = '';
+  if (editItem) {
+    var metaText = '予約: ' + (editItem.createdByName || '') + ' ' + shortTime(editItem.createdAt);
+    if (editItem.isEdited) metaText += '　✎ ' + (editItem.updatedByName || '') + ' ' + shortTime(editItem.updatedAt);
+    if (editItem.seriesId) metaText += '　🔁 毎週の繰り返し予約の1回（ここで変えるとこの回だけ変わります）';
+    meta.textContent = metaText;
+    var canDelete = currentUser && (currentUser.email === editItem.createdByEmail || currentUser.isAdmin);
+    delBtn.style.display = canDelete ? '' : 'none';
+    delSeriesBtn.style.display = (canDelete && editItem.seriesId) ? '' : 'none';
+    repeatWrap.style.display = 'none';
+  } else {
+    meta.textContent = '';
+    delBtn.style.display = 'none';
+    delSeriesBtn.style.display = 'none';
+    repeatWrap.style.display = '';
+  }
+  document.getElementById('roomBookingModal').style.display = 'flex';
+}
+
+
+<!--
+  ==========================================================================
+  ⑫ index.html（<script> の中）: 予約の送信を繰り返しに対応させる（関数をまるごと置き換え）
+  ==========================================================================
+  探す（submitRoomBooking 関数の全体）:
+-->
+function submitRoomBooking() {
+  var date = document.getElementById('rbDate').value;
+  var room = document.getElementById('rbRoom').value;
+  var slotBtn = document.querySelector('#rbSlotGrid .rb-slot-btn.selected');
+  var slot = slotBtn ? slotBtn.getAttribute('data-slot') : '';
+  var purpose = document.getElementById('rbPurpose').value.trim();
+  if (!date) { alert('日付を指定してください'); return; }
+  if (!room) { alert('教室を選んでください'); return; }
+  if (!slot) { alert('校時を選んでください'); return; }
+  if (!purpose) { alert('用途を入力してください'); return; }
+
+  var payload = {
+    date: date, room: room, slot: slot,
+    classes: document.getElementById('rbClasses').value.trim(),
+    purpose: purpose,
+    note: document.getElementById('rbNote').value.trim()
+  };
+  var isEdit = !!rbModalState.editId;
+  if (isEdit) payload.id = rbModalState.editId;
+
+  var btn = document.getElementById('rbSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = isEdit ? '更新中...' : '予約中...';
+
+  function done(res) {
+    btn.disabled = false;
+    btn.textContent = isEdit ? '更新する' : '予約する';
+    if (res && res.ok) {
+      document.getElementById('rbResult').innerHTML = '<span style="color:var(--accent);">✓ ' + (isEdit ? '更新' : '予約') + 'しました</span>';
+      setTimeout(function() {
+        closeRoomBookingModal();
+        afterRoomBookingChanged(date, isEdit && rbModalState.editItem ? rbModalState.editItem.date : null);
+      }, 400);
+    } else {
+      document.getElementById('rbResult').innerHTML = '<span style="color:var(--danger);">' + escapeHtml(res && res.error ? res.error : '不明なエラー') + '</span>';
+    }
+  }
+  function fail(err) {
+    btn.disabled = false;
+    btn.textContent = isEdit ? '更新する' : '予約する';
+    document.getElementById('rbResult').innerHTML = '<span style="color:var(--danger);">通信エラー: ' + escapeHtml(err && err.message ? err.message : String(err)) + '</span>';
+  }
+  if (isEdit) {
+    google.script.run.withSuccessHandler(done).withFailureHandler(fail).updateRoomBooking(payload);
+  } else {
+    google.script.run.withSuccessHandler(done).withFailureHandler(fail).addRoomBooking(payload);
+  }
+}
+
+<!--
+  これに置き換える:
+-->
+function submitRoomBooking() {
+  var date = document.getElementById('rbDate').value;
+  var room = document.getElementById('rbRoom').value;
+  var slotBtn = document.querySelector('#rbSlotGrid .rb-slot-btn.selected');
+  var slot = slotBtn ? slotBtn.getAttribute('data-slot') : '';
+  var purpose = document.getElementById('rbPurpose').value.trim();
+  if (!date) { alert('日付を指定してください'); return; }
+  if (!room) { alert('教室を選んでください'); return; }
+  if (!slot) { alert('校時を選んでください'); return; }
+  if (!purpose) { alert('用途を入力してください'); return; }
+
+  var isEdit = !!rbModalState.editId;
+  var repeatUntil = '';
+  if (!isEdit && document.getElementById('rbRepeat').checked) {
+    repeatUntil = document.getElementById('rbRepeatUntil').value;
+    if (!repeatUntil) { alert('繰り返しの終了日（この日まで）を指定してください'); return; }
+    if (repeatUntil <= date) { alert('繰り返しの終了日は、開始日より後の日付にしてください'); return; }
+    var weeks = countRoomRepeatWeeks(date, repeatUntil);
+    if (weeks > 53) { alert('繰り返しは最長1年（53回）までです。終了日を近い日にしてください'); return; }
+    if (!confirm(formatDateJa(date) + ' から ' + formatDateJa(repeatUntil) + ' まで、毎週' + weekdayJaOf(date) + '曜日の' + roomSlotLongLabel(slot) + 'に ' + room + ' を ' + weeks + '回分予約します。よろしいですか？')) return;
+  }
+
+  var payload = {
+    date: date, room: room, slot: slot,
+    classes: document.getElementById('rbClasses').value.trim(),
+    purpose: purpose,
+    note: document.getElementById('rbNote').value.trim()
+  };
+  if (isEdit) payload.id = rbModalState.editId;
+  if (repeatUntil) payload.repeatUntil = repeatUntil;
+
+  var btn = document.getElementById('rbSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = isEdit ? '更新中...' : '予約中...';
+
+  function done(res) {
+    btn.disabled = false;
+    btn.textContent = isEdit ? '更新する' : '予約する';
+    if (res && res.ok) {
+      var skipped = (res.skipped || []);
+      var msg;
+      if (!isEdit && repeatUntil) {
+        msg = '✓ ' + (res.created || 0) + '件を予約しました';
+        if (skipped.length) {
+          msg += '。登録できなかった日: ' + skipped.map(function(s) { return formatDateJa(s.date) + '（' + s.reason + '）'; }).join('、');
+        }
+      } else {
+        msg = '✓ ' + (isEdit ? '更新' : '予約') + 'しました';
+      }
+      document.getElementById('rbResult').innerHTML = '<span style="color:' + (skipped.length ? 'var(--warn)' : 'var(--accent)') + ';">' + escapeHtml(msg) + '</span>';
+      var editDate = isEdit && rbModalState.editItem ? rbModalState.editItem.date : null;
+      if (skipped.length) {
+        // 飛ばした日があるときは結果を読めるように閉じない（キャンセルで閉じる）
+        btn.disabled = true;
+        afterRoomBookingChanged(date, editDate);
+        return;
+      }
+      setTimeout(function() {
+        closeRoomBookingModal();
+        afterRoomBookingChanged(date, editDate);
+      }, 400);
+    } else {
+      document.getElementById('rbResult').innerHTML = '<span style="color:var(--danger);">' + escapeHtml(res && res.error ? res.error : '不明なエラー') + '</span>';
+    }
+  }
+  function fail(err) {
+    btn.disabled = false;
+    btn.textContent = isEdit ? '更新する' : '予約する';
+    document.getElementById('rbResult').innerHTML = '<span style="color:var(--danger);">通信エラー: ' + escapeHtml(err && err.message ? err.message : String(err)) + '</span>';
+  }
+  if (isEdit) {
+    google.script.run.withSuccessHandler(done).withFailureHandler(fail).updateRoomBooking(payload);
+  } else {
+    google.script.run.withSuccessHandler(done).withFailureHandler(fail).addRoomBooking(payload);
+  }
+}
+
+
+<!--
+  ==========================================================================
+  ⑬ index.html（<script> の中）: 繰り返し欄の切り替えと、まとめて削除の関数を追加する
+  ==========================================================================
+  探す（この行の「直前」に追加）:
+-->
+// 予約の追加・変更・削除のあと、開いている画面を読み直す
+
+<!--
+  上の行の直前に、次を追加する:
+-->
+// ---- 毎週の繰り返し ----
+function weekdayJaOf(dateStr) {
+  var d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  return ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+}
+
+// 開始日から終了日まで、1週間おきに何回あるか
+function countRoomRepeatWeeks(startStr, untilStr) {
+  var s = new Date(startStr);
+  var u = new Date(untilStr);
+  if (isNaN(s.getTime()) || isNaN(u.getTime()) || u < s) return 0;
+  return Math.floor((u.getTime() - s.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+}
+
+function toggleRoomRepeat(on) {
+  var body = document.getElementById('rbRepeatBody');
+  body.style.display = on ? '' : 'none';
+  if (on) {
+    var untilEl = document.getElementById('rbRepeatUntil');
+    var date = document.getElementById('rbDate').value;
+    untilEl.min = date || formatDate(new Date());
+    if (!untilEl.value && date) {
+      // 初期値は開始日の約3か月後（同じ曜日の12週後）
+      var d = new Date(date);
+      d.setDate(d.getDate() + 7 * 12);
+      untilEl.value = formatDate(d);
+    }
+  }
+  updateRoomRepeatInfo();
+}
+
+function updateRoomRepeatInfo() {
+  var info = document.getElementById('rbRepeatInfo');
+  if (!info) return;
+  if (!document.getElementById('rbRepeat').checked) { info.textContent = ''; return; }
+  var date = document.getElementById('rbDate').value;
+  var until = document.getElementById('rbRepeatUntil').value;
+  document.getElementById('rbRepeatUntil').min = date || '';
+  if (!date || !until) { info.textContent = ''; return; }
+  var weeks = countRoomRepeatWeeks(date, until);
+  if (weeks <= 0) { info.textContent = '終了日は開始日より後にしてください'; return; }
+  if (weeks > 53) { info.textContent = '最長1年（53回）までです。終了日を近い日にしてください'; return; }
+  info.textContent = '毎週' + weekdayJaOf(date) + '曜日 × ' + weeks + '回（' + formatDateJa(date) + '〜' + formatDateJa(until) + '）';
+}
+
+// 繰り返しの予約を「その日以降まとめて」削除する
+function deleteRoomBookingSeriesFromModal() {
+  if (!rbModalState.editId || !rbModalState.editItem || !rbModalState.editItem.seriesId) return;
+  var item = rbModalState.editItem;
+  if (!confirm(formatDateJa(item.date) + ' 以降の、毎週' + weekdayJaOf(item.date) + '曜日 ' + roomSlotLongLabel(item.slot) + ' の ' + item.room + ' の予約をすべて削除しますか？\n（それより前の分は残ります）')) return;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) {
+        closeRoomBookingModal();
+        afterRoomBookingChanged(item.date, null);
+        if (document.getElementById('roomWeekModal').style.display !== 'flex' && document.getElementById('myRoomBookingModal').style.display !== 'flex') {
+          alert((res.deleted || 0) + '件を削除しました');
+        }
+      } else {
+        alert('エラー: ' + (res && res.error ? res.error : '不明'));
+      }
+    })
+    .withFailureHandler(function(err) { alert('通信エラー: ' + (err && err.message ? err.message : String(err))); })
+    .deleteRoomBooking(rbModalState.editId, 'series');
+}
+
+
+<!--
+  ============================================================
+  適用後にやること
+  ============================================================
+  1. Code.gs の APP_VERSION を1つ上げて、新バージョンとしてデプロイする
+  2. 「特別教室予約」シートを既に使っている場合、次に予約を1件入れたときに
+     O列「繰り返しID」の見出しが自動で付きます（手で足す必要はありません）
+
+  確認方法:
+  ・空きマスを押して「🔁 毎週同じ曜日・校時で繰り返す」にチェック →
+    「この日まで」に日付を入れると「毎週火曜日 × 12回（9/16〜12/2）」のように
+    回数が出る → 「予約する」→ 確認のダイアログ → 「〇件を予約しました」
+  ・「📅 週間予約表」で翌週以降を見ると、同じマスに 🔁 付きで入っている
+  ・🔁 付きのマスを開くと「🔁 今後の分もすべて削除」が出て、まとめて消せる
+  ・途中の1回だけ内容を変えても、他の回は変わらない
+  ============================================================
+-->
