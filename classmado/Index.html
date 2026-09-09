@@ -426,16 +426,16 @@
     ];
   }
 
+  // 個人の提出状況（未提出／提出済み）でタブを分ける。締切の近さ（soon/overdue）は
+  // 「未提出」タブの中でバッジ表示として引き続き見える。
   var TASK_FILTERS = [
-    {key:"soon", label:"締切が近い"},
-    {key:"overdue", label:"期限切れ"},
+    {key:"todo", label:"未提出"},
     {key:"done", label:"提出済み"},
     {key:"all", label:"すべて"}
   ];
 
   var TASK_EMPTY_TEXT = {
-    soon: "締切が近い提出物はありません。ひと安心ですね。",
-    overdue: "期限切れの提出物はありません。",
+    todo: "未提出の提出物はありません。よくできました！",
     done: "まだ提出済みのものはありません。",
     all: "提出物はまだ登録されていません。"
   };
@@ -474,7 +474,7 @@
     viewDate: null,     // 「今日の予定」で表示する基準日（yyyy-MM-dd）。null=今日
     tab: "today",
     announceFilter: "all",
-    taskFilter: "soon",
+    taskFilter: "todo",
     data: null,          // {schedule, events, tasks, posts}
     dataClass: null,
     renderSeq: 0,
@@ -1631,17 +1631,23 @@
   }
 
   function taskCounts(list){
-    var counts = {all: list.length, soon: 0, overdue: 0, done: 0, normal: 0};
+    var counts = {all: list.length, soon: 0, overdue: 0, done: 0, normal: 0, todo: 0};
     list.forEach(function(t){
       var s = dueStatus(t.due, t.done);
       counts[s.cls] = (counts[s.cls] || 0) + 1;
+      if (s.cls !== "done") counts.todo++;
     });
     return counts;
   }
 
   function renderTaskSection(title, icon, category, filterKey){
     var list = state.data.tasks.filter(function(t){ return t.category === category; })
-      .filter(function(t){ var s = dueStatus(t.due, t.done); return filterKey === "all" ? true : s.cls === filterKey; })
+      .filter(function(t){
+        var s = dueStatus(t.due, t.done);
+        if (filterKey === "all") return true;
+        if (filterKey === "todo") return s.cls !== "done";
+        return s.cls === filterKey;
+      })
       .sort(function(a,b){ return a.due.localeCompare(b.due); });
     var html = '<div class="panel"><div class="panel-head"><div class="panel-title">'+icon+' '+title+'</div><div class="panel-meta">'+list.length+'件</div></div>';
     if (list.length === 0) { html += '<div class="empty">'+TASK_EMPTY_TEXT[filterKey]+'</div>'; }
@@ -1676,12 +1682,21 @@
 
   /* ============== 連絡 ============== */
 
+  // 日付を「9/2」の形にする簡易フォーマッタ
+  function mdLabel(dateStr){
+    var p = String(dateStr).split("-");
+    return p.length === 3 ? (Number(p[1]) + "/" + Number(p[2])) : String(dateStr);
+  }
+
   function renderPost(a, compact){
     var html = '<div class="post">';
     html += '<div class="post-top">'+chipHtml(a.category, a.label)+'<span class="post-time">'+escapeHtml(a.time)+'</span></div>';
     html += '<div class="post-title">'+escapeHtml(a.title)+'</div>';
     if (!compact && a.body) html += '<div class="post-body">'+escapeHtml(a.body)+'</div>';
-    html += '<div class="post-by">'+escapeHtml(a.postedBy)+'</div>';
+    // 「今日だけ表示」（投稿日=表示終了日）以外、つまり継続表示が設定されているものだけ終了日を添える
+    var untilNote = (a.until && a.postDate && a.until !== a.postDate)
+      ? '　・　'+mdLabel(a.until)+'まで表示' : '';
+    html += '<div class="post-by">'+escapeHtml(a.postedBy)+escapeHtml(untilNote)+'</div>';
     html += '</div>';
     return html;
   }
@@ -1995,6 +2010,14 @@
     } else {
       html += '<div class="field"><label>タイトル</label><input type="text" id="fTitle" placeholder="例：明日の集合時間について"></div>';
       html += '<div class="field"><label>本文</label><textarea id="fBody" placeholder="伝えたい内容を入力してください"></textarea></div>';
+      html += '<div class="field"><label>表示期間</label>'
+        + '<div style="display:flex;gap:16px;font-size:13.5px;color:var(--ink)">'
+        + '<label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="untilMode" value="today" checked> 今日だけ表示</label>'
+        + '<label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="untilMode" value="custom"> 日付を指定</label>'
+        + '</div>'
+        + '<div id="untilDateWrap" style="display:none;margin-top:8px"><input type="date" id="fUntil" value="'+todayIso+'" min="'+todayIso+'"></div>'
+        + '<div style="font-size:11.5px;color:var(--ink-faint);margin-top:5px">連絡は基本的にその日限りの表示です。ずっと見えるようにしたい連絡（お知らせ・案内など）は「日付を指定」で表示を終える日を選んでください。</div>'
+        + '</div>';
     }
 
     html += '<div class="field-error" id="fError" style="display:none"></div>';
@@ -2005,6 +2028,14 @@
 
     document.getElementById("cancelBtn").onclick = function(){ root.innerHTML = ""; };
     document.getElementById("backdrop").onclick = function(e){ if (e.target.id === "backdrop") root.innerHTML = ""; };
+
+    if (!isTask) {
+      Array.prototype.forEach.call(document.querySelectorAll('input[name="untilMode"]'), function(radio){
+        radio.onchange = function(){
+          document.getElementById("untilDateWrap").style.display = radio.value === "custom" && radio.checked ? "block" : "none";
+        };
+      });
+    }
 
     document.getElementById("submitBtn").onclick = async function(){
       var errBox = document.getElementById("fError");
@@ -2027,9 +2058,11 @@
             due: due, detail: document.getElementById("fBody").value.trim()
           });
         } else {
+          var untilMode = document.querySelector('input[name="untilMode"]:checked').value;
+          var until = untilMode === "custom" ? document.getElementById("fUntil").value : "";
           await gsRun("api_postAnnouncement", {
             cls: cls, category: chosen.category, label: chosen.label, title: title,
-            body: document.getElementById("fBody").value.trim()
+            body: document.getElementById("fBody").value.trim(), until: until
           });
         }
         root.innerHTML = "";

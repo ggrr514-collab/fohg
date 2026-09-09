@@ -13,7 +13,7 @@
 //        「行事取込」シートに日付・曜日・週・行事・日課が自動転記される。
 //  (2) 「予定」シート1枚に日付とタイトルを並べた行事マスター形式（従来どおり）
 // 空欄のままなら、このスプレッドシート内の「予定」シートだけを使う。
-var EVENT_SS_ID = '';
+var EVENT_SS_ID = '1VB7PDDjjHrcMpSoUglT0q4D-Bo2FhlgEEZd1Iqr3H4k';
 // (2)の形式のとき、行事が入っているシート名
 var EVENT_SHEET_NAME = '予定';
 
@@ -1122,18 +1122,27 @@ function api_getTasks(cls) {
     .sort(function (a, b) { return a.due.localeCompare(b.due); });
 }
 
+// 連絡は基本的にその日限りの表示とし、継続表示したい場合は投稿者が
+// 「いつまで表示するか」を指定する。表示終了日を過ぎた連絡は
+// 新着連絡・連絡一覧のどちらからも自動で見えなくなる。
 function api_getAnnouncements(cls) {
   var ctx = getContext_();
   assertCanView_(ctx, cls);
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   return readSheet_(SHEET.POSTS)
     .filter(function (p) { return p['クラス'] === cls; })
     .map(function (p) {
       return {
         id: String(p['ID']), cls: p['クラス'], category: p['カテゴリ'], label: p['表示名'],
         title: p['タイトル'], body: p['本文'] || '', postedBy: p['投稿者表示名'] || '',
-        time: toDateTimeLabel_(p['投稿日時']), _sort: p['投稿日時'] instanceof Date ? p['投稿日時'].getTime() : 0
+        time: toDateTimeLabel_(p['投稿日時']),
+        postDate: toDateStr_(p['投稿日時']),
+        until: toDateStr_(p['表示終了日']),  // 空欄＝旧データ（後方互換で無期限表示）
+        _sort: p['投稿日時'] instanceof Date ? p['投稿日時'].getTime() : 0
       };
     })
+    // 表示終了日を過ぎたものは除外する（表示終了日が空の旧データは無期限表示のまま）
+    .filter(function (p) { return !p.until || p.until >= today; })
     .sort(function (a, b) { return b._sort - a._sort; })
     .map(function (p) { delete p._sort; return p; });
 }
@@ -1168,6 +1177,19 @@ function api_postTask(payload) {
   return { ok: true, id: id };
 }
 
+// 「連絡」シートに「表示終了日」列がなければ末尾に追加する（旧テンプレート互換）
+function ensurePostsUntilColumn_() {
+  var sheet = getSheet_(SHEET.POSTS);
+  var headerRow = findHeaderRow_(sheet);
+  if (!headerRow) return;
+  var headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (headers.indexOf('表示終了日') < 0) {
+    sheet.getRange(headerRow, sheet.getLastColumn() + 1).setValue('表示終了日');
+  }
+}
+
+// 連絡を投稿する。until（表示終了日、yyyy-MM-dd）を省略すると「今日だけ表示」になる。
+// 継続表示したい場合は、投稿者が until にその日付を指定する。
 function api_postAnnouncement(payload) {
   var ctx = getContext_();
   var cls = payload && payload.cls;
@@ -1181,11 +1203,17 @@ function api_postAnnouncement(payload) {
   var title = payload.title ? String(payload.title).trim() : '';
   if (!title) throw new Error('タイトルを入力してください。');
 
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var until = payload.until && /^\d{4}-\d{2}-\d{2}$/.test(String(payload.until)) ? String(payload.until) : '';
+  if (!until || until < today) until = today;  // 未指定・投稿日より前の指定は「今日だけ表示」に揃える
+
+  ensurePostsUntilColumn_();
   var id = Utilities.getUuid();
   appendRow_(SHEET.POSTS, {
     'ID': id, 'クラス': cls, 'カテゴリ': payload.category, '表示名': payload.label,
     'タイトル': title, '本文': payload.body ? String(payload.body).trim() : '',
-    '投稿者メール': ctx.email, '投稿者表示名': ctx.name, '投稿日時': new Date()
+    '投稿者メール': ctx.email, '投稿者表示名': ctx.name, '投稿日時': new Date(),
+    '表示終了日': until
   });
   return { ok: true, id: id };
 }
