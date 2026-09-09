@@ -68,10 +68,10 @@ function getHiddenEventWords_() {
   return list.length > 0 ? list : HIDDEN_EVENT_WORDS_DEFAULT;
 }
 
-// 行事テキストから、生徒に見せない項目を取り除く。
+// 行事テキストから、アプリの画面（教員・生徒どちらも）に見せない項目を取り除く。
 // 行事は「素点交換　職員会議　尿検査」のように空白区切りの項目連結なので、
 // 非表示ワードを含む項目だけを除いて残りをつなぎ直す。
-function filterEventTextForStudents_(text, words) {
+function filterHiddenEventWords_(text, words) {
   if (!text) return text;
   var kept = String(text).split(/[\s　]+/).filter(function (part) {
     return part !== '' && !words.some(function (w) { return part.indexOf(w) >= 0; });
@@ -374,12 +374,12 @@ function api_getContext() {
     schoolDayEntry(todayD, '今日'),
     schoolDayEntry(nextD, literallyTomorrow ? '明日' : '次の登校日')
   ];
-  // 生徒には、素点交換など非表示ワードを含む項目を見せない
-  if (ctx.role === 'student') {
+  // 素点交換など非表示ワードを含む項目は、教員・生徒どちらの画面からも見せない
+  {
     var hiddenWords = getHiddenEventWords_();
     schoolDays.forEach(function (sd) {
-      sd.text = filterEventTextForStudents_(sd.text, hiddenWords);
-      sd.baseText = filterEventTextForStudents_(sd.baseText, hiddenWords);
+      sd.text = filterHiddenEventWords_(sd.text, hiddenWords);
+      sd.baseText = filterHiddenEventWords_(sd.baseText, hiddenWords);
     });
   }
 
@@ -595,11 +595,11 @@ function api_getEvents(cls) {
   var events = readEvents_()
     .filter(function (r) { return (r.cls === cls || r.cls === '全校') && r.date >= today; })
     .sort(function (a, b) { return a.date.localeCompare(b.date); });
-  // 生徒には、素点交換など非表示ワードを含む項目を見せない
-  if (ctx.role === 'student') {
+  // 素点交換など非表示ワードを含む項目は、教員・生徒どちらの画面からも見せない
+  {
     var words = getHiddenEventWords_();
     events = events.map(function (e) {
-      e.title = filterEventTextForStudents_(e.title, words);
+      e.title = filterHiddenEventWords_(e.title, words);
       return e;
     }).filter(function (e) { return e.title; });
   }
@@ -642,12 +642,12 @@ function api_getCalendar(cls, ym) {
     entry(d).titles.unshift(overrides[d].text);
   });
 
-  // 生徒には、素点交換など非表示ワードを含む項目を見せない
-  if (ctx.role === 'student') {
+  // 素点交換など非表示ワードを含む項目は、教員・生徒どちらの画面からも見せない
+  {
     var words = getHiddenEventWords_();
     Object.keys(byDate).forEach(function (d) {
       byDate[d].titles = byDate[d].titles
-        .map(function (t) { return filterEventTextForStudents_(t, words); })
+        .map(function (t) { return filterHiddenEventWords_(t, words); })
         .filter(function (t) { return t; });
     });
   }
@@ -1329,11 +1329,11 @@ function api_getDayInfo(cls, baseDate) {
     });
   }
 
-  // 生徒には、素点交換など非表示ワードを含む項目を見せない
-  if (ctx.role === 'student') {
+  // 素点交換など非表示ワードを含む項目は、教員・生徒どちらの画面からも見せない
+  {
     var hiddenWords = getHiddenEventWords_();
     days.forEach(function (d) {
-      d.schoolEvents = filterEventTextForStudents_(d.schoolEvents, hiddenWords);
+      d.schoolEvents = filterHiddenEventWords_(d.schoolEvents, hiddenWords);
     });
   }
 
