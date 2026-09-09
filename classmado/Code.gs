@@ -34,6 +34,7 @@ var SHEET = {
   TASKS: '課題',
   SUBMISSIONS: '提出状況',
   POSTS: '連絡',
+  POST_CONFIRMATIONS: '連絡確認',
   SETTINGS: '設定'
 };
 
@@ -1130,6 +1131,15 @@ function api_getAnnouncements(cls) {
   var ctx = getContext_();
   assertCanView_(ctx, cls);
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+  // ログイン中の本人が「確認しました」を押した連絡ID一覧
+  var confirmedSet = {};
+  if (getSS_().getSheetByName(SHEET.POST_CONFIRMATIONS)) {
+    readSheet_(SHEET.POST_CONFIRMATIONS)
+      .filter(function (c) { return c['確認者メール'] === ctx.email; })
+      .forEach(function (c) { confirmedSet[String(c['連絡ID'])] = true; });
+  }
+
   return readSheet_(SHEET.POSTS)
     .filter(function (p) { return p['クラス'] === cls; })
     .map(function (p) {
@@ -1140,6 +1150,7 @@ function api_getAnnouncements(cls) {
         time: toDateTimeLabel_(p['投稿日時']),
         postDate: toDateStr_(p['投稿日時']),
         until: toDateStr_(p['表示終了日']),  // 空欄＝旧データ（後方互換で無期限表示）
+        confirmed: !!confirmedSet[String(p['ID'])],
         _sort: p['投稿日時'] instanceof Date ? p['投稿日時'].getTime() : 0
       };
     })
@@ -1147,6 +1158,49 @@ function api_getAnnouncements(cls) {
     .filter(function (p) { return !p.until || p.until >= today; })
     .sort(function (a, b) { return b._sort - a._sort; })
     .map(function (p) { delete p._sort; return p; });
+}
+
+// 連絡の「確認しました」を記録する（本人ごとの確認状態。もう一度押すと取り消せる）
+function api_setPostConfirmed(postId, confirmed) {
+  var ctx = getContext_();
+  var id = postId ? String(postId) : '';
+  if (!id) throw new Error('対象の連絡が指定されていません。');
+
+  var ss = getSS_();
+  var sheet = ss.getSheetByName(SHEET.POST_CONFIRMATIONS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET.POST_CONFIRMATIONS);
+    sheet.getRange(1, 1, 2, 3).setValues([
+      ['※ 連絡の「確認しました」ボタンを押した記録です。手入力は不要です。', '', ''],
+      ['連絡ID', '確認者メール', '確認日時']
+    ]);
+  }
+
+  var headerRow = findHeaderRow_(sheet);
+  var lastRow = sheet.getLastRow();
+  if (headerRow && lastRow > headerRow) {
+    var values = sheet.getRange(headerRow, 1, lastRow - headerRow + 1, sheet.getLastColumn()).getValues();
+    var headers = values[0];
+    var idIdx = headers.indexOf('連絡ID');
+    var emailIdx = headers.indexOf('確認者メール');
+    var timeIdx = headers.indexOf('確認日時');
+    for (var i = 1; i < values.length; i++) {
+      if (String(values[i][idIdx]) === id && values[i][emailIdx] === ctx.email) {
+        var rowNum = headerRow + i;
+        if (!confirmed) {
+          sheet.deleteRow(rowNum);
+        } else {
+          sheet.getRange(rowNum, timeIdx + 1).setValue(new Date());
+        }
+        return { ok: true };
+      }
+    }
+  }
+  if (!confirmed) return { ok: true };  // 取消対象がなければ何もしない
+  appendRow_(SHEET.POST_CONFIRMATIONS, {
+    '連絡ID': id, '確認者メール': ctx.email, '確認日時': new Date()
+  });
+  return { ok: true };
 }
 
 function api_getPostPermissions(cls, kind) {

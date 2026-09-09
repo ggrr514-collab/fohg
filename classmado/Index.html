@@ -181,6 +181,18 @@
   .item-edit-btn:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
   .item-del-btn { background: none; border: 1px solid var(--line-strong); color: var(--ink-faint); }
   .item-del-btn:hover { color: var(--overdue); border-color: var(--overdue); background: var(--overdue-bg); }
+
+  /* ---- 連絡：確認しましたボタン ---- */
+  .post-confirm { margin-top: 8px; }
+  .confirm-btn {
+    font-size: 12px; font-weight: 700; border-radius: 999px;
+    padding: 5px 14px; cursor: pointer; border: 1.5px solid var(--line-strong);
+    background: none; color: var(--ink-soft);
+  }
+  .confirm-btn:hover { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
+  .confirm-btn:disabled { opacity: .6; cursor: default; }
+  .confirm-btn.is-confirmed { background: var(--done-bg); border-color: var(--done); color: var(--done); }
+  .confirm-btn.is-confirmed:hover { background: var(--overdue-bg); border-color: var(--overdue); color: var(--overdue); }
   .period-num {
     font-family: var(--font-num); font-size: 13px; font-weight: 600;
     color: var(--ink-faint); text-align: center;
@@ -278,9 +290,16 @@
   .task-due.soon { color: var(--warn); background: var(--warn-bg); }
   .task-due.overdue { color: var(--overdue); background: var(--overdue-bg); }
   .task-due.done { color: var(--done); background: var(--done-bg); }
-  .task-check { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
-  .task-check label { font-size: 12.5px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; cursor: pointer; }
-  .task-check input { width: 17px; height: 17px; accent-color: var(--done); cursor: pointer; }
+  .task-check { margin-top: 8px; }
+  .task-done-btn {
+    font-size: 13px; font-weight: 700; border-radius: 999px;
+    padding: 7px 16px; cursor: pointer; border: 1.5px solid var(--accent);
+    background: var(--accent); color: var(--paper-raised);
+  }
+  .task-done-btn:hover { filter: brightness(1.08); }
+  .task-done-btn:disabled { opacity: .6; cursor: default; }
+  .task-done-btn.is-done { background: var(--done-bg); border-color: var(--done); color: var(--done); }
+  .task-done-btn.is-done:hover { background: var(--overdue-bg); border-color: var(--overdue); color: var(--overdue); }
 
   /* ---- announcements ---- */
   .post { padding: 9px 0; border-top: 1px solid var(--line); }
@@ -1142,6 +1161,7 @@
     var calTodayBtn = document.getElementById("calToday");
     if (calTodayBtn) calTodayBtn.onclick = function(){ state.calMonth = null; renderTab(); };
     bindTaskChecks();
+    bindItemActions();
     bindDailyNoteEdits();
     bindScheduleSwapEdits();
 
@@ -1617,7 +1637,9 @@
     html += '<div class="task-title">'+escapeHtml(t.title)+'</div>';
     if (t.detail) html += '<div class="task-detail">'+escapeHtml(t.detail)+'</div>';
     if (state.ctx.role === "student") {
-      html += '<div class="task-check"><label><input type="checkbox" data-task="'+escapeHtml(t.id)+'" '+(t.done?"checked":"")+'> 自分でチェック（提出できたら）</label></div>';
+      html += '<div class="task-check"><button class="task-done-btn'+(t.done ? ' is-done' : '')+'" data-task="'+escapeHtml(t.id)+'" data-done="'+(t.done ? '1' : '0')+'">'
+        + (t.done ? '✓ 提出済み（タップで取り消す）' : '提出済みにする')
+        + '</button></div>';
     }
     html += '<div class="post-by">'+escapeHtml(t.postedBy)+'</div>';
     if (canEdit && !compact) {
@@ -1631,18 +1653,17 @@
   }
 
   function bindTaskChecks(){
-    Array.prototype.forEach.call(document.querySelectorAll("[data-task]"), function(cb){
-      cb.onchange = async function(){
-        var id = cb.getAttribute("data-task");
-        var checked = cb.checked;
-        cb.disabled = true;
+    Array.prototype.forEach.call(document.querySelectorAll(".task-done-btn"), function(btn){
+      btn.onclick = async function(){
+        var id = btn.getAttribute("data-task");
+        var newDone = btn.getAttribute("data-done") !== "1";
+        btn.disabled = true;
         try {
-          await gsRun("api_setTaskDone", id, checked);
-          showToast(checked ? "提出済みにしました" : "未提出に戻しました");
+          await gsRun("api_setTaskDone", id, newDone);
+          showToast(newDone ? "提出済みにしました" : "未提出に戻しました");
           await refreshData();
         } catch (err) {
-          cb.checked = !checked;
-          cb.disabled = false;
+          btn.disabled = false;
           showToast(errorMessage(err));
         }
       };
@@ -1739,6 +1760,21 @@
         }
       };
     });
+    Array.prototype.forEach.call(document.querySelectorAll(".confirm-btn"), function(btn){
+      btn.onclick = async function(){
+        var id = btn.getAttribute("data-post-confirm");
+        var newConfirmed = btn.getAttribute("data-confirmed") !== "1";
+        btn.disabled = true;
+        try {
+          await gsRun("api_setPostConfirmed", id, newConfirmed);
+          showToast(newConfirmed ? "確認済みにしました" : "確認を取り消しました");
+          await refreshData();
+        } catch (err) {
+          btn.disabled = false;
+          showToast(errorMessage(err));
+        }
+      };
+    });
   }
 
   // 課題・提出物を編集するモーダル（投稿した本人・教員のみ）
@@ -1794,7 +1830,8 @@
 
   function renderPost(a, compact){
     // 編集・削除できるのは、投稿した本人（係・委員会・実行委員・担任など）か教員のみ
-    var canEdit = state.ctx.role === "teacher" || (a.postedByEmail && a.postedByEmail === state.ctx.email);
+    var isOwnPost = !!(a.postedByEmail && a.postedByEmail === state.ctx.email);
+    var canEdit = state.ctx.role === "teacher" || isOwnPost;
     var html = '<div class="post">';
     html += '<div class="post-top">'+chipHtml(a.category, a.label)+'<span class="post-time">'+escapeHtml(a.time)+'</span></div>';
     html += '<div class="post-title">'+escapeHtml(a.title)+'</div>';
@@ -1803,6 +1840,12 @@
     var untilNote = (a.until && a.postDate && a.until !== a.postDate)
       ? '　・　'+mdLabel(a.until)+'まで表示' : '';
     html += '<div class="post-by">'+escapeHtml(a.postedBy)+escapeHtml(untilNote)+'</div>';
+    // 自分の投稿には「確認しました」は出さない（自分で確認する意味がないため）
+    if (!isOwnPost) {
+      html += '<div class="post-confirm"><button class="confirm-btn'+(a.confirmed ? ' is-confirmed' : '')+'" data-post-confirm="'+escapeHtml(a.id)+'" data-confirmed="'+(a.confirmed ? '1' : '0')+'">'
+        + (a.confirmed ? '✓ 確認済み' : '確認しました')
+        + '</button></div>';
+    }
     if (canEdit && !compact) {
       html += '<div class="item-actions">'
         + '<button class="item-edit-btn" data-post-edit="'+escapeHtml(a.id)+'">編集</button>'
