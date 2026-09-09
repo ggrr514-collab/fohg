@@ -1443,6 +1443,16 @@
     }
     html += '</div>';
 
+    // 教員向け：今どの非表示ワードが有効か確認できる表示（設定シートの反映確認用）
+    if (isTeacher) {
+      var hw = state.ctx.hiddenWords || [];
+      html += '<div style="font-size:11.5px;color:var(--ink-faint);margin-top:10px">'
+        + '🔒 現在の非表示ワード（この語を含む行事の項目は誰の画面からも消えます）：'
+        + (hw.length > 0 ? escapeHtml(hw.join('・')) : '（未設定）')
+        + '　※「設定」シートの「非表示ワード」で変更できます。'
+        + '</div>';
+    }
+
     document.getElementById("mainContent").innerHTML = html;
 
     var syncBtn = document.getElementById("syncEventsBtn");

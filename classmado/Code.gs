@@ -392,7 +392,10 @@ function api_getContext() {
     eventSyncTime: getSetting_('行事取込日時', ''),
     secondTermStart: getSecondTermStart_(),
     committees: COMMITTEES,
-    subjects: getSubjects_()
+    subjects: getSubjects_(),
+    // 今どの非表示ワードが有効になっているかを画面で確認できるようにする
+    // （「設定」シートの値が反映されているか、デプロイが更新されているかの確認用）
+    hiddenWords: getHiddenEventWords_()
   };
 }
 
