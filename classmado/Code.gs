@@ -57,7 +57,7 @@ var COMMITTEES = [
 // 生徒に表示しない行事のキーワード（既定値）。行事のうち、これらの語を含む項目は
 // 生徒の画面から取り除かれる（教員には全て表示される。取込データ自体は変更しない）。
 // 「設定」シートに キー「非表示ワード」・値「素点交換、成績交換、…」の行を作れば変更できる。
-var HIDDEN_EVENT_WORDS_DEFAULT = ['素点交換', '成績交換', '学校評価', '通知表', '分掌会'];
+var HIDDEN_EVENT_WORDS_DEFAULT = ['素点交換', '成績交換', '学校評価', '通知票', '分掌会'];
 
 function getHiddenEventWords_() {
   var raw = getSetting_('非表示ワード', '');
