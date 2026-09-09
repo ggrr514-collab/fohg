@@ -1116,7 +1116,8 @@ function api_getTasks(cls) {
       return {
         id: String(t['ID']), cls: t['クラス'], category: t['カテゴリ'], label: t['表示名'],
         title: t['タイトル'], due: toDateStr_(t['締切日']), detail: t['詳細'] || '',
-        postedBy: t['投稿者表示名'] || '', done: !!doneSet[t['ID']]
+        postedBy: t['投稿者表示名'] || '', postedByEmail: t['投稿者メール'] || '',
+        done: !!doneSet[t['ID']]
       };
     })
     .sort(function (a, b) { return a.due.localeCompare(b.due); });
@@ -1135,6 +1136,7 @@ function api_getAnnouncements(cls) {
       return {
         id: String(p['ID']), cls: p['クラス'], category: p['カテゴリ'], label: p['表示名'],
         title: p['タイトル'], body: p['本文'] || '', postedBy: p['投稿者表示名'] || '',
+        postedByEmail: p['投稿者メール'] || '',
         time: toDateTimeLabel_(p['投稿日時']),
         postDate: toDateStr_(p['投稿日時']),
         until: toDateStr_(p['表示終了日']),  // 空欄＝旧データ（後方互換で無期限表示）
@@ -1216,6 +1218,147 @@ function api_postAnnouncement(payload) {
     '表示終了日': until
   });
   return { ok: true, id: id };
+}
+
+// 投稿を編集・削除できるかどうか（教員、または投稿した本人のみ）
+function canEditPost_(ctx, postedByEmail) {
+  return ctx.role === 'teacher' || (!!postedByEmail && ctx.email === postedByEmail);
+}
+
+// 課題・提出物を編集する（投稿した本人、または教員のみ）
+function api_updateTask(payload) {
+  var ctx = getContext_();
+  var id = payload && payload.id ? String(payload.id) : '';
+  if (!id) throw new Error('対象の課題が指定されていません。');
+
+  var title = payload.title ? String(payload.title).trim() : '';
+  if (!title) throw new Error('タイトルを入力してください。');
+  if (!payload.due) throw new Error('締切日を入力してください。');
+
+  var sheet = getSheet_(SHEET.TASKS);
+  var headerRow = findHeaderRow_(sheet);
+  var lastRow = sheet.getLastRow();
+  if (!headerRow || lastRow <= headerRow) throw new Error('課題が登録されていません。');
+
+  var values = sheet.getRange(headerRow, 1, lastRow - headerRow + 1, sheet.getLastColumn()).getValues();
+  var headers = values[0];
+  var idIdx = headers.indexOf('ID');
+  var titleIdx = headers.indexOf('タイトル');
+  var dueIdx = headers.indexOf('締切日');
+  var detailIdx = headers.indexOf('詳細');
+  var emailIdx = headers.indexOf('投稿者メール');
+
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][idIdx]) === id) {
+      if (!canEditPost_(ctx, values[i][emailIdx])) {
+        throw new Error('この課題を編集できるのは、投稿した本人か教員のみです。');
+      }
+      var rowNum = headerRow + i;
+      sheet.getRange(rowNum, titleIdx + 1).setValue(title);
+      sheet.getRange(rowNum, dueIdx + 1).setValue(payload.due);
+      sheet.getRange(rowNum, detailIdx + 1).setValue(payload.detail ? String(payload.detail).trim() : '');
+      return { ok: true };
+    }
+  }
+  throw new Error('該当する課題が見つかりませんでした。すでに削除されている可能性があります。');
+}
+
+// 課題・提出物を削除する（投稿した本人、または教員のみ）
+function api_deleteTask(taskId) {
+  var ctx = getContext_();
+  var id = taskId ? String(taskId) : '';
+  if (!id) throw new Error('対象の課題が指定されていません。');
+
+  var sheet = getSheet_(SHEET.TASKS);
+  var headerRow = findHeaderRow_(sheet);
+  var lastRow = sheet.getLastRow();
+  if (!headerRow || lastRow <= headerRow) throw new Error('課題が登録されていません。');
+
+  var values = sheet.getRange(headerRow, 1, lastRow - headerRow + 1, sheet.getLastColumn()).getValues();
+  var headers = values[0];
+  var idIdx = headers.indexOf('ID');
+  var emailIdx = headers.indexOf('投稿者メール');
+
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][idIdx]) === id) {
+      if (!canEditPost_(ctx, values[i][emailIdx])) {
+        throw new Error('この課題を削除できるのは、投稿した本人か教員のみです。');
+      }
+      sheet.deleteRow(headerRow + i);
+      return { ok: true };
+    }
+  }
+  throw new Error('該当する課題が見つかりませんでした。すでに削除されている可能性があります。');
+}
+
+// 連絡を編集する（投稿した本人、または教員のみ）。表示終了日も併せて変更できる。
+function api_updateAnnouncement(payload) {
+  var ctx = getContext_();
+  var id = payload && payload.id ? String(payload.id) : '';
+  if (!id) throw new Error('対象の連絡が指定されていません。');
+
+  var title = payload.title ? String(payload.title).trim() : '';
+  if (!title) throw new Error('タイトルを入力してください。');
+
+  ensurePostsUntilColumn_();
+  var sheet = getSheet_(SHEET.POSTS);
+  var headerRow = findHeaderRow_(sheet);
+  var lastRow = sheet.getLastRow();
+  if (!headerRow || lastRow <= headerRow) throw new Error('連絡が登録されていません。');
+
+  var values = sheet.getRange(headerRow, 1, lastRow - headerRow + 1, sheet.getLastColumn()).getValues();
+  var headers = values[0];
+  var idIdx = headers.indexOf('ID');
+  var titleIdx = headers.indexOf('タイトル');
+  var bodyIdx = headers.indexOf('本文');
+  var emailIdx = headers.indexOf('投稿者メール');
+  var untilIdx = headers.indexOf('表示終了日');
+  var postDateIdx = headers.indexOf('投稿日時');
+
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][idIdx]) === id) {
+      if (!canEditPost_(ctx, values[i][emailIdx])) {
+        throw new Error('この連絡を編集できるのは、投稿した本人か教員のみです。');
+      }
+      var rowNum = headerRow + i;
+      var postDate = toDateStr_(values[i][postDateIdx]);
+      var until = payload.until && /^\d{4}-\d{2}-\d{2}$/.test(String(payload.until)) ? String(payload.until) : '';
+      if (!until || until < postDate) until = postDate;  // 投稿日より前にはしない
+      sheet.getRange(rowNum, titleIdx + 1).setValue(title);
+      sheet.getRange(rowNum, bodyIdx + 1).setValue(payload.body ? String(payload.body).trim() : '');
+      if (untilIdx >= 0) sheet.getRange(rowNum, untilIdx + 1).setValue(until);
+      return { ok: true };
+    }
+  }
+  throw new Error('該当する連絡が見つかりませんでした。すでに削除されている可能性があります。');
+}
+
+// 連絡を削除する（投稿した本人、または教員のみ）
+function api_deleteAnnouncement(postId) {
+  var ctx = getContext_();
+  var id = postId ? String(postId) : '';
+  if (!id) throw new Error('対象の連絡が指定されていません。');
+
+  var sheet = getSheet_(SHEET.POSTS);
+  var headerRow = findHeaderRow_(sheet);
+  var lastRow = sheet.getLastRow();
+  if (!headerRow || lastRow <= headerRow) throw new Error('連絡が登録されていません。');
+
+  var values = sheet.getRange(headerRow, 1, lastRow - headerRow + 1, sheet.getLastColumn()).getValues();
+  var headers = values[0];
+  var idIdx = headers.indexOf('ID');
+  var emailIdx = headers.indexOf('投稿者メール');
+
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][idIdx]) === id) {
+      if (!canEditPost_(ctx, values[i][emailIdx])) {
+        throw new Error('この連絡を削除できるのは、投稿した本人か教員のみです。');
+      }
+      sheet.deleteRow(headerRow + i);
+      return { ok: true };
+    }
+  }
+  throw new Error('該当する連絡が見つかりませんでした。すでに削除されている可能性があります。');
 }
 
 /* ---------- 今日・明日の教科連絡（日別連絡） ---------- */

@@ -170,6 +170,17 @@
     padding: 3px 10px; cursor: pointer; white-space: nowrap;
   }
   .role-del:hover { color: var(--overdue); border-color: var(--overdue); background: var(--overdue-bg); }
+
+  /* ---- 課題・連絡：投稿者本人／教員向けの編集・削除ボタン ---- */
+  .item-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .item-edit-btn, .item-del-btn {
+    font-size: 12px; font-weight: 700; border-radius: 999px;
+    padding: 3px 11px; cursor: pointer; white-space: nowrap;
+  }
+  .item-edit-btn { background: none; border: 1px solid var(--line-strong); color: var(--ink-soft); }
+  .item-edit-btn:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+  .item-del-btn { background: none; border: 1px solid var(--line-strong); color: var(--ink-faint); }
+  .item-del-btn:hover { color: var(--overdue); border-color: var(--overdue); background: var(--overdue-bg); }
   .period-num {
     font-family: var(--font-num); font-size: 13px; font-weight: 600;
     color: var(--ink-faint); text-align: center;
@@ -1108,7 +1119,7 @@
     if (todaysTasks.length === 0) {
       html += '<div class="empty">今のところ、締切が近い課題はありません。</div>';
     } else {
-      todaysTasks.forEach(function(t){ html += renderTaskItem(t); });
+      todaysTasks.forEach(function(t){ html += renderTaskItem(t, true); });
     }
     html += '</div>';
     html += '</div>';
@@ -1597,8 +1608,10 @@
 
   /* ============== 課題・提出物 ============== */
 
-  function renderTaskItem(t){
+  function renderTaskItem(t, compact){
     var s = dueStatus(t.due, t.done);
+    // 編集・削除できるのは、投稿した本人（係・担任など）か教員のみ
+    var canEdit = state.ctx.role === "teacher" || (t.postedByEmail && t.postedByEmail === state.ctx.email);
     var html = '<div class="task-item">';
     html += '<div class="task-top">'+chipHtml(t.category, t.label)+'<span class="task-due '+s.cls+'">'+s.text+'</span></div>';
     html += '<div class="task-title">'+escapeHtml(t.title)+'</div>';
@@ -1607,6 +1620,12 @@
       html += '<div class="task-check"><label><input type="checkbox" data-task="'+escapeHtml(t.id)+'" '+(t.done?"checked":"")+'> 自分でチェック（提出できたら）</label></div>';
     }
     html += '<div class="post-by">'+escapeHtml(t.postedBy)+'</div>';
+    if (canEdit && !compact) {
+      html += '<div class="item-actions">'
+        + '<button class="item-edit-btn" data-task-edit="'+escapeHtml(t.id)+'">編集</button>'
+        + '<button class="item-del-btn" data-task-del="'+escapeHtml(t.id)+'">削除</button>'
+        + '</div>';
+    }
     html += '</div>';
     return html;
   }
@@ -1672,12 +1691,97 @@
 
     document.getElementById("mainContent").innerHTML = html;
     bindTaskChecks();
+    bindItemActions();
 
     Array.prototype.forEach.call(document.querySelectorAll("[data-filter]"), function(btn){
       btn.onclick = function(){ state.taskFilter = btn.getAttribute("data-filter"); renderTab(); };
     });
 
     await renderComposer("tasks", seq);
+  }
+
+  // 課題・連絡の「編集」「削除」ボタンの動作をまとめてバインドする
+  // （削除は係・担当と同じく2段階確認：もう一度押すと確定）
+  function bindItemActions(){
+    Array.prototype.forEach.call(document.querySelectorAll("[data-task-edit]"), function(btn){
+      btn.onclick = function(){
+        var t = state.data.tasks.filter(function(x){ return x.id === btn.getAttribute("data-task-edit"); })[0];
+        if (t) openTaskEditModal(t);
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-post-edit]"), function(btn){
+      btn.onclick = function(){
+        var a = state.data.posts.filter(function(x){ return x.id === btn.getAttribute("data-post-edit"); })[0];
+        if (a) openPostEditModal(a);
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".item-del-btn"), function(btn){
+      btn.onclick = async function(){
+        if (btn.getAttribute("data-armed") !== "1") {
+          btn.setAttribute("data-armed", "1");
+          btn.textContent = "削除する？";
+          setTimeout(function(){ btn.setAttribute("data-armed",""); btn.textContent = "削除"; }, 3000);
+          return;
+        }
+        btn.disabled = true;
+        var taskId = btn.getAttribute("data-task-del");
+        var postId = btn.getAttribute("data-post-del");
+        try {
+          if (taskId) await gsRun("api_deleteTask", taskId);
+          else if (postId) await gsRun("api_deleteAnnouncement", postId);
+          showToast("削除しました");
+          await refreshData();
+        } catch (err) {
+          btn.disabled = false;
+          btn.setAttribute("data-armed", "");
+          btn.textContent = "削除";
+          showToast(errorMessage(err));
+        }
+      };
+    });
+  }
+
+  // 課題・提出物を編集するモーダル（投稿した本人・教員のみ）
+  function openTaskEditModal(t){
+    var root = document.getElementById("modalRoot");
+    var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
+    html += '<h3>課題・提出物を編集</h3>';
+    html += '<div class="modal-sub">'+chipHtml(t.category, t.label)+'</div>';
+    html += '<div class="field"><label>タイトル</label><input type="text" id="fTitle" value="'+escapeHtml(t.title)+'"></div>';
+    html += '<div class="field"><label>締切日</label><input type="date" id="fDue" value="'+escapeHtml(t.due)+'"></div>';
+    html += '<div class="field"><label>詳細（任意）</label><textarea id="fBody">'+escapeHtml(t.detail || "")+'</textarea></div>';
+    html += '<div class="field-error" id="fError" style="display:none"></div>';
+    html += '<div class="modal-actions"><button class="btn-secondary" id="cancelBtn">キャンセル</button><button class="btn-primary" id="submitBtn">保存する</button></div>';
+    html += '</div></div>';
+    root.innerHTML = html;
+
+    document.getElementById("cancelBtn").onclick = function(){ root.innerHTML = ""; };
+    document.getElementById("backdrop").onclick = function(e){ if (e.target.id === "backdrop") root.innerHTML = ""; };
+
+    document.getElementById("submitBtn").onclick = async function(){
+      var errBox = document.getElementById("fError");
+      errBox.style.display = "none";
+      var title = document.getElementById("fTitle").value.trim();
+      if (!title) { errBox.textContent = "タイトルを入力してください"; errBox.style.display = "block"; return; }
+      var due = document.getElementById("fDue").value;
+      if (!due) { errBox.textContent = "締切日を入力してください"; errBox.style.display = "block"; return; }
+      var btn = document.getElementById("submitBtn");
+      btn.disabled = true;
+      btn.textContent = "保存中…";
+      try {
+        await gsRun("api_updateTask", {
+          id: t.id, title: title, due: due, detail: document.getElementById("fBody").value.trim()
+        });
+        root.innerHTML = "";
+        showToast("更新しました");
+        await refreshData();
+      } catch (err) {
+        errBox.textContent = errorMessage(err);
+        errBox.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "保存する";
+      }
+    };
   }
 
   /* ============== 連絡 ============== */
@@ -1689,6 +1793,8 @@
   }
 
   function renderPost(a, compact){
+    // 編集・削除できるのは、投稿した本人（係・委員会・実行委員・担任など）か教員のみ
+    var canEdit = state.ctx.role === "teacher" || (a.postedByEmail && a.postedByEmail === state.ctx.email);
     var html = '<div class="post">';
     html += '<div class="post-top">'+chipHtml(a.category, a.label)+'<span class="post-time">'+escapeHtml(a.time)+'</span></div>';
     html += '<div class="post-title">'+escapeHtml(a.title)+'</div>';
@@ -1697,6 +1803,12 @@
     var untilNote = (a.until && a.postDate && a.until !== a.postDate)
       ? '　・　'+mdLabel(a.until)+'まで表示' : '';
     html += '<div class="post-by">'+escapeHtml(a.postedBy)+escapeHtml(untilNote)+'</div>';
+    if (canEdit && !compact) {
+      html += '<div class="item-actions">'
+        + '<button class="item-edit-btn" data-post-edit="'+escapeHtml(a.id)+'">編集</button>'
+        + '<button class="item-del-btn" data-post-del="'+escapeHtml(a.id)+'">削除</button>'
+        + '</div>';
+    }
     html += '</div>';
     return html;
   }
@@ -1718,12 +1830,73 @@
     html += '</div>';
 
     document.getElementById("mainContent").innerHTML = html;
+    bindItemActions();
 
     Array.prototype.forEach.call(document.querySelectorAll("[data-filter]"), function(btn){
       btn.onclick = function(){ state.announceFilter = btn.getAttribute("data-filter"); renderTab(); };
     });
 
     await renderComposer("announcement", seq);
+  }
+
+  // 連絡を編集するモーダル（投稿した本人・教員のみ）。表示期間も投稿フォームと同様に変更できる。
+  function openPostEditModal(a){
+    var root = document.getElementById("modalRoot");
+    var todayIso = new Date().toISOString().slice(0,10);
+    // 投稿日と表示終了日が異なる＝継続表示が設定されている
+    var isCustomUntil = !!(a.until && a.postDate && a.until !== a.postDate);
+
+    var html = '<div class="modal-backdrop" id="backdrop"><div class="modal">';
+    html += '<h3>連絡を編集</h3>';
+    html += '<div class="modal-sub">'+chipHtml(a.category, a.label)+'</div>';
+    html += '<div class="field"><label>タイトル</label><input type="text" id="fTitle" value="'+escapeHtml(a.title)+'"></div>';
+    html += '<div class="field"><label>本文</label><textarea id="fBody">'+escapeHtml(a.body || "")+'</textarea></div>';
+    html += '<div class="field"><label>表示期間</label>'
+      + '<div style="display:flex;gap:16px;font-size:13.5px;color:var(--ink)">'
+      + '<label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="untilMode" value="today" '+(isCustomUntil ? "" : "checked")+'> 今日だけ表示</label>'
+      + '<label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="untilMode" value="custom" '+(isCustomUntil ? "checked" : "")+'> 日付を指定</label>'
+      + '</div>'
+      + '<div id="untilDateWrap" style="display:'+(isCustomUntil ? "block" : "none")+';margin-top:8px">'
+      + '<input type="date" id="fUntil" value="'+escapeHtml(a.until || todayIso)+'" min="'+escapeHtml(a.postDate || todayIso)+'"></div>'
+      + '</div>';
+    html += '<div class="field-error" id="fError" style="display:none"></div>';
+    html += '<div class="modal-actions"><button class="btn-secondary" id="cancelBtn">キャンセル</button><button class="btn-primary" id="submitBtn">保存する</button></div>';
+    html += '</div></div>';
+    root.innerHTML = html;
+
+    document.getElementById("cancelBtn").onclick = function(){ root.innerHTML = ""; };
+    document.getElementById("backdrop").onclick = function(e){ if (e.target.id === "backdrop") root.innerHTML = ""; };
+
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="untilMode"]'), function(radio){
+      radio.onchange = function(){
+        document.getElementById("untilDateWrap").style.display = radio.value === "custom" && radio.checked ? "block" : "none";
+      };
+    });
+
+    document.getElementById("submitBtn").onclick = async function(){
+      var errBox = document.getElementById("fError");
+      errBox.style.display = "none";
+      var title = document.getElementById("fTitle").value.trim();
+      if (!title) { errBox.textContent = "タイトルを入力してください"; errBox.style.display = "block"; return; }
+      var untilMode = document.querySelector('input[name="untilMode"]:checked').value;
+      var until = untilMode === "custom" ? document.getElementById("fUntil").value : "";
+      var btn = document.getElementById("submitBtn");
+      btn.disabled = true;
+      btn.textContent = "保存中…";
+      try {
+        await gsRun("api_updateAnnouncement", {
+          id: a.id, title: title, body: document.getElementById("fBody").value.trim(), until: until
+        });
+        root.innerHTML = "";
+        showToast("更新しました");
+        await refreshData();
+      } catch (err) {
+        errBox.textContent = errorMessage(err);
+        errBox.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "保存する";
+      }
+    };
   }
 
   /* ============== 係・担当 ============== */
