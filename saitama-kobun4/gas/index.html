@@ -100,6 +100,9 @@
   .honbun.tate{writing-mode:vertical-rl; width:100%; max-width:100%; height:min(64vh,520px); padding:22px 26px; overflow-x:auto; overflow-y:hidden}
   .honbun.yoko{writing-mode:horizontal-tb; padding:22px 24px}
   .honbun .ul{text-decoration:underline; text-underline-offset:4px; text-decoration-thickness:1px}
+  /* 常用漢字外の字などのふりがな。縦書きなら右、横書きなら上（ふつうのルビの位置） */
+  .honbun ruby.rd{ruby-position:over; -webkit-ruby-position:before}
+  .honbun ruby.rd > rt{font-size:.5em; color:#4a5464; letter-spacing:0; font-weight:400}
   /* 入試と同じく、難しい語句の隣（縦書きなら左側）に小さく口語訳を添える */
   .honbun ruby.gl{ruby-position:under; -webkit-ruby-position:under; ruby-align:start}
   .honbun ruby.gl > rt{font-size:.63em; color:#66707f; font-family:"Zen Kaku Gothic New",sans-serif;
@@ -418,7 +421,7 @@
    古典クエスト ― クライアント側
    ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
    ============================================================ */
-var CLIENT_VERSION = 2;
+var CLIENT_VERSION = 3;
 
 var MARK  = ['ア','イ','ウ','エ'];
 var TYPES = ['仮名遣い','主語・指示語','内容理解','要旨・話し合い'];
