@@ -100,15 +100,23 @@
   .honbun.tate{writing-mode:vertical-rl; width:100%; max-width:100%; height:min(64vh,520px); padding:22px 26px; overflow-x:auto; overflow-y:hidden}
   .honbun.yoko{writing-mode:horizontal-tb; padding:22px 24px}
   .honbun .ul{text-decoration:underline; text-underline-offset:4px; text-decoration-thickness:1px}
-  /* 入試と同じく、難しい箇所だけ本文中に口語訳を添える */
-  .honbun .gl > i{font-style:normal; font-size:.84em; color:#6f7889; letter-spacing:.01em}
-  .honbun.notr .gl > i{display:none}
+  /* 入試と同じく、難しい語句の隣（縦書きなら左側）に小さく口語訳を添える */
+  .honbun ruby.gl{ruby-position:under; -webkit-ruby-position:under; ruby-align:start}
+  .honbun ruby.gl > rt{font-size:.63em; color:#66707f; font-family:"Zen Kaku Gothic New",sans-serif;
+    letter-spacing:0; line-height:1.4; text-align:start; font-weight:400}
+  .honbun.notr ruby.gl > rt{display:none}
   .honbun .mk{font-size:.72em; vertical-align:super; color:var(--navy); font-weight:700}
   .honbun.tate .mk{vertical-align:baseline}
   .honbun p{margin:0 0 .4em}
   .honbun.tate p{margin:0 .4em 0 0}
   @media(max-width:560px){ .honbun{font-size:16px} .honbun.tate{height:min(60vh,440px); padding:18px 20px} }
 
+  .maegaki{margin-top:14px; border:1px solid var(--line); border-left:3px solid var(--navy);
+    border-radius:0 10px 10px 0; background:var(--paper-2); padding:12px 15px;
+    font-size:13.5px; line-height:1.9; color:#3a4555}
+  .maegaki .lab{display:block; font-size:11px; letter-spacing:.1em; color:var(--navy); margin-bottom:4px}
+  .blankline{background:var(--paper-2); border:1px solid var(--line); border-radius:10px;
+    padding:12px 14px; font-size:14.5px; line-height:1.95; margin:0 0 12px}
   .chu{margin-top:10px; border:1px solid var(--line); border-radius:10px; background:#fff; padding:13px 15px;
     font-size:12.5px; color:var(--muted); line-height:1.85}
   .chu b{color:#3a4555; font-weight:600}
@@ -346,6 +354,7 @@
     <span class="spacer"></span>
     <span class="timer" id="pTimer">00:00</span>
   </div>
+  <div class="maegaki" id="pIntro"></div>
   <div class="honbun tate" id="pHonbun"></div>
   <div class="toolrow">
     <button class="btn sm on" id="tateBtn" onclick="setTate(true)">縦書き</button>
@@ -412,7 +421,7 @@
 var CLIENT_VERSION = 2;
 
 var MARK  = ['ア','イ','ウ','エ'];
-var TYPES = ['仮名遣い','主語・語意','内容理解','要旨・話し合い'];
+var TYPES = ['仮名遣い','主語・指示語','内容理解','要旨・話し合い'];
 var KINDS = ['正解が複数ある','正解が選択肢にない','読みや表記の誤り','その他'];
 
 var ME=null, STAGES=[], PROG=null, SETTINGS={}, BLOCKED='', SESSION=null;
@@ -596,7 +605,7 @@ function hintText(tt, full){
   });
   if(worst && worst.r<0.8){
     var tip = worst.t==='仮名遣い' ? '「は行転呼・ゐゑを・ぢづ・au→おう」の4パターンを見直しましょう。'
-            : worst.t==='主語・語意' ? '主語は「言ふ／思ふ」の直前をたどり、敬語の有無で人物を見分けましょう。'
+            : worst.t==='主語・指示語' ? '主語は会話の直前をたどり、尊敬語（給ふ・仰せらる）と謙譲語（奏す・申す）で人物を見分けましょう。'
             : worst.t==='内容理解' ? '傍線部の直前・直後に必ず根拠があります。本文の言葉に線を引いて確かめましょう。'
             : '話し合い文は本文の要旨のまとめです。最後の一文（教訓・感想）に注目しましょう。';
     return 'いま最も伸びしろがあるのは「'+worst.t+'」です（正答率'+Math.round(worst.r*100)+'％）。'+tip;
@@ -652,14 +661,16 @@ function openStage(i){
 
   document.getElementById('pTitle').textContent='STAGE '+(i+1)+'　'+st.title;
   document.getElementById('pSrc').textContent='（'+st.src+'より）　'+fullOf(st)+'点満点・目安5分';
+  document.getElementById('pIntro').innerHTML='<span class="lab">（前書き）</span>'+(st.intro||'');
   document.getElementById('pHonbun').innerHTML=st.honbun;
   document.getElementById('pChu').innerHTML='<span class="lab">（注）</span>'+st.chu;
   document.getElementById('pQs').innerHTML=st.qs.map(function(q,qi){
     return '<div class="q" id="q'+qi+'">'+
       '<div class="qhead"><span class="qno">'+esc(q.n)+'</span><span class="tag">'+esc(q.type)+'</span>'+
       '<span class="pt">'+(q.pt||3)+'点</span></div>'+
-      (q.talk?'<p class="qtext">'+q.q+'</p><div class="talk">'+q.talk+'</div>'
-             :'<p class="qtext">'+q.q+'</p>')+
+      '<p class="qtext">'+q.q+'</p>'+
+      (q.talk?'<div class="talk">'+q.talk+'</div>':'')+
+      (q.blank?'<div class="blankline">'+q.blank+'</div>':'')+
       '<div class="opts">'+q.opts.map(function(o,oi){
         return '<button class="opt" id="o'+qi+'_'+oi+'" onclick="pick('+qi+','+oi+')">'+
                '<span class="mk">'+MARK[oi]+'</span><span>'+esc(o)+'</span></button>';
@@ -837,7 +848,9 @@ function startReview(){
         '<details class="yaku" style="margin:0 0 12px"><summary>本文と（注）を開く</summary>'+
           '<div class="inner"><div class="honbun yoko" style="margin-top:0">'+st.honbun+'</div>'+
           '<div class="chu"><span class="lab">（注）</span>'+st.chu+'</div></div></details>'+
-        (q.talk?'<p class="qtext">'+q.q+'</p><div class="talk">'+q.talk+'</div>':'<p class="qtext">'+q.q+'</p>')+
+        '<p class="qtext">'+q.q+'</p>'+
+        (q.talk?'<div class="talk">'+q.talk+'</div>':'')+
+        (q.blank?'<div class="blankline">'+q.blank+'</div>':'')+
         '<div class="opts">'+q.opts.map(function(o,oi){
           return '<button class="opt" id="v'+n+'_'+oi+'" onclick="vPick('+n+',\''+q.id+'\','+oi+')">'+
                  '<span class="mk">'+MARK[oi]+'</span><span>'+esc(o)+'</span></button>';

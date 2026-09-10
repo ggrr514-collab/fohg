@@ -61,7 +61,7 @@ const RANKS = [
   { ratio: 0.00, name: "古文の旅人"   }
 ];
 
-const Q_TYPES = ["仮名遣い", "主語・語意", "内容理解", "要旨・話し合い"];
+const Q_TYPES = ["仮名遣い", "主語・指示語", "内容理解", "要旨・話し合い"];
 
 /* ============================================================
    ウェブアプリ
@@ -120,7 +120,16 @@ function tryUi_() { try { return SpreadsheetApp.getUi(); } catch (e) { return nu
 /* ============================================================
    シート定義
    ============================================================ */
-const H_ROSTER = ["email", "氏名", "組", "番号"];
+/** 名簿シートを新しく作るときの見出し（既存シートがあればそちらの見出しに合わせる） */
+const H_ROSTER = ["出席番号", "名前", "アドレス"];
+
+/** 名簿の見出しのゆれを吸収する。先に完全一致、無ければ部分一致で探す。 */
+const ROSTER_ALIASES = {
+  email: ["email", "Email", "EMAIL", "mail", "Mail", "メール", "メールアドレス", "アドレス", "Gmail"],
+  name:  ["氏名", "名前", "生徒名", "なまえ", "Name"],
+  klass: ["組", "クラス", "学級", "Class"],
+  no:    ["出席番号", "番号", "出席No", "No", "no"]
+};
 
 const H_RESULT = ["UUID","保存日時","email","氏名","組","番号","ステージID","ステージ名","出典",
                   "得点","満点","正答数","問題数","正答率(%)","所要時間(秒)","自己ベスト更新",
@@ -191,23 +200,59 @@ function rosterSheet_() {
   return sh;
 }
 
+/**
+ * 名簿の列位置を見出しから判定する。見つからない列は 0（＝無い）。
+ * 例）「出席番号 / 名前 / アドレス」でも「email / 氏名 / 組 / 番号」でも動く。
+ */
+function rosterCols_(sh) {
+  const m = headerMap_(sh);
+  const keys = Object.keys(m);
+
+  function exact(list) {
+    for (let i = 0; i < list.length; i++) if (m[list[i]]) return m[list[i]];
+    return 0;
+  }
+  function loose(re, exclude) {
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      if (exclude && exclude.indexOf(m[k]) >= 0) continue;
+      if (re.test(k)) return m[k];
+    }
+    return 0;
+  }
+
+  const cols = {
+    email: exact(ROSTER_ALIASES.email),
+    name:  exact(ROSTER_ALIASES.name),
+    klass: exact(ROSTER_ALIASES.klass),
+    no:    exact(ROSTER_ALIASES.no)
+  };
+  const used = [cols.email, cols.name, cols.klass, cols.no].filter(function (c) { return c; });
+  if (!cols.email) cols.email = loose(/mail|メール|アドレス|@/i, used);
+  if (!cols.name)  cols.name  = loose(/氏名|名前|name/i, used);
+
+  // 見出しが1つも当たらない古い形式（email / 氏名 / 組 / 番号 の並び）への保険
+  if (!cols.email && !cols.name && sh.getLastColumn() >= 2) { cols.email = 1; cols.name = 2; }
+  return cols;
+}
+
 /** 名簿を email で引く。無ければ null */
 function findByEmail_(email) {
   const e = String(email || "").trim().toLowerCase();
   if (!e) return null;
   const sh = rosterSheet_();
   if (sh.getLastRow() < 2) return null;
-  const m = headerMap_(sh);
-  const cE = m["email"] || m["メールアドレス"] || 1;
-  const cN = m["氏名"] || 2, cK = m["組"] || 3, cNo = m["番号"] || 4;
+  const c = rosterCols_(sh);
+  if (!c.email) return null;
   const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+  function cell(row, col) { return col ? String(row[col - 1] == null ? "" : row[col - 1]).trim() : ""; }
   for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i][cE - 1]).trim().toLowerCase() === e) {
+    if (cell(rows[i], c.email).toLowerCase() === e) {
       return {
         email: e,
-        name:  String(rows[i][cN - 1] || "").trim(),
-        klass: String(rows[i][cK - 1] || "").trim(),
-        no:    String(rows[i][cNo - 1] || "").trim(),
+        name:  cell(rows[i], c.name),
+        klass: cell(rows[i], c.klass),
+        no:    cell(rows[i], c.no),
         row:   i + 2,
         teacher: isTeacher_(e)
       };
@@ -216,26 +261,63 @@ function findByEmail_(email) {
   return null;
 }
 
-/** 名簿へ追記（すでにあれば氏名などを補完するだけ） */
+/** 氏名の表記ゆれを吸収して比べるためのキー（空白を除く） */
+function nameKey_(s) { return String(s || "").replace(/[\s\u3000]/g, ""); }
+
+/**
+ * 名簿へ登録する。
+ *  1) すでに同じメールの行があれば、空いている項目だけ補う
+ *  2) 氏名が一致していてメールだけ空の行があれば、その行にメールを入れる
+ *     （名簿にいるがアカウント未登録の生徒を、行を増やさずに拾う）
+ *  3) どちらでもなければ最終行に追加する
+ * 実在する列にしか書き込まないので、他の列を壊さない。
+ */
 function upsertRoster_(email, name, klass, no) {
   const sh = rosterSheet_();
-  const m = headerMap_(sh);
-  const cE = m["email"] || m["メールアドレス"] || 1;
-  const cN = m["氏名"] || 2, cK = m["組"] || 3, cNo = m["番号"] || 4;
+  const c = rosterCols_(sh);
+  if (!c.email) {
+    throw new Error("名簿シートに「アドレス」（またはemail）の列が見つかりません。見出し行をご確認ください。");
+  }
 
+  function put(row, col, value) {
+    if (col && value !== "" && value != null) sh.getRange(row, col).setValue(value);
+  }
+
+  // 1) すでにいる
   const found = findByEmail_(email);
   if (found) {
-    if (!found.name && name)   sh.getRange(found.row, cN).setValue(name);
-    if (!found.klass && klass) sh.getRange(found.row, cK).setValue(klass);
-    if (!found.no && no)       sh.getRange(found.row, cNo).setValue(no);
+    if (!found.name  && name)  put(found.row, c.name,  name);
+    if (!found.klass && klass) put(found.row, c.klass, klass);
+    if (!found.no    && no)    put(found.row, c.no,    no);
     return findByEmail_(email);
   }
-  const width = Math.max(sh.getLastColumn(), cNo);
-  const row = new Array(width).fill("");
-  row[cE - 1] = email;
-  row[cN - 1] = name;
-  row[cK - 1] = klass;
-  row[cNo - 1] = no;
+
+  // 2) 氏名が同じでメールだけ空の行を探す
+  if (c.name && sh.getLastRow() >= 2) {
+    const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+    const key = nameKey_(name);
+    let hit = 0, count = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const mail = String(rows[i][c.email - 1] || "").trim();
+      const nm   = nameKey_(rows[i][c.name - 1]);
+      if (!mail && key && nm === key) { hit = i + 2; count++; }
+    }
+    if (count === 1) {                       // 候補がちょうど1人のときだけ
+      put(hit, c.email, email);
+      if (klass) put(hit, c.klass, klass);
+      if (no)    put(hit, c.no,    no);
+      return findByEmail_(email);
+    }
+  }
+
+  // 3) 追加
+  const width = Math.max(sh.getLastColumn(), c.email, c.name, c.klass, c.no, 1);
+  const row = [];
+  for (let i = 0; i < width; i++) row.push("");
+  row[c.email - 1] = email;
+  if (c.name)  row[c.name  - 1] = name;
+  if (c.klass) row[c.klass - 1] = klass;
+  if (c.no)    row[c.no    - 1] = no;
   sh.getRange(sh.getLastRow() + 1, 1, 1, width).setValues([row]);
   return findByEmail_(email);
 }
@@ -338,10 +420,15 @@ function getSession() {
 
     // 名簿に無い → 初回登録へ
     if (!me) {
+      const c = rosterCols_(rosterSheet_());
+      if (!c.email) {
+        return { ok: false, message: "名簿シートに「アドレス」（またはemail）の列が見つかりません。先生にお知らせください。" };
+      }
       return {
         ok: true, state: "register", version: CLIENT_VERSION,
         email: email, suggestNo: localPart_(email),
-        domain: MAIL_DOMAIN, prefix: STUDENT_PREFIX
+        domain: MAIL_DOMAIN, prefix: STUDENT_PREFIX,
+        fields: { klass: !!c.klass, no: !!c.no }     // 名簿にある欄だけ入力させる
       };
     }
     return sessionFor_(me);
@@ -449,7 +536,7 @@ function loadPool_() {
     if (pick(row, tMap, "公開").trim().toUpperCase() === "FALSE") return;
     const st = {
       id: id, src: pick(row, tMap, "出典"), title: pick(row, tMap, "タイトル"),
-      lead: pick(row, tMap, "リード文"), honbun: pick(row, tMap, "本文HTML"),
+      lead: pick(row, tMap, "リード文"), intro: pick(row, tMap, "前書き"), honbun: pick(row, tMap, "本文HTML"),
       chu: pick(row, tMap, "注"), yaku: pick(row, tMap, "現代語訳"),
       ord: Number(pick(row, tMap, "表示順")) || 9999, qs: []
     };
@@ -469,7 +556,7 @@ function loadPool_() {
     byId[sid].qs.push({
       id: qid, n: pick(row, qMap, "問番号") || "問",
       type: pick(row, qMap, "設問タイプ") || "内容理解",
-      q: pick(row, qMap, "設問文"), talk: pick(row, qMap, "話し合い文"),
+      q: pick(row, qMap, "設問文"), blank: pick(row, qMap, "空欄文"), talk: pick(row, qMap, "話し合い文"),
       opts: opts, a: a, exp: pick(row, qMap, "解説"),
       pt: Number(pick(row, qMap, "配点")) || 3
     });
@@ -839,7 +926,17 @@ function testConnection() {
     const ss = book_();
     out.push("集計簿: " + ss.getName());
     const r = ss.getSheetByName(SH_ROSTER);
-    out.push("名簿: " + (r ? (r.getLastRow() - 1) + "名" : "なし（初回セットアップ未実行）"));
+    if (r) {
+      const c = rosterCols_(r);
+      out.push("名簿: " + (r.getLastRow() - 1) + "行");
+      out.push("  列の判定 … アドレス:" + (c.email ? "第" + c.email + "列" : "見つかりません") +
+               " / 氏名:" + (c.name ? "第" + c.name + "列" : "なし") +
+               " / 組:" + (c.klass ? "第" + c.klass + "列" : "なし") +
+               " / 出席番号:" + (c.no ? "第" + c.no + "列" : "なし"));
+      if (!c.email) out.push("  ※ アドレスの列が判定できません。見出しを「アドレス」か「email」にしてください。");
+    } else {
+      out.push("名簿: なし（初回セットアップ未実行）");
+    }
   } catch (e) { out.push("集計簿: NG " + e.message); }
   try {
     const pool = loadPool_();
