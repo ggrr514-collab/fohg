@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>古典クエスト</title>
+<base target="_top">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+
+  :root{
+    --ink:#14161a; --navy:#16223d; --navy-700:#1f3057; --navy-50:#eef1f7;
+    --paper:#ffffff; --paper-2:#fafbfc; --line:#e7e9ee; --muted:#5b6472;
+    --ok:#1a6d52; --ok-bg:#eaf5f0; --ng:#a8271f; --ng-bg:#fdeeec;
+    --gold:#8a6d1f; --gold-bg:#f8f3e4;
+    --shadow:0 1px 2px rgba(20,22,26,.04), 0 8px 24px rgba(20,22,26,.06);
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:"Zen Kaku Gothic New",-apple-system,sans-serif;
+    color:var(--ink); background:var(--paper);
+    -webkit-font-smoothing:antialiased; line-height:1.7;
+    word-break:keep-all; overflow-wrap:anywhere; line-break:strict;
+  }
+  .mincho{font-family:"Shippori Mincho",serif}
+  button{font-family:inherit; cursor:pointer}
+  .wrap{max-width:960px; margin:0 auto; padding:0 20px}
+
+  header.site{position:sticky; top:0; z-index:40; background:rgba(255,255,255,.9);
+    backdrop-filter:saturate(160%) blur(10px); border-bottom:1px solid var(--line)}
+  .bar{max-width:960px; margin:0 auto; padding:12px 20px; display:flex; align-items:center; gap:10px}
+  .wordmark{font-family:"Shippori Mincho",serif; font-weight:700; font-size:22px; color:var(--navy);
+    letter-spacing:.14em; background:none; border:0; padding:0}
+  .bar .spacer{flex:1}
+  .nav-btn{font-size:12.5px; color:var(--muted); background:#fff; border:1px solid var(--line);
+    padding:6px 12px; border-radius:999px; white-space:nowrap}
+  .nav-btn:hover{border-color:var(--navy); color:var(--navy)}
+  .rankchip{font-size:12px; color:var(--gold); background:var(--gold-bg);
+    border:1px solid #ecdfbd; padding:5px 11px; border-radius:999px; white-space:nowrap}
+  @media(max-width:560px){ .wordmark{font-size:18px} .nav-btn{font-size:11.5px; padding:5px 9px} .rankchip{display:none} }
+
+  .hero{padding:36px 0 8px}
+  .hero h1{font-family:"Shippori Mincho",serif; font-weight:600; font-size:clamp(21px,4vw,31px);
+    line-height:1.55; margin:0 0 10px; letter-spacing:.05em}
+  .hero p{margin:0; color:var(--muted); font-size:14.5px; max-width:44em}
+  .notice{margin-top:16px; padding:13px 16px; background:var(--paper-2); border:1px solid var(--line);
+    border-radius:10px; font-size:12.5px; color:var(--muted)}
+  .notice b{color:var(--navy)}
+
+  .panel{margin-top:22px; border:1px solid var(--line); border-radius:var(--radius); background:#fff; overflow:hidden}
+  .panel > h2{margin:0; padding:14px 18px; font-size:14px; font-weight:700; letter-spacing:.06em;
+    color:var(--navy); background:var(--navy-50); border-bottom:1px solid var(--line)}
+  .panel .pad{padding:18px}
+
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px}
+  .kpi{border:1px solid var(--line); border-radius:10px; padding:13px 14px; background:var(--paper-2)}
+  .kpi .lab{font-size:11.5px; color:var(--muted); letter-spacing:.04em}
+  .kpi .val{font-family:"Shippori Mincho",serif; font-size:24px; font-weight:700; color:var(--navy); line-height:1.3}
+  .kpi .val small{font-size:12px; font-weight:500; color:var(--muted); margin-left:2px}
+
+  .bars{display:flex; flex-direction:column; gap:12px}
+  .barrow{display:grid; grid-template-columns:8.5em 1fr 4.6em; align-items:center; gap:10px; font-size:13px}
+  .barrow .track{height:9px; border-radius:99px; background:var(--navy-50); overflow:hidden}
+  .barrow .fill{height:100%; border-radius:99px; background:var(--navy); transition:width .5s ease}
+  .barrow .fill.weak{background:#b8763a}
+  .barrow .num{text-align:right; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums}
+  .barrow .name{color:#3a4555}
+  .hint{margin:14px 0 0; font-size:12.5px; color:var(--muted)}
+
+  .stages{display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:14px; padding:18px 0 44px}
+  .stage{border:1px solid var(--line); border-radius:var(--radius); background:#fff; padding:16px;
+    display:flex; flex-direction:column; gap:9px; text-align:left; transition:transform .16s, box-shadow .16s, border-color .16s}
+  .stage:hover{transform:translateY(-3px); box-shadow:var(--shadow); border-color:#d7dbe4}
+  .stage .top{display:flex; align-items:center; gap:8px}
+  .stage .no{font-family:"Shippori Mincho",serif; font-size:12px; letter-spacing:.1em; color:#fff;
+    background:var(--navy); border-radius:6px; padding:2px 8px}
+  .stage .src{font-size:11.5px; color:var(--navy); background:var(--navy-50); border-radius:999px; padding:2px 9px}
+  .stage h3{margin:0; font-family:"Shippori Mincho",serif; font-size:17px; font-weight:600; line-height:1.5}
+  .stage p{margin:0; font-size:13px; color:var(--muted)}
+  .stage .foot{display:flex; align-items:center; gap:8px; margin-top:3px; font-size:12px; color:var(--muted)}
+  .stage .score{font-weight:700; color:var(--navy)}
+  .stage .full{color:var(--gold); background:var(--gold-bg); border:1px solid #ecdfbd; border-radius:999px; padding:1px 8px; font-size:11px}
+  .stage .go{margin-left:auto; font-size:12.5px; color:var(--navy); font-weight:500}
+
+  /* ===== play ===== */
+  .playhead{display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:22px 0 4px}
+  .playhead h2{margin:0; font-family:"Shippori Mincho",serif; font-size:19px; font-weight:600; letter-spacing:.04em}
+  .playhead .src2{font-size:12px; color:var(--muted)}
+  .playhead .spacer{flex:1}
+  .timer{font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums;
+    border:1px solid var(--line); border-radius:999px; padding:4px 12px; background:#fff}
+  .timer.over{color:var(--ng); border-color:#f2cfcb; background:var(--ng-bg)}
+
+  .honbun{font-family:"Shippori Mincho",serif; font-size:17px; line-height:2.05; letter-spacing:.04em;
+    border:1px solid var(--line); border-radius:var(--radius); background:var(--paper-2); margin-top:14px}
+  .honbun.tate{writing-mode:vertical-rl; width:100%; max-width:100%; height:min(64vh,520px); padding:22px 26px; overflow-x:auto; overflow-y:hidden}
+  .honbun.yoko{writing-mode:horizontal-tb; padding:22px 24px}
+  .honbun .ul{text-decoration:underline; text-underline-offset:4px; text-decoration-thickness:1px}
+  .honbun .mk{font-size:.72em; vertical-align:super; color:var(--navy); font-weight:700}
+  .honbun.tate .mk{vertical-align:baseline}
+  .honbun p{margin:0 0 .4em}
+  .honbun.tate p{margin:0 .4em 0 0}
+  @media(max-width:560px){ .honbun{font-size:16px} .honbun.tate{height:min(60vh,440px); padding:18px 20px} }
+
+  .chu{margin-top:10px; border:1px solid var(--line); border-radius:10px; background:#fff; padding:13px 15px;
+    font-size:12.5px; color:var(--muted); line-height:1.85}
+  .chu b{color:#3a4555; font-weight:600}
+  .chu .lab{display:block; font-size:11px; letter-spacing:.1em; color:var(--navy); margin-bottom:5px}
+
+  .toolrow{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap}
+
+  .q{border:1px solid var(--line); border-radius:var(--radius); background:#fff; padding:17px 18px; margin-top:16px}
+  .q .qhead{display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; margin-bottom:11px}
+  .q .qno{font-family:"Shippori Mincho",serif; font-weight:700; color:var(--navy); font-size:15px; white-space:nowrap}
+  .q .tag{font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; white-space:nowrap}
+  .q .pt{font-size:11.5px; color:var(--muted); margin-left:auto}
+  .q .qtext{font-size:14.5px; line-height:1.85; margin:0 0 12px}
+  .q .qtext .kb{font-family:"Shippori Mincho",serif; text-decoration:underline; text-underline-offset:3px}
+  .talk{background:var(--paper-2); border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+    font-size:13.5px; line-height:1.95; margin:0 0 12px}
+  .talk .sp{color:var(--navy); font-weight:600}
+  .talk .blank{display:inline-block; min-width:7em; border-bottom:1.5px solid var(--navy); text-align:center; color:var(--navy)}
+
+  .opts{display:flex; flex-direction:column; gap:8px}
+  .opt{display:flex; gap:10px; align-items:flex-start; text-align:left; width:100%;
+    border:1px solid var(--line); border-radius:10px; background:#fff; padding:11px 13px;
+    font-size:14px; line-height:1.75; color:var(--ink); transition:border-color .14s, background .14s}
+  .opt:hover{border-color:var(--navy); background:var(--navy-50)}
+  .opt .mk{flex:0 0 auto; font-family:"Shippori Mincho",serif; font-weight:700; color:var(--navy);
+    width:1.6em; height:1.6em; border-radius:50%; border:1px solid var(--line); background:#fff;
+    display:grid; place-items:center; font-size:12.5px; margin-top:2px}
+  .opt.sel{border-color:var(--navy); background:var(--navy-50); box-shadow:0 0 0 2px var(--navy-50)}
+  .opt.sel .mk{background:var(--navy); color:#fff; border-color:var(--navy)}
+  .opt.correct{border-color:#a9d4c3; background:var(--ok-bg)}
+  .opt.correct .mk{background:var(--ok); color:#fff; border-color:var(--ok)}
+  .opt.wrong{border-color:#f0c6c2; background:var(--ng-bg)}
+  .opt.wrong .mk{background:var(--ng); color:#fff; border-color:var(--ng)}
+  .opt[disabled]{cursor:default}
+  .opt[disabled]:hover{border-color:var(--line); background:#fff}
+  .opt.correct[disabled]:hover{border-color:#a9d4c3; background:var(--ok-bg)}
+  .opt.wrong[disabled]:hover{border-color:#f0c6c2; background:var(--ng-bg)}
+
+  .exp{margin-top:12px; border-left:3px solid var(--navy); background:var(--paper-2);
+    border-radius:0 8px 8px 0; padding:11px 14px; font-size:13px; line-height:1.9; color:#3a4555}
+  .exp .jd{display:inline-block; font-weight:700; font-size:12px; letter-spacing:.06em; margin-bottom:3px}
+  .exp .jd.o{color:var(--ok)} .exp .jd.x{color:var(--ng)}
+  .exp b{color:var(--navy)}
+
+  .actions{display:flex; gap:10px; flex-wrap:wrap; padding:20px 0 48px}
+  .btn{font-size:14px; font-weight:500; padding:12px 22px; border-radius:9px;
+    border:1px solid var(--navy); background:#fff; color:var(--navy); transition:all .15s}
+  .btn.primary{background:var(--navy); color:#fff}
+  .btn.primary:hover{background:var(--navy-700)}
+  .btn.ghost:hover{background:var(--navy-50)}
+  .btn[disabled]{opacity:.35; pointer-events:none; border-color:var(--line); color:var(--muted); background:#fff}
+  .btn.sm{font-size:12.5px; padding:7px 14px; border-radius:999px; border-color:var(--line); color:var(--muted)}
+  .btn.sm:hover{border-color:var(--navy); color:var(--navy)}
+  .btn.sm.on{background:var(--navy); color:#fff; border-color:var(--navy)}
+  .btn.danger{border-color:#e3c6c3; color:var(--ng)}
+  .btn.danger:hover{background:var(--ng-bg)}
+
+  /* ===== result ===== */
+  .scorecard{margin-top:22px; border:1px solid var(--line); border-radius:var(--radius);
+    background:var(--paper-2); padding:26px 22px; text-align:center}
+  .scorecard .big{font-family:"Shippori Mincho",serif; font-size:46px; font-weight:700; color:var(--navy); line-height:1.15}
+  .scorecard .big small{font-size:19px; color:var(--muted); font-weight:500}
+  .scorecard .msg{margin:8px 0 0; font-size:14px; color:#3a4555}
+  .scorecard .meta{margin:10px 0 0; font-size:12.5px; color:var(--muted)}
+
+  details.yaku{margin-top:14px; border:1px solid var(--line); border-radius:10px; background:#fff}
+  details.yaku > summary{cursor:pointer; list-style:none; padding:12px 16px; font-size:13.5px;
+    color:var(--navy); font-weight:600; display:flex; align-items:center; gap:8px}
+  details.yaku > summary::-webkit-details-marker{display:none}
+  details.yaku > summary::before{content:"▶"; font-size:9px; color:var(--muted); transition:transform .18s}
+  details.yaku[open] > summary::before{transform:rotate(90deg)}
+  details.yaku .inner{padding:0 18px 16px; font-size:13.5px; line-height:2; color:#3a4555}
+  details.yaku .inner p{margin:0 0 .9em}
+
+  footer.site{border-top:1px solid var(--line); padding:24px 0 40px; color:var(--muted); font-size:12px}
+  .hidden{display:none !important}
+
+  /* ===== GAS版で追加 ===== */
+  .center-wrap{max-width:420px; margin:0 auto; padding:44px 20px 60px}
+  .login h1{font-family:"Shippori Mincho",serif; font-weight:600; font-size:27px; letter-spacing:.14em;
+    text-align:center; color:var(--navy); margin:0 0 6px}
+  .login .sub{text-align:center; color:var(--muted); font-size:13px; margin:0 0 26px; letter-spacing:.04em}
+  .field{margin-bottom:14px}
+  .field label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; letter-spacing:.04em}
+  .field input{width:100%; padding:13px 14px; font-size:16px; font-family:inherit; color:var(--ink);
+    border:1px solid var(--line); border-radius:10px; background:var(--paper-2); outline:none;
+    transition:border-color .15s, box-shadow .15s}
+  .field input:focus{border-color:var(--navy); box-shadow:0 0 0 3px var(--navy-50); background:#fff}
+  .msg{margin:14px 0 0; padding:11px 14px; border-radius:9px; font-size:13px; line-height:1.7; display:none}
+  .msg.show{display:block}
+  .msg.err{background:var(--ng-bg); color:var(--ng); border:1px solid #f0c6c2}
+  .msg.ok{background:var(--ok-bg); color:var(--ok); border:1px solid #a9d4c3}
+  .msg.warn{background:var(--gold-bg); color:var(--gold); border:1px solid #ecdfbd}
+
+  .who{font-size:12px; color:var(--muted); white-space:nowrap}
+  .who b{color:var(--navy); font-weight:600}
+
+  .loading{position:fixed; inset:0; background:rgba(255,255,255,.72); backdrop-filter:blur(2px);
+    display:none; place-items:center; z-index:80}
+  .loading.show{display:grid}
+  .loading .box{background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow);
+    padding:20px 26px; font-size:13.5px; color:var(--navy); display:flex; align-items:center; gap:12px}
+  .spin{width:16px; height:16px; border:2px solid var(--navy-50); border-top-color:var(--navy);
+    border-radius:50%; animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .rank-table{width:100%; border-collapse:collapse; font-size:13px}
+  .rank-table th,.rank-table td{padding:8px 10px; border-bottom:1px solid var(--line); text-align:left}
+  .rank-table th{font-size:11.5px; color:var(--muted); font-weight:500; letter-spacing:.04em}
+  .rank-table td.n{text-align:right; font-variant-numeric:tabular-nums}
+  .rank-table tr.me td{background:var(--navy-50); font-weight:700; color:var(--navy)}
+  .rank-table .medal{font-family:"Shippori Mincho",serif; font-weight:700; color:var(--navy)}
+
+  .hist{font-size:13px}
+  .hist .row{display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:center;
+    padding:9px 0; border-bottom:1px solid var(--line)}
+  .hist .row:last-child{border-bottom:0}
+  .hist .t{color:var(--muted); font-size:11.5px}
+  .hist .s{font-weight:700; color:var(--navy); font-variant-numeric:tabular-nums}
+  .hist .g{color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums}
+
+  .gain{display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-top:14px}
+  .gain span{font-size:12px; color:var(--muted); background:#fff; border:1px solid var(--line);
+    border-radius:999px; padding:4px 12px}
+  .gain span b{color:var(--navy); font-weight:700}
+  .gain span.mult{background:var(--gold-bg); border-color:#ecdfbd; color:var(--gold)}
+
+  .modal{position:fixed; inset:0; background:rgba(20,22,26,.45); backdrop-filter:blur(2px);
+    display:none; place-items:center; z-index:90; padding:20px}
+  .modal.show{display:grid}
+  .modal .sheet{background:#fff; border-radius:14px; border:1px solid var(--line); box-shadow:var(--shadow);
+    width:100%; max-width:460px; max-height:86vh; overflow:auto; padding:22px}
+  .modal h3{margin:0 0 4px; font-family:"Shippori Mincho",serif; font-size:18px; font-weight:600; color:var(--navy)}
+  .modal .lead{margin:0 0 16px; font-size:12.5px; color:var(--muted)}
+  .modal textarea{width:100%; min-height:88px; padding:11px 13px; font-size:14px; font-family:inherit;
+    border:1px solid var(--line); border-radius:10px; background:var(--paper-2); outline:none; resize:vertical}
+  .modal textarea:focus{border-color:var(--navy); box-shadow:0 0 0 3px var(--navy-50); background:#fff}
+  .kinds{display:flex; flex-wrap:wrap; gap:7px; margin-bottom:13px}
+  .kinds button{font-size:12.5px; padding:7px 13px; border-radius:999px; border:1px solid var(--line);
+    background:#fff; color:var(--muted)}
+  .kinds button.on{background:var(--navy); color:#fff; border-color:var(--navy)}
+  .report-btn{margin-top:10px; font-size:12px; color:var(--muted); background:none; border:0;
+    text-decoration:underline; text-underline-offset:3px; padding:0}
+  .report-btn:hover{color:var(--navy)}
+</style>
+</head>
+<body>
+
+<div class="loading" id="loading"><div class="box"><span class="spin"></span><span id="loadingMsg">読み込んでいます…</span></div></div>
+
+<!-- ============ LOGIN ============ -->
+<main id="login" class="center-wrap login">
+  <h1>古典クエスト</h1>
+  <p class="sub">埼玉県公立高校入試　大問4（古文）対策</p>
+  <div class="panel" style="margin-top:0">
+    <div class="pad">
+      <div class="field"><label for="inNo">出席番号</label>
+        <input id="inNo" type="tel" inputmode="numeric" autocomplete="off" placeholder="例）105"></div>
+      <div class="field"><label for="inCode">個人コード</label>
+        <input id="inCode" type="password" autocomplete="off" placeholder="先生から配られたコード"></div>
+      <button class="btn primary" id="loginBtn" style="width:100%; margin-top:8px">はじめる</button>
+      <div class="msg err" id="loginMsg"></div>
+    </div>
+  </div>
+  <p class="hint" style="text-align:center">記録は先生のスプレッドシートに保存されます。</p>
+</main>
+
+<header class="site hidden" id="siteHeader">
+  <div class="bar">
+    <button class="wordmark" onclick="goHome()">古典クエスト</button>
+    <span class="spacer"></span>
+    <span class="who" id="whoChip"></span>
+    <span class="rankchip" id="rankChip">古文の旅人</span>
+    <button class="nav-btn" onclick="goHome()">ステージ一覧</button>
+  </div>
+</header>
+
+<!-- ============ HOME ============ -->
+<main id="home" class="wrap hidden">
+  <section class="hero">
+    <h1 class="mincho">埼玉県公立高校入試<br>大問4「古文」対策クエスト</h1>
+    <p>1ステージ＝本文1つ＋小問4問（各3点／12点満点）。すべて<b>ア〜エの4択記号問題</b>です。解いた記録は自動で保存され、弱点分析にも反映されます。</p>
+    <div class="msg warn" id="blockedMsg"></div>
+  </section>
+
+  <section class="panel">
+    <h2>冒険の記録</h2>
+    <div class="pad">
+      <div class="kpis">
+        <div class="kpi"><div class="lab">合計スコア</div><div class="val" id="kScore">0</div></div>
+        <div class="kpi"><div class="lab">クリアしたステージ</div><div class="val" id="kClear">0<small>/0</small></div></div>
+        <div class="kpi"><div class="lab">正答率</div><div class="val" id="kRate">–<small>%</small></div></div>
+        <div class="kpi"><div class="lab">称号</div><div class="val" id="kRank" style="font-size:19px">古文の旅人</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>弱点分析（設問タイプ別の正答率）</h2>
+    <div class="pad">
+      <div class="bars" id="typeBars"></div>
+      <p class="hint" id="typeHint">まだ記録がありません。ステージ1から挑戦してみましょう。</p>
+      <div class="toolrow" style="margin-top:16px">
+        <button class="btn sm" id="reviewBtn" onclick="startReview()">まちがえた問題を復習（0問）</button>
+        <button class="btn sm" onclick="openRanking()">ランキングを見る</button>
+        <button class="btn sm" onclick="openHistory()">解答履歴を見る</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="rankPanel">
+    <h2>ランキング（合計スコア）</h2>
+    <div class="pad"><div id="rankBody" class="hint">読み込んでいます…</div></div>
+  </section>
+
+  <section class="panel hidden" id="histPanel">
+    <h2>解答履歴（新しい順）</h2>
+    <div class="pad"><div id="histBody" class="hint">読み込んでいます…</div></div>
+  </section>
+
+  <section class="stages" id="stageGrid"></section>
+</main>
+
+<!-- ============ PLAY ============ -->
+<main id="play" class="wrap hidden">
+  <div class="playhead">
+    <h2 class="mincho" id="pTitle"></h2>
+    <span class="src2" id="pSrc"></span>
+    <span class="spacer"></span>
+    <span class="timer" id="pTimer">00:00</span>
+  </div>
+  <div class="honbun tate" id="pHonbun"></div>
+  <div class="toolrow">
+    <button class="btn sm on" id="tateBtn" onclick="setTate(true)">縦書き</button>
+    <button class="btn sm" id="yokoBtn" onclick="setTate(false)">横書き</button>
+  </div>
+  <div class="chu" id="pChu"></div>
+  <div id="pQs"></div>
+  <div class="actions">
+    <button class="btn primary" id="gradeBtn" onclick="grade()" disabled>採点して記録する</button>
+    <button class="btn ghost" onclick="confirmLeave()">中断してもどる</button>
+  </div>
+</main>
+
+<!-- ============ RESULT ============ -->
+<main id="result" class="wrap hidden">
+  <div class="playhead"><h2 class="mincho" id="rTitle"></h2></div>
+  <div class="scorecard">
+    <div class="big" id="rScore">0<small>/12点</small></div>
+    <p class="msg2 mincho" id="rMsg" style="margin:8px 0 0; font-size:14px; color:#3a4555"></p>
+    <div class="gain" id="rGain"></div>
+    <p class="meta" id="rMeta"></p>
+  </div>
+  <div class="msg err" id="saveMsg"></div>
+  <details class="yaku" id="rYaku"><summary>現代語訳を読む</summary><div class="inner" id="rYakuBody"></div></details>
+  <div id="rReview"></div>
+  <div class="actions">
+    <button class="btn primary" id="rNext" onclick="nextStage()">次のステージへ</button>
+    <button class="btn ghost" onclick="retry()">もう一度解く</button>
+    <button class="btn ghost" onclick="goHome()">ステージ一覧へ</button>
+  </div>
+</main>
+
+<!-- ============ REVIEW ============ -->
+<main id="review" class="wrap hidden">
+  <div class="playhead"><h2 class="mincho">まちがえた問題の復習</h2><span class="spacer"></span></div>
+  <p class="hint" style="margin-top:6px">直近の解答でまちがえた問題です。ここでの正誤は記録されません。ステージをもう一度解くと記録が更新されます。</p>
+  <div id="vList"></div>
+  <div class="actions"><button class="btn ghost" onclick="goHome()">ステージ一覧へ</button></div>
+</main>
+
+<!-- ============ 疑義報告モーダル ============ -->
+<div class="modal" id="repModal">
+  <div class="sheet">
+    <h3>この問題を報告する</h3>
+    <p class="lead" id="repQ"></p>
+    <div class="kinds" id="repKinds"></div>
+    <textarea id="repMemo" placeholder="どこがおかしいと思ったか、くわしく書いてください。"></textarea>
+    <div class="msg" id="repMsg"></div>
+    <div style="display:flex; gap:10px; margin-top:14px">
+      <button class="btn primary" id="repSend" onclick="sendReport()">報告する</button>
+      <button class="btn ghost" onclick="closeReport()">やめる</button>
+    </div>
+  </div>
+</div>
+
+<footer class="site"><div class="wrap">古典クエスト｜埼玉県公立高校入試 大問4（古文）対策　※本文は『宇治拾遺物語』『徒然草』ほかの古典作品から採り、表記を一部改めています。設問はオリジナルです。</div></footer>
+
+<script>
+/* ============================================================
+   古典クエスト ― クライアント側
+   ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
+   ============================================================ */
+var CLIENT_VERSION = 1;
+
+var MARK  = ['ア','イ','ウ','エ'];
+var TYPES = ['仮名遣い','主語・語意','内容理解','要旨・話し合い'];
+var KINDS = ['正解が複数ある','正解が選択肢にない','読みや表記の誤り','その他'];
+var NO_KEY = 'kobun4-last-no';
+
+var ME=null, STAGES=[], PROG=null, SETTINGS={}, BLOCKED='';
+var CUR=null, PICKS=[], GRADED=false, T0=0, TICK=null, TATE=true, BLUR=0, STARTED='';
+var LAST=null;                 // 直近の採点結果（疑義報告に使う）
+var REP={qid:null, mine:-1, kind:KINDS[0]};
+
+/* ---------- サーバー呼び出し ---------- */
+function call(fn, args, onOk, onErr){
+  showLoading(true);
+  var runner = google.script.run
+    .withSuccessHandler(function(r){ showLoading(false); onOk && onOk(r); })
+    .withFailureHandler(function(e){
+      showLoading(false);
+      var m = (e && e.message) ? e.message : String(e);
+      if(onErr) onErr(m); else alert('通信に失敗しました。\n' + m);
+    });
+  runner[fn].apply(runner, args || []);
+}
+function showLoading(on, msg){
+  var el=document.getElementById('loading');
+  if(msg) document.getElementById('loadingMsg').textContent=msg;
+  el.classList.toggle('show', !!on);
+}
+function setMsg(id, text, cls){
+  var el=document.getElementById(id);
+  el.className='msg ' + (cls||'err') + (text?' show':'');
+  el.textContent=text||'';
+}
+
+/* ---------- 画面切り替え ---------- */
+function show(id){
+  ['login','home','play','result','review'].forEach(function(s){
+    document.getElementById(s).classList.toggle('hidden', s!==id);
+  });
+  document.getElementById('siteHeader').classList.toggle('hidden', id==='login');
+  window.scrollTo(0,0);
+}
+function goHome(){ stopTimer(); renderHome(); show('home'); }
+
+/* ============================================================
+   ログイン
+   ============================================================ */
+window.addEventListener('load', function(){
+  var last='';
+  try{ last=localStorage.getItem(NO_KEY)||''; }catch(e){}
+  if(last) document.getElementById('inNo').value=last;
+  document.getElementById('loginBtn').addEventListener('click', doLogin);
+  ['inNo','inCode'].forEach(function(id){
+    document.getElementById(id).addEventListener('keydown', function(ev){
+      if(ev.key==='Enter') doLogin();
+    });
+  });
+  document.getElementById(last?'inCode':'inNo').focus();
+  window.addEventListener('blur', function(){ if(CUR!=null && !GRADED) BLUR++; });
+  buildRepKinds();
+});
+
+function doLogin(){
+  var no=document.getElementById('inNo').value.trim();
+  var cd=document.getElementById('inCode').value.trim();
+  if(!no||!cd){ setMsg('loginMsg','出席番号と個人コードを入力してください。'); return; }
+  setMsg('loginMsg','');
+  call('login',[no,cd], function(r){
+    if(!r || !r.ok){ setMsg('loginMsg', (r&&r.message)||'ログインできませんでした。'); return; }
+    if(r.version !== CLIENT_VERSION){
+      setMsg('loginMsg','画面が古いようです。ページを再読み込みしてください。（画面 '+CLIENT_VERSION+' / サーバー '+r.version+'）');
+      return;
+    }
+    ME=r.student; STAGES=r.stages||[]; PROG=r.progress; SETTINGS=r.settings||{}; BLOCKED=r.blocked||'';
+    try{ localStorage.setItem(NO_KEY, ME.no); }catch(e){}
+    document.getElementById('whoChip').innerHTML='<b>'+esc(ME.name)+'</b> さん'+(ME.teacher?'（教員）':'');
+    goHome();
+  }, function(m){ setMsg('loginMsg','通信に失敗しました。'+m); });
+}
+
+function esc(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ============================================================
+   ホーム
+   ============================================================ */
+function renderHome(){
+  document.getElementById('kScore').textContent = fmt(PROG.totalScore||0);
+  var cleared=0, full=0;
+  STAGES.forEach(function(st){
+    var b=PROG.best[st.id];
+    if(b!=null) cleared++;
+    if(b!=null && b>=fullOf(st)) full++;
+  });
+  document.getElementById('kClear').innerHTML=cleared+'<small>/'+STAGES.length+'</small>';
+
+  var tc=0, tt=0;
+  TYPES.forEach(function(t){ var s=PROG.stats[t]||{c:0,t:0}; tc+=s.c; tt+=s.t; });
+  document.getElementById('kRate').innerHTML=(tt?Math.round(tc/tt*100):'–')+'<small>%</small>';
+  document.getElementById('kRank').textContent=PROG.rankName;
+  document.getElementById('rankChip').textContent=PROG.rankName+'（'+fmt(PROG.totalScore||0)+'pt）';
+
+  document.getElementById('typeBars').innerHTML=TYPES.map(function(t){
+    var s=PROG.stats[t]||{c:0,t:0}, r=s.t?Math.round(s.c/s.t*100):0;
+    var weak=(s.t>=3 && r<60);
+    return '<div class="barrow"><span class="name">'+t+'</span>'+
+      '<span class="track"><span class="fill'+(weak?' weak':'')+'" style="width:'+(s.t?r:0)+'%"></span></span>'+
+      '<span class="num">'+(s.t? r+'%':'—')+'</span></div>';
+  }).join('');
+
+  document.getElementById('typeHint').textContent=hintText(tt, full);
+
+  var rb=document.getElementById('reviewBtn');
+  var wrongN=(PROG.wrong||[]).length;
+  rb.textContent='まちがえた問題を復習（'+wrongN+'問）';
+  rb.disabled=(wrongN===0);
+
+  setMsg('blockedMsg', BLOCKED, 'warn');
+
+  document.getElementById('stageGrid').innerHTML=STAGES.map(function(st,i){
+    var b=PROG.best[st.id], fu=fullOf(st);
+    var foot=(b==null)?'<span>未挑戦</span>'
+      :'<span>最高得点 <span class="score">'+b+'/'+fu+'点</span></span>'+(b>=fu?'<span class="full">満点</span>':'');
+    return '<button class="stage" onclick="openStage('+i+')">'+
+      '<div class="top"><span class="no">STAGE '+(i+1)+'</span><span class="src">'+esc(st.src)+'</span></div>'+
+      '<h3>'+esc(st.title)+'</h3><p>'+esc(st.lead)+'</p>'+
+      '<div class="foot">'+foot+'<span class="go">解く →</span></div></button>';
+  }).join('');
+}
+
+function fullOf(st){ var n=0; st.qs.forEach(function(q){ n+=(q.pt||3); }); return n; }
+function fmt(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+function hintText(tt, full){
+  if(!tt) return 'まだ記録がありません。ステージ1から挑戦してみましょう。';
+  var worst=null;
+  TYPES.forEach(function(t){
+    var s=PROG.stats[t]||{c:0,t:0};
+    if(s.t>=3){ var r=s.c/s.t; if(!worst||r<worst.r) worst={t:t,r:r}; }
+  });
+  if(worst && worst.r<0.8){
+    var tip = worst.t==='仮名遣い' ? '「は行転呼・ゐゑを・ぢづ・au→おう」の4パターンを見直しましょう。'
+            : worst.t==='主語・語意' ? '主語は「言ふ／思ふ」の直前をたどり、敬語の有無で人物を見分けましょう。'
+            : worst.t==='内容理解' ? '傍線部の直前・直後に必ず根拠があります。本文の言葉に線を引いて確かめましょう。'
+            : '話し合い文は本文の要旨のまとめです。最後の一文（教訓・感想）に注目しましょう。';
+    return 'いま最も伸びしろがあるのは「'+worst.t+'」です（正答率'+Math.round(worst.r*100)+'％）。'+tip;
+  }
+  return 'どのタイプも安定しています。満点でないステージを解き直して仕上げましょう。'+(full?'（満点：'+full+'ステージ）':'');
+}
+
+/* ---------- ランキング・履歴 ---------- */
+function openRanking(){
+  var p=document.getElementById('rankPanel');
+  p.classList.remove('hidden');
+  p.scrollIntoView({behavior:'smooth', block:'start'});
+  call('getRanking',[ME.no], function(r){
+    var body=document.getElementById('rankBody');
+    if(!r || !r.ok){ body.textContent='読み込めませんでした。'; return; }
+    if(!r.top.length){ body.textContent='まだ記録がありません。'; return; }
+    body.innerHTML='<table class="rank-table"><tr><th>順位</th><th>氏名</th><th>称号</th><th class="n">スコア</th></tr>'+
+      r.top.map(function(x){
+        var me=(String(x.no)===String(ME.no));
+        return '<tr class="'+(me?'me':'')+'"><td class="medal">'+x.rank+'</td><td>'+esc(x.name)+'</td>'+
+               '<td>'+esc(x.rankName)+'</td><td class="n">'+fmt(x.score)+'</td></tr>';
+      }).join('')+'</table>'+
+      (r.mine.rank ? '<p class="hint">あなたは '+r.total+' 人中 <b>'+r.mine.rank+'位</b>（'+fmt(r.mine.score)+'pt）です。</p>'
+                   : '<p class="hint">まだランキングに入っていません。1ステージ解いてみましょう。</p>');
+  });
+}
+
+function openHistory(){
+  var p=document.getElementById('histPanel');
+  p.classList.remove('hidden');
+  p.scrollIntoView({behavior:'smooth', block:'start'});
+  call('getMyHistory',[ME.no, 30], function(r){
+    var body=document.getElementById('histBody');
+    if(!r || !r.ok){ body.textContent='読み込めませんでした。'; return; }
+    if(!r.rows.length){ body.textContent='まだ記録がありません。'; return; }
+    body.innerHTML='<div class="hist">'+r.rows.map(function(x){
+      return '<div class="row"><div><div>'+esc(x.stage)+'</div><div class="t">'+esc(x.at)+'</div></div>'+
+             '<div class="s">'+x.score+'/'+x.full+'点</div>'+
+             '<div class="g">'+Math.floor(x.secs/60)+'分'+(x.secs%60)+'秒　+'+fmt(x.gained)+'pt</div></div>';
+    }).join('')+'</div>';
+  });
+}
+
+/* ============================================================
+   ステージ
+   ============================================================ */
+function openStage(i){
+  if(BLOCKED){ alert(BLOCKED); return; }
+  CUR=i; GRADED=false; BLUR=0;
+  var st=STAGES[i];
+  PICKS=st.qs.map(function(){ return null; });
+  STARTED=new Date().toISOString();
+
+  document.getElementById('pTitle').textContent='STAGE '+(i+1)+'　'+st.title;
+  document.getElementById('pSrc').textContent='（'+st.src+'より）　'+fullOf(st)+'点満点・目安5分';
+  document.getElementById('pHonbun').innerHTML=st.honbun;
+  document.getElementById('pChu').innerHTML='<span class="lab">（注）</span>'+st.chu;
+  document.getElementById('pQs').innerHTML=st.qs.map(function(q,qi){
+    return '<div class="q" id="q'+qi+'">'+
+      '<div class="qhead"><span class="qno">'+esc(q.n)+'</span><span class="tag">'+esc(q.type)+'</span>'+
+      '<span class="pt">'+(q.pt||3)+'点</span></div>'+
+      (q.talk?'<p class="qtext">'+q.q+'</p><div class="talk">'+q.talk+'</div>'
+             :'<p class="qtext">'+q.q+'</p>')+
+      '<div class="opts">'+q.opts.map(function(o,oi){
+        return '<button class="opt" id="o'+qi+'_'+oi+'" onclick="pick('+qi+','+oi+')">'+
+               '<span class="mk">'+MARK[oi]+'</span><span>'+esc(o)+'</span></button>';
+      }).join('')+'</div><div id="e'+qi+'"></div></div>';
+  }).join('');
+  document.getElementById('gradeBtn').disabled=true;
+  document.getElementById('gradeBtn').textContent='採点して記録する';
+  setTate(TATE);
+  startTimer();
+  show('play');
+}
+
+function setTate(v){
+  TATE=v;
+  var h=document.getElementById('pHonbun');
+  h.classList.toggle('tate',v); h.classList.toggle('yoko',!v);
+  document.getElementById('tateBtn').classList.toggle('on',v);
+  document.getElementById('yokoBtn').classList.toggle('on',!v);
+  if(v) h.scrollLeft=h.scrollWidth;
+}
+
+function pick(qi,oi){
+  if(GRADED) return;
+  PICKS[qi]=oi;
+  STAGES[CUR].qs[qi].opts.forEach(function(_,k){
+    document.getElementById('o'+qi+'_'+k).classList.toggle('sel',k===oi);
+  });
+  document.getElementById('gradeBtn').disabled = PICKS.some(function(p){ return p===null; });
+}
+
+function startTimer(){
+  stopTimer(); T0=Date.now();
+  var el=document.getElementById('pTimer');
+  el.classList.remove('over'); el.textContent='00:00';
+  TICK=setInterval(function(){
+    var s=Math.floor((Date.now()-T0)/1000);
+    el.textContent=('0'+Math.floor(s/60)).slice(-2)+':'+('0'+(s%60)).slice(-2);
+    el.classList.toggle('over', s>300);
+  },1000);
+}
+function stopTimer(){ if(TICK){ clearInterval(TICK); TICK=null; } }
+function confirmLeave(){
+  if(!GRADED && PICKS.some(function(p){ return p!==null; })){
+    if(!confirm('採点せずにもどると、この回の記録は保存されません。もどりますか。')) return;
+  }
+  CUR=null; goHome();
+}
+
+/* ============================================================
+   採点（サーバーで答え合わせ・記録）
+   ============================================================ */
+function grade(){
+  if(GRADED) return;
+  var st=STAGES[CUR];
+  var secs=Math.floor((Date.now()-T0)/1000);
+  document.getElementById('gradeBtn').disabled=true;
+  document.getElementById('gradeBtn').textContent='記録しています…';
+
+  call('submitResult',[{
+    no: ME.no, stageId: st.id, picks: PICKS,
+    seconds: secs, blur: BLUR, startedAt: STARTED
+  }], function(r){
+    if(!r || !r.ok){
+      document.getElementById('gradeBtn').disabled=false;
+      document.getElementById('gradeBtn').textContent='採点して記録する';
+      alert((r&&r.message)||'記録できませんでした。もう一度お試しください。');
+      return;
+    }
+    GRADED=true; stopTimer();
+    PROG=r.progress; LAST=r;
+    document.getElementById('rankChip').textContent=PROG.rankName+'（'+fmt(PROG.totalScore||0)+'pt）';
+    paintPlay(r);
+    paintResult(r, secs);
+    show('result');
+  }, function(m){
+    document.getElementById('gradeBtn').disabled=false;
+    document.getElementById('gradeBtn').textContent='採点して記録する';
+    alert('記録できませんでした。電波のよい場所でもう一度お試しください。\n'+m);
+  });
+}
+
+/* 出題画面側にも正誤を反映しておく（「もう一度解く」で戻ったとき用ではなく、採点済みの固定） */
+function paintPlay(r){
+  var st=STAGES[CUR];
+  st.qs.forEach(function(q,qi){
+    var d=r.detail[qi];
+    q.opts.forEach(function(_,k){
+      var b=document.getElementById('o'+qi+'_'+k);
+      if(!b) return;
+      b.disabled=true; b.classList.remove('sel');
+      if(k===d.a) b.classList.add('correct');
+      else if(k===d.mine) b.classList.add('wrong');
+    });
+    var e=document.getElementById('e'+qi);
+    if(e) e.innerHTML=expHtml(q,d.mine,d.ok);
+  });
+}
+
+function expHtml(q,mine,ok){
+  return '<div class="exp"><span class="jd '+(ok?'o':'x')+'">'+(ok?'○ 正解':'× 不正解')+'</span>'+
+    (ok?'':'　正解は <b>'+MARK[q.a]+'</b>')+'<br>'+q.exp+'</div>';
+}
+
+function paintResult(r, secs){
+  var st=STAGES[CUR];
+  document.getElementById('rTitle').textContent='STAGE '+(CUR+1)+'　'+st.title+'　結果';
+  document.getElementById('rScore').innerHTML=r.score+'<small>/'+r.fullScore+'点</small>';
+
+  var msg = r.score===r.fullScore ? '満点です。文句なしの出来ばえ。'
+          : r.rate>=75 ? '合格ライン。取りこぼした問題の根拠を本文で確かめましょう。'
+          : r.rate>=50 ? 'あと一歩。解説を読んでから、もう一度解き直すと定着します。'
+          : r.rate>=25 ? 'まずは現代語訳を読んでから、本文をもう一度たどってみましょう。'
+                       : '現代語訳→本文→設問の順で読み直すのがおすすめです。';
+  document.getElementById('rMsg').textContent=msg;
+
+  var gain='<span>基礎点 <b>'+fmt(r.basePt)+'</b></span>'+
+           '<span>タイム点 <b>'+fmt(r.timePt)+'</b></span>'+
+           (r.fullPt?'<span>満点ボーナス <b>'+fmt(r.fullPt)+'</b></span>':'')+
+           (r.mult>1?'<span class="mult">授業中ボーナス <b>×'+r.mult+'</b></span>':'')+
+           '<span>獲得スコア <b>'+fmt(r.gained)+'</b></span>';
+  document.getElementById('rGain').innerHTML=gain;
+
+  document.getElementById('rMeta').textContent=
+    '解答時間 '+Math.floor(secs/60)+'分'+(secs%60)+'秒　／　自己最高 '+(PROG.best[st.id])+'点'+
+    (r.isBest && r.prevBest!=null ? '（自己ベスト更新）' : (r.isBest?'（初クリア）':''))+
+    '　／　合計 '+fmt(PROG.totalScore)+'pt・'+PROG.rankName;
+
+  setMsg('saveMsg', r.duplicated ? 'この回はすでに記録されています（二重送信を防ぎました）。' : '', 'warn');
+  document.getElementById('rYakuBody').innerHTML=st.yaku;
+  document.getElementById('rYaku').open=false;
+
+  document.getElementById('rReview').innerHTML=st.qs.map(function(q,qi){
+    var d=r.detail[qi], ok=d.ok;
+    return '<div class="q"><div class="qhead"><span class="qno">'+esc(q.n)+'</span><span class="tag">'+esc(q.type)+'</span>'+
+      '<span class="pt" style="color:'+(ok?'var(--ok)':'var(--ng)')+';font-weight:700">'+(ok?'正解 +'+(q.pt||3)+'点':'不正解 0点')+'</span></div>'+
+      '<p class="qtext" style="font-size:13.5px;color:var(--muted)">'+q.q.replace(/<span class="kb">/g,'<span>')+'</p>'+
+      '<p style="margin:0 0 8px;font-size:14px">正解　<b class="mincho" style="color:var(--navy)">'+MARK[q.a]+'</b>　'+esc(q.opts[q.a])+
+      (ok?'':'<br><span style="font-size:13px;color:var(--ng)">あなたの解答　'+MARK[d.mine]+'　'+esc(q.opts[d.mine]||'')+'</span>')+'</p>'+
+      '<div class="exp">'+q.exp+'</div>'+
+      '<button class="report-btn" onclick="openReport(\''+q.id+'\','+d.mine+')">この問題がおかしいと思ったら報告する</button>'+
+      '</div>';
+  }).join('');
+
+  document.getElementById('rNext').classList.toggle('hidden', CUR>=STAGES.length-1);
+  document.getElementById('rNext').textContent='STAGE '+(CUR+2)+' へ進む';
+}
+
+function retry(){ openStage(CUR); }
+function nextStage(){ if(CUR<STAGES.length-1) openStage(CUR+1); else goHome(); }
+
+/* ============================================================
+   復習（記録には残さない見直し用）
+   ============================================================ */
+function findQ(qid){
+  for(var i=0;i<STAGES.length;i++){
+    for(var j=0;j<STAGES[i].qs.length;j++){
+      if(STAGES[i].qs[j].id===qid) return {stage:STAGES[i], si:i, q:STAGES[i].qs[j]};
+    }
+  }
+  return null;
+}
+function startReview(){
+  var list=(PROG.wrong||[]).map(findQ).filter(Boolean);
+  var box=document.getElementById('vList');
+  if(!list.length){
+    box.innerHTML='<div class="panel"><div class="pad" style="color:var(--muted);font-size:14px">復習リストは空です。おつかれさまでした。</div></div>';
+  }else{
+    box.innerHTML=list.map(function(f,n){
+      var q=f.q, st=f.stage;
+      return '<div class="q" id="v'+n+'">'+
+        '<div class="qhead"><span class="qno">'+esc(q.n)+'</span><span class="tag">'+esc(q.type)+'</span>'+
+        '<span class="pt">STAGE '+(f.si+1)+'　'+esc(st.title)+'（'+esc(st.src)+'）</span></div>'+
+        '<details class="yaku" style="margin:0 0 12px"><summary>本文と（注）を開く</summary>'+
+          '<div class="inner"><div class="honbun yoko" style="margin-top:0">'+st.honbun+'</div>'+
+          '<div class="chu"><span class="lab">（注）</span>'+st.chu+'</div></div></details>'+
+        (q.talk?'<p class="qtext">'+q.q+'</p><div class="talk">'+q.talk+'</div>':'<p class="qtext">'+q.q+'</p>')+
+        '<div class="opts">'+q.opts.map(function(o,oi){
+          return '<button class="opt" id="v'+n+'_'+oi+'" onclick="vPick('+n+',\''+q.id+'\','+oi+')">'+
+                 '<span class="mk">'+MARK[oi]+'</span><span>'+esc(o)+'</span></button>';
+        }).join('')+'</div><div id="ve'+n+'"></div></div>';
+    }).join('');
+  }
+  show('review');
+}
+function vPick(n,qid,oi){
+  var f=findQ(qid); if(!f) return;
+  var q=f.q, ok=(oi===q.a);
+  q.opts.forEach(function(_,k){
+    var b=document.getElementById('v'+n+'_'+k);
+    if(!b) return;
+    b.disabled=true;
+    if(k===q.a) b.classList.add('correct'); else if(k===oi) b.classList.add('wrong');
+  });
+  document.getElementById('ve'+n).innerHTML=expHtml(q,oi,ok)+
+    '<p style="margin:8px 0 0;font-size:12.5px;color:var(--muted)">※ここでの正誤は記録されません。ステージをもう一度解くと記録が更新されます。</p>';
+}
+
+/* ============================================================
+   疑義報告
+   ============================================================ */
+function buildRepKinds(){
+  document.getElementById('repKinds').innerHTML=KINDS.map(function(k,i){
+    return '<button class="'+(i===0?'on':'')+'" onclick="setKind(\''+k+'\',this)">'+k+'</button>';
+  }).join('');
+}
+function setKind(k, el){
+  REP.kind=k;
+  Array.prototype.forEach.call(document.querySelectorAll('#repKinds button'), function(b){ b.classList.remove('on'); });
+  el.classList.add('on');
+}
+function openReport(qid, mine){
+  var f=findQ(qid); if(!f) return;
+  REP.qid=qid; REP.mine=mine; REP.kind=KINDS[0];
+  buildRepKinds();
+  document.getElementById('repQ').textContent=f.q.n+'　'+f.q.q.replace(/<[^>]*>/g,'').slice(0,60)+'…';
+  document.getElementById('repMemo').value='';
+  setMsg('repMsg','');
+  document.getElementById('repSend').disabled=false;
+  document.getElementById('repModal').classList.add('show');
+}
+function closeReport(){ document.getElementById('repModal').classList.remove('show'); }
+function sendReport(){
+  var memo=document.getElementById('repMemo').value.trim();
+  if(!memo){ setMsg('repMsg','どこがおかしいと思ったかを書いてください。'); return; }
+  document.getElementById('repSend').disabled=true;
+  call('reportIssue',[{
+    no: ME.no, qid: REP.qid, mine: REP.mine, kind: REP.kind, memo: memo,
+    resultUuid: LAST ? LAST.resultUuid : ''
+  }], function(r){
+    if(!r || !r.ok){ setMsg('repMsg',(r&&r.message)||'送信できませんでした。'); document.getElementById('repSend').disabled=false; return; }
+    setMsg('repMsg', r.message, 'ok');
+    setTimeout(closeReport, 1600);
+  }, function(m){
+    setMsg('repMsg','送信できませんでした。'+m);
+    document.getElementById('repSend').disabled=false;
+  });
+}
+</script>
+</body>
+</html>
