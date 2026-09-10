@@ -209,7 +209,6 @@
     <div class="pad">
       <div class="kpis">
         <div class="kpi"><div class="lab">累計得点</div><div class="val" id="kTotal">0<small>/120</small></div></div>
-        <div class="kpi"><div class="lab">クリアしたステージ</div><div class="val" id="kClear">0<small>/10</small></div></div>
         <div class="kpi"><div class="lab">正答率</div><div class="val" id="kRate">–<small>%</small></div></div>
         <div class="kpi"><div class="lab">称号</div><div class="val" id="kRank" style="font-size:19px">古文の旅人</div></div>
       </div>
@@ -587,15 +586,14 @@ function goHome(){ stopTimer(); renderHome(); show('home'); }
    ホーム
    ============================================================ */
 function renderHome(){
-  var pt=totalPoints(), cleared=0, full=0;
-  STAGES.forEach(function(st){ if(SAVE.best[st.id]!=null) cleared++; if(SAVE.best[st.id]===12) full++; });
-  document.getElementById('kTotal').innerHTML=pt+'<small>/120</small>';
-  document.getElementById('kClear').innerHTML=cleared+'<small>/10</small>';
+  var pt=totalPoints(), full=0;
+  STAGES.forEach(function(st){ if(SAVE.best[st.id]===12) full++; });
+  document.getElementById('kTotal').innerHTML=pt+'<small>/'+(STAGES.length*12)+'</small>';
   var tc=0,tt=0; TYPES.forEach(function(t){ tc+=SAVE.stats[t].c; tt+=SAVE.stats[t].t; });
   document.getElementById('kRate').innerHTML=(tt?Math.round(tc/tt*100):'–')+'<small>%</small>';
   var rk=rankOf(pt);
   document.getElementById('kRank').textContent=rk;
-  document.getElementById('rankChip').textContent=rk+'（'+pt+'pt）';
+  document.getElementById('rankChip').textContent=rk+'（'+pt+'点）';
 
   var bars=TYPES.map(function(t){
     var s=SAVE.stats[t], r=s.t?Math.round(s.c/s.t*100):0;
@@ -718,7 +716,7 @@ function grade(){
 
   if(SAVE.best[st.id]==null || score>SAVE.best[st.id]) SAVE.best[st.id]=score;
   save();
-  document.getElementById('rankChip').textContent=rankOf(totalPoints())+'（'+totalPoints()+'pt）';
+  document.getElementById('rankChip').textContent=rankOf(totalPoints())+'（'+totalPoints()+'点）';
 
   document.getElementById('rTitle').textContent='STAGE '+(CUR+1)+'　'+st.title+'　結果';
   document.getElementById('rScore').innerHTML=score+'<small>/12点</small>';
@@ -728,7 +726,7 @@ function grade(){
           : score>=3 ?'まずは現代語訳を読んでから、本文をもう一度たどってみましょう。'
                      :'現代語訳→本文→設問の順で読み直すのがおすすめです。';
   document.getElementById('rMsg').textContent=msg;
-  document.getElementById('rMeta').textContent='解答時間 '+Math.floor(secs/60)+'分'+(secs%60)+'秒　／　自己最高 '+SAVE.best[st.id]+'点　／　累計 '+totalPoints()+'pt・'+rankOf(totalPoints());
+  document.getElementById('rMeta').textContent='解答時間 '+Math.floor(secs/60)+'分'+(secs%60)+'秒　／　自己最高 '+SAVE.best[st.id]+'/12点　／　累計 '+totalPoints()+'/'+(STAGES.length*12)+'点・'+rankOf(totalPoints());
   document.getElementById('rYakuBody').innerHTML=st.yaku;
   document.getElementById('rYaku').open=false;
 

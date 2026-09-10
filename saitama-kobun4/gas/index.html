@@ -227,12 +227,6 @@
   .hist .s{font-weight:700; color:var(--navy); font-variant-numeric:tabular-nums}
   .hist .g{color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums}
 
-  .gain{display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-top:14px}
-  .gain span{font-size:12px; color:var(--muted); background:#fff; border:1px solid var(--line);
-    border-radius:999px; padding:4px 12px}
-  .gain span b{color:var(--navy); font-weight:700}
-  .gain span.mult{background:var(--gold-bg); border-color:#ecdfbd; color:var(--gold)}
-
   .modal{position:fixed; inset:0; background:rgba(20,22,26,.45); backdrop-filter:blur(2px);
     display:none; place-items:center; z-index:90; padding:20px}
   .modal.show{display:grid}
@@ -256,19 +250,32 @@
 
 <div class="loading" id="loading"><div class="box"><span class="spin"></span><span id="loadingMsg">読み込んでいます…</span></div></div>
 
-<!-- ============ LOGIN ============ -->
-<main id="login" class="center-wrap login">
+<!-- ============ GATE（自動ログイン／初回登録） ============ -->
+<main id="gate" class="center-wrap login">
   <h1>古典クエスト</h1>
   <p class="sub">埼玉県公立高校入試　大問4（古文）対策</p>
-  <div class="panel" style="margin-top:0">
+
+  <div class="msg" id="gateMsg"></div>
+
+  <div class="panel hidden" id="gateForm" style="margin-top:16px">
+    <h2>はじめての人だけ入力してください</h2>
     <div class="pad">
-      <div class="field"><label for="inNo">出席番号</label>
-        <input id="inNo" type="tel" inputmode="numeric" autocomplete="off" placeholder="例）105"></div>
-      <div class="field"><label for="inCode">個人コード</label>
-        <input id="inCode" type="password" autocomplete="off" placeholder="先生から配られたコード"></div>
-      <button class="btn primary" id="loginBtn" style="width:100%; margin-top:8px">はじめる</button>
-      <div class="msg err" id="loginMsg"></div>
+      <p class="hint" style="margin:0 0 16px">名簿にあなたのアカウントがまだ登録されていません。番号と氏名を入れると名簿に登録され、<b>次回からは自動でログイン</b>されます。</p>
+      <div class="field"><label for="inNo">番号（<span id="prefixHint">18s</span> から始まるもの）</label>
+        <input id="inNo" type="text" autocomplete="off" placeholder="例）18s10659"></div>
+      <div class="field"><label for="inName">氏名</label>
+        <input id="inName" type="text" autocomplete="off" placeholder="例）西原　太郎"></div>
+      <div class="field"><label for="inKlass">組（任意）</label>
+        <input id="inKlass" type="text" autocomplete="off" placeholder="例）３年１組"></div>
+      <div class="field"><label for="inSeat">出席番号（任意）</label>
+        <input id="inSeat" type="tel" inputmode="numeric" autocomplete="off" placeholder="例）1"></div>
+      <button class="btn primary" id="regBtn" style="width:100%; margin-top:8px">登録してはじめる</button>
+      <div class="msg err" id="regMsg"></div>
     </div>
+  </div>
+
+  <div class="toolrow" style="justify-content:center; margin-top:18px">
+    <button class="btn sm" onclick="location.reload()">読み込み直す</button>
   </div>
   <p class="hint" style="text-align:center">記録は先生のスプレッドシートに保存されます。</p>
 </main>
@@ -287,7 +294,7 @@
 <main id="home" class="wrap hidden">
   <section class="hero">
     <h1 class="mincho">埼玉県公立高校入試<br>大問4「古文」対策クエスト</h1>
-    <p>1ステージ＝本文1つ＋小問4問（各3点／12点満点）。すべて<b>ア〜エの4択記号問題</b>です。解いた記録は自動で保存され、弱点分析にも反映されます。</p>
+    <p>1ステージ＝本文1つ＋小問4問。<b>1問3点・合計12点満点</b>で、すべて<b>ア〜エの4択記号問題</b>です。解いた記録は自動で保存され、弱点分析にも反映されます。</p>
     <div class="msg warn" id="blockedMsg"></div>
   </section>
 
@@ -295,8 +302,7 @@
     <h2>冒険の記録</h2>
     <div class="pad">
       <div class="kpis">
-        <div class="kpi"><div class="lab">合計スコア</div><div class="val" id="kScore">0</div></div>
-        <div class="kpi"><div class="lab">クリアしたステージ</div><div class="val" id="kClear">0<small>/0</small></div></div>
+        <div class="kpi"><div class="lab">累計得点</div><div class="val" id="kPoints">0<small>/120</small></div></div>
         <div class="kpi"><div class="lab">正答率</div><div class="val" id="kRate">–<small>%</small></div></div>
         <div class="kpi"><div class="lab">称号</div><div class="val" id="kRank" style="font-size:19px">古文の旅人</div></div>
       </div>
@@ -356,7 +362,6 @@
   <div class="scorecard">
     <div class="big" id="rScore">0<small>/12点</small></div>
     <p class="msg2 mincho" id="rMsg" style="margin:8px 0 0; font-size:14px; color:#3a4555"></p>
-    <div class="gain" id="rGain"></div>
     <p class="meta" id="rMeta"></p>
   </div>
   <div class="msg err" id="saveMsg"></div>
@@ -399,14 +404,13 @@
    古典クエスト ― クライアント側
    ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
    ============================================================ */
-var CLIENT_VERSION = 1;
+var CLIENT_VERSION = 2;
 
 var MARK  = ['ア','イ','ウ','エ'];
 var TYPES = ['仮名遣い','主語・語意','内容理解','要旨・話し合い'];
 var KINDS = ['正解が複数ある','正解が選択肢にない','読みや表記の誤り','その他'];
-var NO_KEY = 'kobun4-last-no';
 
-var ME=null, STAGES=[], PROG=null, SETTINGS={}, BLOCKED='';
+var ME=null, STAGES=[], PROG=null, SETTINGS={}, BLOCKED='', SESSION=null;
 var CUR=null, PICKS=[], GRADED=false, T0=0, TICK=null, TATE=true, BLUR=0, STARTED='';
 var LAST=null;                 // 直近の採点結果（疑義報告に使う）
 var REP={qid:null, mine:-1, kind:KINDS[0]};
@@ -428,56 +432,102 @@ function showLoading(on, msg){
   if(msg) document.getElementById('loadingMsg').textContent=msg;
   el.classList.toggle('show', !!on);
 }
-function setMsg(id, text, cls){
+function setMsg(id, text, cls, asHtml){
   var el=document.getElementById(id);
   el.className='msg ' + (cls||'err') + (text?' show':'');
-  el.textContent=text||'';
+  if(asHtml) el.innerHTML=text||''; else el.textContent=text||'';
 }
 
 /* ---------- 画面切り替え ---------- */
 function show(id){
-  ['login','home','play','result','review'].forEach(function(s){
+  ['gate','home','play','result','review'].forEach(function(s){
     document.getElementById(s).classList.toggle('hidden', s!==id);
   });
-  document.getElementById('siteHeader').classList.toggle('hidden', id==='login');
+  document.getElementById('siteHeader').classList.toggle('hidden', id==='gate');
   window.scrollTo(0,0);
 }
 function goHome(){ stopTimer(); renderHome(); show('home'); }
 
 /* ============================================================
-   ログイン
+   自動ログイン（Googleアカウントのメール）／初回登録
    ============================================================ */
 window.addEventListener('load', function(){
-  var last='';
-  try{ last=localStorage.getItem(NO_KEY)||''; }catch(e){}
-  if(last) document.getElementById('inNo').value=last;
-  document.getElementById('loginBtn').addEventListener('click', doLogin);
-  ['inNo','inCode'].forEach(function(id){
+  document.getElementById('regBtn').addEventListener('click', doRegister);
+  ['inNo','inName','inKlass','inSeat'].forEach(function(id){
     document.getElementById(id).addEventListener('keydown', function(ev){
-      if(ev.key==='Enter') doLogin();
+      if(ev.key==='Enter') doRegister();
     });
   });
-  document.getElementById(last?'inCode':'inNo').focus();
   window.addEventListener('blur', function(){ if(CUR!=null && !GRADED) BLUR++; });
   buildRepKinds();
+  bootSession();
 });
 
-function doLogin(){
-  var no=document.getElementById('inNo').value.trim();
-  var cd=document.getElementById('inCode').value.trim();
-  if(!no||!cd){ setMsg('loginMsg','出席番号と個人コードを入力してください。'); return; }
-  setMsg('loginMsg','');
-  call('login',[no,cd], function(r){
-    if(!r || !r.ok){ setMsg('loginMsg', (r&&r.message)||'ログインできませんでした。'); return; }
+function bootSession(){
+  showLoading(true, 'ログイン情報を確認しています…');
+  call('getSession', [], function(r){
+    if(!r || !r.ok){ gateError((r&&r.message)||'読み込みに失敗しました。'); return; }
+    SESSION=r;
     if(r.version !== CLIENT_VERSION){
-      setMsg('loginMsg','画面が古いようです。ページを再読み込みしてください。（画面 '+CLIENT_VERSION+' / サーバー '+r.version+'）');
+      gateError('画面が古いようです。ページを再読み込みしてください。（画面 '+CLIENT_VERSION+' / サーバー '+r.version+'）');
       return;
     }
-    ME=r.student; STAGES=r.stages||[]; PROG=r.progress; SETTINGS=r.settings||{}; BLOCKED=r.blocked||'';
-    try{ localStorage.setItem(NO_KEY, ME.no); }catch(e){}
-    document.getElementById('whoChip').innerHTML='<b>'+esc(ME.name)+'</b> さん'+(ME.teacher?'（教員）':'');
-    goHome();
-  }, function(m){ setMsg('loginMsg','通信に失敗しました。'+m); });
+    if(r.state==='ready'){ applySession(r); return; }
+
+    document.getElementById('prefixHint').textContent=r.prefix||'18s';
+    if(r.state==='register'){
+      setMsg('gateMsg','ようこそ。<b>'+esc(r.email)+'</b> で開いています。', 'ok', true);
+      document.getElementById('inNo').value=r.suggestNo||'';
+      document.getElementById('inNo').readOnly=true;
+      document.getElementById('gateForm').classList.remove('hidden');
+      document.getElementById('inName').focus();
+    }else{  // noaccount
+      setMsg('gateMsg', r.message||'学校のアカウントでログインしてから開いてください。', 'warn');
+      if(r.allowManual){
+        document.getElementById('inNo').readOnly=false;
+        document.getElementById('gateForm').classList.remove('hidden');
+        document.getElementById('inNo').focus();
+      }else{
+        document.getElementById('gateForm').classList.add('hidden');
+      }
+    }
+    show('gate');
+  }, function(m){ gateError('通信に失敗しました。'+m); });
+}
+
+function gateError(msg){
+  setMsg('gateMsg', msg, 'err');
+  document.getElementById('gateForm').classList.add('hidden');
+  show('gate');
+}
+
+function applySession(r){
+  ME=r.student; STAGES=r.stages||[]; PROG=r.progress; SETTINGS=r.settings||{}; BLOCKED=r.blocked||'';
+  var label=(ME.klass?esc(ME.klass)+' ':'')+(ME.no?esc(ME.no)+'番 ':'')+'<b>'+esc(ME.name||ME.email)+'</b> さん'
+            +(ME.teacher?'（教員）':'');
+  document.getElementById('whoChip').innerHTML=label;
+  goHome();
+}
+
+function doRegister(){
+  var no=document.getElementById('inNo').value.trim();
+  var name=document.getElementById('inName').value.trim();
+  if(!no){ setMsg('regMsg','番号を入力してください。'); return; }
+  if(!name){ setMsg('regMsg','氏名を入力してください。'); return; }
+  setMsg('regMsg','');
+  document.getElementById('regBtn').disabled=true;
+  call('registerStudent',[{
+    number: no, name: name,
+    klass: document.getElementById('inKlass').value.trim(),
+    no: document.getElementById('inSeat').value.trim()
+  }], function(r){
+    document.getElementById('regBtn').disabled=false;
+    if(!r || !r.ok){ setMsg('regMsg',(r&&r.message)||'登録できませんでした。'); return; }
+    applySession(r);
+  }, function(m){
+    document.getElementById('regBtn').disabled=false;
+    setMsg('regMsg','通信に失敗しました。'+m);
+  });
 }
 
 function esc(s){
@@ -488,20 +538,18 @@ function esc(s){
    ホーム
    ============================================================ */
 function renderHome(){
-  document.getElementById('kScore').textContent = fmt(PROG.totalScore||0);
-  var cleared=0, full=0;
+  var maxPt=PROG.maxPoints||0, full=0;
   STAGES.forEach(function(st){
     var b=PROG.best[st.id];
-    if(b!=null) cleared++;
     if(b!=null && b>=fullOf(st)) full++;
   });
-  document.getElementById('kClear').innerHTML=cleared+'<small>/'+STAGES.length+'</small>';
+  document.getElementById('kPoints').innerHTML=(PROG.points||0)+'<small>/'+maxPt+'</small>';
 
   var tc=0, tt=0;
   TYPES.forEach(function(t){ var s=PROG.stats[t]||{c:0,t:0}; tc+=s.c; tt+=s.t; });
   document.getElementById('kRate').innerHTML=(tt?Math.round(tc/tt*100):'–')+'<small>%</small>';
   document.getElementById('kRank').textContent=PROG.rankName;
-  document.getElementById('rankChip').textContent=PROG.rankName+'（'+fmt(PROG.totalScore||0)+'pt）';
+  document.getElementById('rankChip').textContent=PROG.rankName+'（'+(PROG.points||0)+'点）';
 
   document.getElementById('typeBars').innerHTML=TYPES.map(function(t){
     var s=PROG.stats[t]||{c:0,t:0}, r=s.t?Math.round(s.c/s.t*100):0;
@@ -556,17 +604,17 @@ function openRanking(){
   var p=document.getElementById('rankPanel');
   p.classList.remove('hidden');
   p.scrollIntoView({behavior:'smooth', block:'start'});
-  call('getRanking',[ME.no], function(r){
+  call('getRanking',[ME.email], function(r){
     var body=document.getElementById('rankBody');
     if(!r || !r.ok){ body.textContent='読み込めませんでした。'; return; }
     if(!r.top.length){ body.textContent='まだ記録がありません。'; return; }
-    body.innerHTML='<table class="rank-table"><tr><th>順位</th><th>氏名</th><th>称号</th><th class="n">スコア</th></tr>'+
+    body.innerHTML='<table class="rank-table"><tr><th>順位</th><th>氏名</th><th>称号</th><th class="n">累計得点</th></tr>'+
       r.top.map(function(x){
-        var me=(String(x.no)===String(ME.no));
-        return '<tr class="'+(me?'me':'')+'"><td class="medal">'+x.rank+'</td><td>'+esc(x.name)+'</td>'+
-               '<td>'+esc(x.rankName)+'</td><td class="n">'+fmt(x.score)+'</td></tr>';
+        return '<tr class="'+(x.me?'me':'')+'"><td class="medal">'+x.rank+'</td>'+
+               '<td>'+(x.klass?'<span style="color:var(--muted);font-size:11.5px">'+esc(x.klass)+'</span> ':'')+esc(x.name)+'</td>'+
+               '<td>'+esc(x.rankName)+'</td><td class="n">'+x.points+'/'+r.maxPoints+'</td></tr>';
       }).join('')+'</table>'+
-      (r.mine.rank ? '<p class="hint">あなたは '+r.total+' 人中 <b>'+r.mine.rank+'位</b>（'+fmt(r.mine.score)+'pt）です。</p>'
+      (r.mine.rank ? '<p class="hint">あなたは '+r.total+' 人中 <b>'+r.mine.rank+'位</b>（'+r.mine.points+'/'+r.maxPoints+'点）です。</p>'
                    : '<p class="hint">まだランキングに入っていません。1ステージ解いてみましょう。</p>');
   });
 }
@@ -575,14 +623,14 @@ function openHistory(){
   var p=document.getElementById('histPanel');
   p.classList.remove('hidden');
   p.scrollIntoView({behavior:'smooth', block:'start'});
-  call('getMyHistory',[ME.no, 30], function(r){
+  call('getMyHistory',[30, ME.email], function(r){
     var body=document.getElementById('histBody');
     if(!r || !r.ok){ body.textContent='読み込めませんでした。'; return; }
     if(!r.rows.length){ body.textContent='まだ記録がありません。'; return; }
     body.innerHTML='<div class="hist">'+r.rows.map(function(x){
       return '<div class="row"><div><div>'+esc(x.stage)+'</div><div class="t">'+esc(x.at)+'</div></div>'+
              '<div class="s">'+x.score+'/'+x.full+'点</div>'+
-             '<div class="g">'+Math.floor(x.secs/60)+'分'+(x.secs%60)+'秒　+'+fmt(x.gained)+'pt</div></div>';
+             '<div class="g">'+Math.floor(x.secs/60)+'分'+(x.secs%60)+'秒</div></div>';
     }).join('')+'</div>';
   });
 }
@@ -666,7 +714,7 @@ function grade(){
   document.getElementById('gradeBtn').textContent='記録しています…';
 
   call('submitResult',[{
-    no: ME.no, stageId: st.id, picks: PICKS,
+    email: ME.email, stageId: st.id, picks: PICKS,
     seconds: secs, blur: BLUR, startedAt: STARTED
   }], function(r){
     if(!r || !r.ok){
@@ -677,7 +725,7 @@ function grade(){
     }
     GRADED=true; stopTimer();
     PROG=r.progress; LAST=r;
-    document.getElementById('rankChip').textContent=PROG.rankName+'（'+fmt(PROG.totalScore||0)+'pt）';
+    document.getElementById('rankChip').textContent=PROG.rankName+'（'+(PROG.points||0)+'点）';
     paintPlay(r);
     paintResult(r, secs);
     show('result');
@@ -722,17 +770,10 @@ function paintResult(r, secs){
                        : '現代語訳→本文→設問の順で読み直すのがおすすめです。';
   document.getElementById('rMsg').textContent=msg;
 
-  var gain='<span>基礎点 <b>'+fmt(r.basePt)+'</b></span>'+
-           '<span>タイム点 <b>'+fmt(r.timePt)+'</b></span>'+
-           (r.fullPt?'<span>満点ボーナス <b>'+fmt(r.fullPt)+'</b></span>':'')+
-           (r.mult>1?'<span class="mult">授業中ボーナス <b>×'+r.mult+'</b></span>':'')+
-           '<span>獲得スコア <b>'+fmt(r.gained)+'</b></span>';
-  document.getElementById('rGain').innerHTML=gain;
-
   document.getElementById('rMeta').textContent=
-    '解答時間 '+Math.floor(secs/60)+'分'+(secs%60)+'秒　／　自己最高 '+(PROG.best[st.id])+'点'+
+    '解答時間 '+Math.floor(secs/60)+'分'+(secs%60)+'秒　／　自己最高 '+(PROG.best[st.id])+'/'+r.fullScore+'点'+
     (r.isBest && r.prevBest!=null ? '（自己ベスト更新）' : (r.isBest?'（初クリア）':''))+
-    '　／　合計 '+fmt(PROG.totalScore)+'pt・'+PROG.rankName;
+    '　／　累計 '+(PROG.points||0)+'/'+(PROG.maxPoints||0)+'点・'+PROG.rankName;
 
   setMsg('saveMsg', r.duplicated ? 'この回はすでに記録されています（二重送信を防ぎました）。' : '', 'warn');
   document.getElementById('rYakuBody').innerHTML=st.yaku;
@@ -833,7 +874,7 @@ function sendReport(){
   if(!memo){ setMsg('repMsg','どこがおかしいと思ったかを書いてください。'); return; }
   document.getElementById('repSend').disabled=true;
   call('reportIssue',[{
-    no: ME.no, qid: REP.qid, mine: REP.mine, kind: REP.kind, memo: memo,
+    email: ME.email, qid: REP.qid, mine: REP.mine, kind: REP.kind, memo: memo,
     resultUuid: LAST ? LAST.resultUuid : ''
   }], function(r){
     if(!r || !r.ok){ setMsg('repMsg',(r&&r.message)||'送信できませんでした。'); document.getElementById('repSend').disabled=false; return; }
