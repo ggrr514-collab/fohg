@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>古典クエスト｜埼玉県公立入試 大問4（古文）対策</title>
+<meta name="description" content="埼玉県公立高校入試 国語 大問4（古文）の出題形式に合わせた、全問4択の対策クエスト。全10ステージ・40問。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#14161a; --navy:#16223d; --navy-700:#1f3057; --navy-50:#eef1f7;
+    --paper:#ffffff; --paper-2:#fafbfc; --line:#e7e9ee; --muted:#5b6472;
+    --ok:#1a6d52; --ok-bg:#eaf5f0; --ng:#a8271f; --ng-bg:#fdeeec;
+    --gold:#8a6d1f; --gold-bg:#f8f3e4;
+    --shadow:0 1px 2px rgba(20,22,26,.04), 0 8px 24px rgba(20,22,26,.06);
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:"Zen Kaku Gothic New",-apple-system,sans-serif;
+    color:var(--ink); background:var(--paper);
+    -webkit-font-smoothing:antialiased; line-height:1.7;
+    word-break:keep-all; overflow-wrap:anywhere; line-break:strict;
+  }
+  .mincho{font-family:"Shippori Mincho",serif}
+  button{font-family:inherit; cursor:pointer}
+  .wrap{max-width:960px; margin:0 auto; padding:0 20px}
+
+  header.site{position:sticky; top:0; z-index:40; background:rgba(255,255,255,.9);
+    backdrop-filter:saturate(160%) blur(10px); border-bottom:1px solid var(--line)}
+  .bar{max-width:960px; margin:0 auto; padding:12px 20px; display:flex; align-items:center; gap:10px}
+  .wordmark{font-family:"Shippori Mincho",serif; font-weight:700; font-size:22px; color:var(--navy);
+    letter-spacing:.14em; background:none; border:0; padding:0}
+  .bar .spacer{flex:1}
+  .nav-btn{font-size:12.5px; color:var(--muted); background:#fff; border:1px solid var(--line);
+    padding:6px 12px; border-radius:999px; white-space:nowrap}
+  .nav-btn:hover{border-color:var(--navy); color:var(--navy)}
+  .rankchip{font-size:12px; color:var(--gold); background:var(--gold-bg);
+    border:1px solid #ecdfbd; padding:5px 11px; border-radius:999px; white-space:nowrap}
+  @media(max-width:560px){ .wordmark{font-size:18px} .nav-btn{font-size:11.5px; padding:5px 9px} .rankchip{display:none} }
+
+  .hero{padding:36px 0 8px}
+  .hero h1{font-family:"Shippori Mincho",serif; font-weight:600; font-size:clamp(21px,4vw,31px);
+    line-height:1.55; margin:0 0 10px; letter-spacing:.05em}
+  .hero p{margin:0; color:var(--muted); font-size:14.5px; max-width:44em}
+  .notice{margin-top:16px; padding:13px 16px; background:var(--paper-2); border:1px solid var(--line);
+    border-radius:10px; font-size:12.5px; color:var(--muted)}
+  .notice b{color:var(--navy)}
+
+  .panel{margin-top:22px; border:1px solid var(--line); border-radius:var(--radius); background:#fff; overflow:hidden}
+  .panel > h2{margin:0; padding:14px 18px; font-size:14px; font-weight:700; letter-spacing:.06em;
+    color:var(--navy); background:var(--navy-50); border-bottom:1px solid var(--line)}
+  .panel .pad{padding:18px}
+
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px}
+  .kpi{border:1px solid var(--line); border-radius:10px; padding:13px 14px; background:var(--paper-2)}
+  .kpi .lab{font-size:11.5px; color:var(--muted); letter-spacing:.04em}
+  .kpi .val{font-family:"Shippori Mincho",serif; font-size:24px; font-weight:700; color:var(--navy); line-height:1.3}
+  .kpi .val small{font-size:12px; font-weight:500; color:var(--muted); margin-left:2px}
+
+  .bars{display:flex; flex-direction:column; gap:12px}
+  .barrow{display:grid; grid-template-columns:8.5em 1fr 4.6em; align-items:center; gap:10px; font-size:13px}
+  .barrow .track{height:9px; border-radius:99px; background:var(--navy-50); overflow:hidden}
+  .barrow .fill{height:100%; border-radius:99px; background:var(--navy); transition:width .5s ease}
+  .barrow .fill.weak{background:#b8763a}
+  .barrow .num{text-align:right; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums}
+  .barrow .name{color:#3a4555}
+  .hint{margin:14px 0 0; font-size:12.5px; color:var(--muted)}
+
+  .stages{display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:14px; padding:18px 0 44px}
+  .stage{border:1px solid var(--line); border-radius:var(--radius); background:#fff; padding:16px;
+    display:flex; flex-direction:column; gap:9px; text-align:left; transition:transform .16s, box-shadow .16s, border-color .16s}
+  .stage:hover{transform:translateY(-3px); box-shadow:var(--shadow); border-color:#d7dbe4}
+  .stage .top{display:flex; align-items:center; gap:8px}
+  .stage .no{font-family:"Shippori Mincho",serif; font-size:12px; letter-spacing:.1em; color:#fff;
+    background:var(--navy); border-radius:6px; padding:2px 8px}
+  .stage .src{font-size:11.5px; color:var(--navy); background:var(--navy-50); border-radius:999px; padding:2px 9px}
+  .stage h3{margin:0; font-family:"Shippori Mincho",serif; font-size:17px; font-weight:600; line-height:1.5}
+  .stage p{margin:0; font-size:13px; color:var(--muted)}
+  .stage .foot{display:flex; align-items:center; gap:8px; margin-top:3px; font-size:12px; color:var(--muted)}
+  .stage .score{font-weight:700; color:var(--navy)}
+  .stage .full{color:var(--gold); background:var(--gold-bg); border:1px solid #ecdfbd; border-radius:999px; padding:1px 8px; font-size:11px}
+  .stage .go{margin-left:auto; font-size:12.5px; color:var(--navy); font-weight:500}
+
+  /* ===== play ===== */
+  .playhead{display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:22px 0 4px}
+  .playhead h2{margin:0; font-family:"Shippori Mincho",serif; font-size:19px; font-weight:600; letter-spacing:.04em}
+  .playhead .src2{font-size:12px; color:var(--muted)}
+  .playhead .spacer{flex:1}
+  .timer{font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums;
+    border:1px solid var(--line); border-radius:999px; padding:4px 12px; background:#fff}
+  .timer.over{color:var(--ng); border-color:#f2cfcb; background:var(--ng-bg)}
+
+  .honbun{font-family:"Shippori Mincho",serif; font-size:17px; line-height:2.05; letter-spacing:.04em;
+    border:1px solid var(--line); border-radius:var(--radius); background:var(--paper-2); margin-top:14px}
+  .honbun.tate{writing-mode:vertical-rl; width:100%; max-width:100%; height:min(64vh,520px); padding:22px 26px; overflow-x:auto; overflow-y:hidden}
+  .honbun.yoko{writing-mode:horizontal-tb; padding:22px 24px}
+  .honbun .ul{text-decoration:underline; text-underline-offset:4px; text-decoration-thickness:1px}
+  .honbun .mk{font-size:.72em; vertical-align:super; color:var(--navy); font-weight:700}
+  .honbun.tate .mk{vertical-align:baseline}
+  .honbun p{margin:0 0 .4em}
+  .honbun.tate p{margin:0 .4em 0 0}
+  @media(max-width:560px){ .honbun{font-size:16px} .honbun.tate{height:min(60vh,440px); padding:18px 20px} }
+
+  .chu{margin-top:10px; border:1px solid var(--line); border-radius:10px; background:#fff; padding:13px 15px;
+    font-size:12.5px; color:var(--muted); line-height:1.85}
+  .chu b{color:#3a4555; font-weight:600}
+  .chu .lab{display:block; font-size:11px; letter-spacing:.1em; color:var(--navy); margin-bottom:5px}
+
+  .toolrow{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap}
+
+  .q{border:1px solid var(--line); border-radius:var(--radius); background:#fff; padding:17px 18px; margin-top:16px}
+  .q .qhead{display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; margin-bottom:11px}
+  .q .qno{font-family:"Shippori Mincho",serif; font-weight:700; color:var(--navy); font-size:15px; white-space:nowrap}
+  .q .tag{font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; white-space:nowrap}
+  .q .pt{font-size:11.5px; color:var(--muted); margin-left:auto}
+  .q .qtext{font-size:14.5px; line-height:1.85; margin:0 0 12px}
+  .q .qtext .kb{font-family:"Shippori Mincho",serif; text-decoration:underline; text-underline-offset:3px}
+  .talk{background:var(--paper-2); border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+    font-size:13.5px; line-height:1.95; margin:0 0 12px}
+  .talk .sp{color:var(--navy); font-weight:600}
+  .talk .blank{display:inline-block; min-width:7em; border-bottom:1.5px solid var(--navy); text-align:center; color:var(--navy)}
+
+  .opts{display:flex; flex-direction:column; gap:8px}
+  .opt{display:flex; gap:10px; align-items:flex-start; text-align:left; width:100%;
+    border:1px solid var(--line); border-radius:10px; background:#fff; padding:11px 13px;
+    font-size:14px; line-height:1.75; color:var(--ink); transition:border-color .14s, background .14s}
+  .opt:hover{border-color:var(--navy); background:var(--navy-50)}
+  .opt .mk{flex:0 0 auto; font-family:"Shippori Mincho",serif; font-weight:700; color:var(--navy);
+    width:1.6em; height:1.6em; border-radius:50%; border:1px solid var(--line); background:#fff;
+    display:grid; place-items:center; font-size:12.5px; margin-top:2px}
+  .opt.sel{border-color:var(--navy); background:var(--navy-50); box-shadow:0 0 0 2px var(--navy-50)}
+  .opt.sel .mk{background:var(--navy); color:#fff; border-color:var(--navy)}
+  .opt.correct{border-color:#a9d4c3; background:var(--ok-bg)}
+  .opt.correct .mk{background:var(--ok); color:#fff; border-color:var(--ok)}
+  .opt.wrong{border-color:#f0c6c2; background:var(--ng-bg)}
+  .opt.wrong .mk{background:var(--ng); color:#fff; border-color:var(--ng)}
+  .opt[disabled]{cursor:default}
+  .opt[disabled]:hover{border-color:var(--line); background:#fff}
+  .opt.correct[disabled]:hover{border-color:#a9d4c3; background:var(--ok-bg)}
+  .opt.wrong[disabled]:hover{border-color:#f0c6c2; background:var(--ng-bg)}
+
+  .exp{margin-top:12px; border-left:3px solid var(--navy); background:var(--paper-2);
+    border-radius:0 8px 8px 0; padding:11px 14px; font-size:13px; line-height:1.9; color:#3a4555}
+  .exp .jd{display:inline-block; font-weight:700; font-size:12px; letter-spacing:.06em; margin-bottom:3px}
+  .exp .jd.o{color:var(--ok)} .exp .jd.x{color:var(--ng)}
+  .exp b{color:var(--navy)}
+
+  .actions{display:flex; gap:10px; flex-wrap:wrap; padding:20px 0 48px}
+  .btn{font-size:14px; font-weight:500; padding:12px 22px; border-radius:9px;
+    border:1px solid var(--navy); background:#fff; color:var(--navy); transition:all .15s}
+  .btn.primary{background:var(--navy); color:#fff}
+  .btn.primary:hover{background:var(--navy-700)}
+  .btn.ghost:hover{background:var(--navy-50)}
+  .btn[disabled]{opacity:.35; pointer-events:none; border-color:var(--line); color:var(--muted); background:#fff}
+  .btn.sm{font-size:12.5px; padding:7px 14px; border-radius:999px; border-color:var(--line); color:var(--muted)}
+  .btn.sm:hover{border-color:var(--navy); color:var(--navy)}
+  .btn.sm.on{background:var(--navy); color:#fff; border-color:var(--navy)}
+  .btn.danger{border-color:#e3c6c3; color:var(--ng)}
+  .btn.danger:hover{background:var(--ng-bg)}
+
+  /* ===== result ===== */
+  .scorecard{margin-top:22px; border:1px solid var(--line); border-radius:var(--radius);
+    background:var(--paper-2); padding:26px 22px; text-align:center}
+  .scorecard .big{font-family:"Shippori Mincho",serif; font-size:46px; font-weight:700; color:var(--navy); line-height:1.15}
+  .scorecard .big small{font-size:19px; color:var(--muted); font-weight:500}
+  .scorecard .msg{margin:8px 0 0; font-size:14px; color:#3a4555}
+  .scorecard .meta{margin:10px 0 0; font-size:12.5px; color:var(--muted)}
+
+  details.yaku{margin-top:14px; border:1px solid var(--line); border-radius:10px; background:#fff}
+  details.yaku > summary{cursor:pointer; list-style:none; padding:12px 16px; font-size:13.5px;
+    color:var(--navy); font-weight:600; display:flex; align-items:center; gap:8px}
+  details.yaku > summary::-webkit-details-marker{display:none}
+  details.yaku > summary::before{content:"▶"; font-size:9px; color:var(--muted); transition:transform .18s}
+  details.yaku[open] > summary::before{transform:rotate(90deg)}
+  details.yaku .inner{padding:0 18px 16px; font-size:13.5px; line-height:2; color:#3a4555}
+  details.yaku .inner p{margin:0 0 .9em}
+
+  footer.site{border-top:1px solid var(--line); padding:24px 0 40px; color:var(--muted); font-size:12px}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="bar">
+    <button class="wordmark" onclick="goHome()">古典クエスト</button>
+    <span class="spacer"></span>
+    <span class="rankchip" id="rankChip">古文の旅人</span>
+    <button class="nav-btn" onclick="goHome()">ステージ一覧</button>
+  </div>
+</header>
+
+<!-- ============ HOME ============ -->
+<main id="home" class="wrap">
+  <section class="hero">
+    <h1 class="mincho">埼玉県公立高校入試<br>大問4「古文」対策クエスト</h1>
+    <p>全10ステージ・全40問。すべて<b>ア〜エの4択記号問題</b>です。1ステージ＝本文1つ＋小問4問（各3点／12点満点）、実際の大問4とまったく同じ構成で解けます。</p>
+    <div class="notice">
+      <b>出題形式について</b>　埼玉県の大問4は「古文のみ（漢文は出ません）」「12点」「小問4問」で固定されています。問2は毎年必ず<b>歴史的仮名遣い→現代仮名遣い</b>、ほかに<b>主語・語句の意味</b>、<b>傍線部の内容・理由</b>、<b>本文全体をまとめた話し合い文の空欄補充</b>が定番です。本クエストはこの形式に合わせたオリジナル予想問題で、実際の過去問そのものではありません。本文は歴史的仮名遣いのまま示し、読みやすさのため表記を一部改めています。
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>冒険の記録</h2>
+    <div class="pad">
+      <div class="kpis">
+        <div class="kpi"><div class="lab">累計得点</div><div class="val" id="kTotal">0<small>/120</small></div></div>
+        <div class="kpi"><div class="lab">クリアしたステージ</div><div class="val" id="kClear">0<small>/10</small></div></div>
+        <div class="kpi"><div class="lab">正答率</div><div class="val" id="kRate">–<small>%</small></div></div>
+        <div class="kpi"><div class="lab">称号</div><div class="val" id="kRank" style="font-size:19px">古文の旅人</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>弱点分析（設問タイプ別の正答率）</h2>
+    <div class="pad">
+      <div class="bars" id="typeBars"></div>
+      <p class="hint" id="typeHint">まだ記録がありません。ステージ1から挑戦してみましょう。</p>
+      <div class="toolrow" style="margin-top:16px">
+        <button class="btn sm" id="reviewBtn" onclick="startReview()">まちがえた問題を復習（0問）</button>
+        <button class="btn sm danger" onclick="resetAll()">記録をリセット</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="stages" id="stageGrid"></section>
+</main>
+
+<!-- ============ PLAY ============ -->
+<main id="play" class="wrap hidden">
+  <div class="playhead">
+    <h2 class="mincho" id="pTitle"></h2>
+    <span class="src2" id="pSrc"></span>
+    <span class="spacer"></span>
+    <span class="timer" id="pTimer">00:00</span>
+  </div>
+  <div class="honbun tate" id="pHonbun"></div>
+  <div class="toolrow">
+    <button class="btn sm on" id="tateBtn" onclick="setTate(true)">縦書き</button>
+    <button class="btn sm" id="yokoBtn" onclick="setTate(false)">横書き</button>
+  </div>
+  <div class="chu" id="pChu"></div>
+  <div id="pQs"></div>
+  <div class="actions">
+    <button class="btn primary" id="gradeBtn" onclick="grade()" disabled>採点する</button>
+    <button class="btn ghost" onclick="goHome()">中断してもどる</button>
+  </div>
+</main>
+
+<!-- ============ RESULT ============ -->
+<main id="result" class="wrap hidden">
+  <div class="playhead"><h2 class="mincho" id="rTitle"></h2></div>
+  <div class="scorecard">
+    <div class="big" id="rScore">0<small>/12点</small></div>
+    <p class="msg mincho" id="rMsg"></p>
+    <p class="meta" id="rMeta"></p>
+  </div>
+  <details class="yaku" id="rYaku"><summary>現代語訳を読む</summary><div class="inner" id="rYakuBody"></div></details>
+  <div id="rReview"></div>
+  <div class="actions">
+    <button class="btn primary" id="rNext" onclick="nextStage()">次のステージへ</button>
+    <button class="btn ghost" onclick="retry()">もう一度解く</button>
+    <button class="btn ghost" onclick="goHome()">ステージ一覧へ</button>
+  </div>
+</main>
+
+<!-- ============ REVIEW ============ -->
+<main id="review" class="wrap hidden">
+  <div class="playhead"><h2 class="mincho">まちがえた問題の復習</h2><span class="spacer"></span></div>
+  <p class="hint" style="margin-top:6px">正解できた問題はリストから消えます。選択肢を選ぶとその場で正誤と解説が出ます。</p>
+  <div id="vList"></div>
+  <div class="actions"><button class="btn ghost" onclick="goHome()">ステージ一覧へ</button></div>
+</main>
+
+<footer class="site"><div class="wrap">古典クエスト｜埼玉県公立高校入試 大問4（古文）対策　※本文は『宇治拾遺物語』『徒然草』ほかの古典作品から採り、表記を一部改めています。設問はオリジナルです。</div></footer>
+
+<script>
+/* ============================================================
+   古典クエスト｜埼玉県公立高校入試 大問4（古文）対策
+   全10ステージ × 小問4問（各3点／12点満点）・すべて4択
+   設問タイプ: 仮名遣い / 主語・語意 / 内容理解 / 要旨・話し合い
+   ============================================================ */
+var T_KANA='仮名遣い', T_WORD='主語・語意', T_CONT='内容理解', T_THEME='要旨・話し合い';
+var TYPES=[T_KANA,T_WORD,T_CONT,T_THEME];
+
+var STAGES=[
+/* ---------------- 1 ---------------- */
+{
+ id:'s1', src:'宇治拾遺物語', title:'絵仏師良秀', lead:'家が焼けるのを見て笑う絵師。その理由は。',
+ honbun:
+  '<p>これも今は昔、絵仏師良秀といふありけり。家の隣より火出で来て、風おしおほひてせめければ、逃げ出でて大路へ出でにけり。人の書かする仏もおはしけり。また、衣着ぬ妻子なども、さながら内にありけり。それも知らず、ただ逃げ出でたるをことにして、<span class="ul"><span class="mk">②</span>向かひ</span>のつらに立てり。</p>'+
+  '<p>見れば、すでにわが家に移りて、煙・炎くゆりけるまで、おほかた、向かひのつらに立ちて眺めければ、「<span class="ul"><span class="mk">①</span>あさましきこと</span>」とて、人ども来とぶらひけれど、騒がず。「いかに」と人言ひければ、向かひに立ちて、家の焼くるを見て、うちうなづきて、<span class="ul"><span class="mk">③</span>時々笑ひけり</span>。「あはれ、しつるせうとくかな。年ごろはわろく書きけるものかな」と言ふ時に、とぶらひに来たる者ども、「こはいかに、かくては立ち給へるぞ。もののつき給へるか」と言ひければ、「なんでふ物のつくべきぞ。年ごろ不動尊の火焰をあしく書きけるなり。今見れば、かうこそ燃えけれと、心得つるなり。これこそせうとくよ」と言ひて、あざ笑ひてこそ立てりけれ。</p>'+
+  '<p>その後にや、良秀がよぢり不動とて、今に人々めで合へり。</p>',
+ chu:'<b>絵仏師</b>＝仏の絵をかくことを職業とする人。　<b>おしおほひて</b>＝吹きつけて。　<b>つら</b>＝側。　<b>とぶらひ</b>＝見舞い。　<b>せうとく</b>＝もうけもの。得をしたこと。　<b>なんでふ</b>＝どうして。　<b>不動尊</b>＝不動明王。　<b>火焰</b>＝不動明王の背後に描かれる炎。　<b>よぢり不動</b>＝良秀のかいた不動明王の絵。',
+ yaku:'<p>これも今となっては昔のことだが、絵仏師の良秀という者がいた。隣の家から火が出て、風が吹きつけて火が迫ってきたので、（良秀は）逃げ出して大通りへ出てしまった。家の中には、人が注文して描かせている仏の絵もあった。また、着物も着ていない妻子などもそのまま家の中にいた。良秀はそれも気にかけず、ただ自分が逃げ出したことだけをよいことにして、向かい側に立っていた。</p><p>見ると、すでに火は自分の家に燃え移って、煙や炎がくすぶり出すまで、ずっと向かい側に立って眺めていたので、「驚きあきれたことだ」と言って、人々が見舞いに来たけれども、（良秀は）騒がない。「どうしたのか」と人が言うと、向かい側に立って、自分の家が焼けるのを見て、うなずいて、時々笑った。「ああ、たいそうなもうけものをしたことだ。長年、まずく描いていたものだなあ」と言うので、見舞いに来ていた者たちが、「これはどうしたことか、こうして立っていらっしゃるのか。物の怪でも取りつきなさったのか」と言うと、「どうして物の怪が取りつくものか。長年、不動明王の火炎をうまく描けずにいたのだ。今見ると、このように燃えるのだったのだなと、会得したのだ。これこそもうけものだ」と言って、あざ笑って立っていた。</p><p>その後のことであろうか、良秀のよじり不動といって、今でも人々がほめ合っている。</p>',
+ qs:[
+  {n:'問1',type:T_WORD,q:'傍線部①「<span class="kb">あさましきこと</span>」とあるが、その意味として最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['情けなく、見苦しいことだ','驚きあきれることだ','うらやましく、ねたましいことだ','みっともなく、卑しいことだ'],a:1,
+   exp:'古語の「<b>あさまし</b>」は「驚きあきれる」の意。現代語の「あさましい（下品だ・卑しい）」とは意味が異なる、頻出の要注意語です。ここは、家が焼けているのに騒がない良秀を見た人々の言葉なので「驚きあきれる」が合います。'},
+  {n:'問2',type:T_KANA,q:'傍線部②「<span class="kb">向かひ</span>」を現代仮名遣いに直したものとして正しいものを、次のア〜エの中から一つ選びなさい。',
+   opts:['むかい','むかひ','むこう','むかえ'],a:0,
+   exp:'語頭以外の「<b>は・ひ・ふ・へ・ほ</b>」は「<b>わ・い・う・え・お</b>」に直します（は行転呼）。「向かひ」→「むかい」。埼玉県では問2でこの直し方が毎年問われます。'},
+  {n:'問3',type:T_CONT,q:'傍線部③「<span class="kb">時々笑ひけり</span>」とあるが、良秀が笑ったのはなぜか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['家も妻子も失ったつらさを人に見せまいと、無理に平気なふりをしていたから。','見舞いに来た人々が自分を心配してくれるのが、うれしくてたまらなかったから。','燃えさかる炎を見て、これまでうまく描けなかった不動明王の火炎の描き方を会得したから。','自分だけが火事から逃げおおせたことを、まわりの人に自慢したかったから。'],a:2,
+   exp:'良秀自身が「年ごろ不動尊の火焰をあしく書きけるなり。今見れば、かうこそ燃えけれと、<b>心得つるなり</b>」と語っています。「心得つ」＝会得した、の意。「つらさを隠して無理に平気なふりをしていた」という説明は、本文からは読み取れません。'},
+  {n:'問4',type:T_THEME,talk:'<span class="sp">先生</span>「この話は、良秀という絵仏師の姿を通して何を描いているでしょうか。」<br><span class="sp">Ａさん</span>「家が焼けているのに騒がず、それどころか笑っています。ふつうの感覚ではありませんね。」<br><span class="sp">Ｂさん</span>「でも良秀は『これこそせうとくよ』と言っています。つまり良秀にとっては<span class="blank">　　</span>ということなのだと思います。」<br><span class="sp">先生</span>「そうですね。だからこそ、最後に『よぢり不動』が名作として語り伝えられているのですね。」',
+   q:'次は、この文章を読んだ生徒たちと先生の話し合いの一部である。空欄にあてはまる内容として最も適切なものを、あとのア〜エの中から一つ選びなさい。',
+   opts:['火事に遭ったのは、絵の腕を上げよという神仏のはからいだ','人に笑われても気にしないことが、絵仏師として生きるための心得だ','焼けた家の損害は、絵を売ればすぐに取り返せるものだ','家族や財産を失うことよりも、絵の道を究めることのほうが大切だ'],a:3,
+   exp:'良秀は、妻子も仏画も家の中にあるのに気にかけず、炎の描き方を会得したことを「せうとく（もうけもの）」と言い切ります。<b>芸道を何よりも優先する執念</b>が描かれた話です。「神仏のはからい」「人に笑われても気にしない心得」「絵を売れば取り返せる」といった内容は、本文中に述べられていません。'}
+ ]
+},
+/* ---------------- 2 ---------------- */
+{
+ id:'s2', src:'十訓抄', title:'大江山いくのの道の', lead:'母の代作を疑われた小式部内侍の、みごとな切り返し。',
+ honbun:
+  '<p>和泉式部、保昌が妻にて丹後に下りけるほどに、京に歌合ありけるに、小式部内侍、歌よみにとられてよみけるを、定頼中納言たはぶれて、小式部内侍ありけるに、「<span class="ul"><span class="mk">①</span>丹後へつかはしける人は参りたりや。いかに心もとなくおぼすらむ</span>」と言ひて、局の前を過ぎられけるを、御簾よりなから出でて、<span class="ul"><span class="mk">②</span>わづかに</span>直衣の袖をひかへて、</p>'+
+  '<p>　大江山いくのの道の遠ければまだふみもみず天の橋立</p>'+
+  '<p>とよみかけけり。思はずにあさましくて、「こはいかに、かかるやうやはある」とばかり言ひて、<span class="ul"><span class="mk">③</span>返しにも及ばず、袖を引き放ちて逃げられけり</span>。小式部、これより歌よみの世おぼえ出で来にけり。</p>',
+ chu:'<b>和泉式部</b>＝平安時代の歌人。小式部内侍の母。　<b>保昌</b>＝藤原保昌。和泉式部の夫。　<b>丹後</b>＝今の京都府北部。　<b>歌合</b>＝左右に分かれて和歌の優劣を競う会。　<b>小式部内侍</b>＝和泉式部の娘。歌人。　<b>定頼中納言</b>＝藤原定頼。　<b>局</b>＝宮中に仕える女性の部屋。　<b>御簾</b>＝すだれ。　<b>なから</b>＝半分。　<b>直衣</b>＝貴族の平服。　<b>大江山・いくの</b>＝丹後へ行く道にある地名。「いくの」に「行く野」を掛ける。　<b>ふみ</b>＝「踏み」と「文（手紙）」を掛ける。　<b>天の橋立</b>＝丹後の名所。　<b>返し</b>＝返歌。',
+ yaku:'<p>和泉式部が、（夫の）保昌の妻として丹後の国に下っていたころ、京で歌合があったが、（娘の）小式部内侍が歌のよみ手に選ばれて歌をよんだところ、定頼中納言がふざけて、小式部内侍がいたところに来て、「丹後へおやりになった使いは帰って参りましたか。（返事が来ないので）どんなに待ち遠しくお思いでしょう」と言って、部屋の前を通り過ぎられたのを、（小式部内侍は）御簾から身を半分ほど乗り出して、わずかに（定頼の）直衣の袖を引きとめて、</p><p>「大江山を越え、生野を通って行く道が遠いので、まだ天の橋立の地を踏んでもいませんし、母からの手紙も見ていません」</p><p>とよみかけた。（定頼は）思いがけないことに驚きあきれて、「これはどうしたことだ、こんなことがあってよいものか」とだけ言って、返歌をすることもできず、袖を引き放ってお逃げになった。小式部内侍は、これ以降、歌よみとしての評判が世に立つようになった。</p>',
+ qs:[
+  {n:'問1',type:T_CONT,q:'傍線部①「<span class="kb">丹後へつかはしける人は参りたりや。いかに心もとなくおぼすらむ</span>」とあるが、定頼中納言がこう言ったのはどういうつもりからか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['歌合に出る自信のない小式部内侍に、助言をしてやろうとしている。','母の代わりに歌をよまなければならない小式部内侍を、心から気の毒に思っている。','母に歌の代作を頼んだ使いの返事がまだ来ないだろうと、小式部内侍をからかっている。','遠く丹後にいる母の身を案じている小式部内侍を、なぐさめようとしている。'],a:2,
+   exp:'直前に「<b>たはぶれて</b>（＝ふざけて）」とあるのが手がかり。小式部内侍の歌は母の代作だという噂をふまえ、「代作を頼みに丹後へやった使いはもう帰ってきましたか」とからかったのです。'},
+  {n:'問2',type:T_KANA,q:'傍線部②「<span class="kb">わづかに</span>」を現代仮名遣いに直したものとして正しいものを、次のア〜エの中から一つ選びなさい。',
+   opts:['わつかに','わじかに','わづかに','わずかに'],a:3,
+   exp:'歴史的仮名遣いの「<b>ぢ・づ</b>」は、現代仮名遣いでは「<b>じ・ず</b>」に直します。「わづかに」→「わずかに」。'},
+  {n:'問3',type:T_CONT,q:'傍線部③「<span class="kb">返しにも及ばず、袖を引き放ちて逃げられけり</span>」とあるが、定頼中納言がこのようにしたのはなぜか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['代作を疑ってからかった相手が、その場でみごとな歌をよんだので、驚ききまり悪くなったから。','小式部内侍に袖をつかまれた姿を人に見られるのが、恥ずかしかったから。','小式部内侍の歌があまりに下手で、返歌をする気にもなれなかったから。','歌合の始まる時刻が迫っていて、返歌をする余裕がなかったから。'],a:0,
+   exp:'「<b>思はずにあさましくて</b>」＝思いがけないことで驚きあきれて、が直接の手がかり。からかった相手にその場で即興の名歌を返され、返歌もできずに逃げ出した、という場面です。'},
+  {n:'問4',type:T_THEME,talk:'<span class="sp">先生</span>「小式部内侍の歌には、どんな工夫がありますか。」<br><span class="sp">Ａさん</span>「地名の『いくの』に『行く野』を、『ふみ』に『踏み』と『文』を掛けています。」<br><span class="sp">Ｂさん</span>「そのうえでこの歌は、<span class="blank">　　</span>という意味になり、定頼のからかいへの切り返しになっていると思います。」<br><span class="sp">先生</span>「そのとおりです。だからこそ定頼は返歌もできなかったのですね。」',
+   q:'次は、この文章を読んだ生徒たちと先生の話し合いの一部である。空欄にあてはまる内容として最も適切なものを、あとのア〜エの中から一つ選びなさい。',
+   opts:['天の橋立の景色を実際に見なければ、すぐれた歌はよむことができない','母のいる丹後は遠いので、まだ天の橋立の地を踏んでもいないし、母からの手紙も見ていない','母のいる丹後は近いので、いつでも自由に手紙のやりとりをすることができる','母に代作を頼んだのだから、返事が来るまでもうしばらく待ってほしい'],a:1,
+   exp:'「まだ<b>ふみ</b>もみず」に「（天の橋立を）踏み」と「（母からの）文」が掛けてあります。<b>手紙のやりとりすらしていない＝代作などしていない</b>、という反論になっているのです。'}
+ ]
+},
+/* ---------------- 3 ---------------- */
+{
+ id:'s3', src:'徒然草', title:'高名の木登り', lead:'「あやまちは、安き所になりて、必ず仕る事に候ふ」。',
+ honbun:
+  '<p>高名の木登りといひしをのこ、人を掟てて、高き木に登せて梢を切らせしに、いと<span class="ul"><span class="mk">②</span>危ふく</span>見えしほどは言ふこともなくて、下るるときに、軒たけばかりになりて、「<span class="ul"><span class="mk">①</span>あやまちすな。心して降りよ</span>」と言葉をかけ侍りしを、「かばかりになりては、飛び降るとも降りなん。いかにかく言ふぞ」と申し侍りしかば、「<span class="ul"><span class="mk">③</span>その事に候ふ。目くるめき、枝危ふきほどは、おのれが恐れ侍れば申さず。あやまちは、安き所になりて、必ず仕る事に候ふ</span>」と言ふ。</p>'+
+  '<p>あやしき下臈なれども、聖人の戒めにかなへり。鞠も、難き所を蹴出して後、安く思へば、必ず落つと侍るやらん。</p>',
+ chu:'<b>高名の</b>＝有名な。　<b>をのこ</b>＝男。　<b>掟てて</b>＝指図して。　<b>軒たけ</b>＝家の軒の高さ。　<b>あやまち</b>＝失敗。けが。　<b>候ふ</b>＝ございます。　<b>目くるめき</b>＝目がくらみ。　<b>仕る</b>＝いたす。　<b>あやしき下臈</b>＝身分の低い者。　<b>聖人の戒め</b>＝すぐれた人の教え。　<b>鞠</b>＝蹴鞠。',
+ yaku:'<p>木登りの名人といわれた男が、人に指図して高い木に登らせて枝の先を切らせたときに、たいそう危なく見えたうちは何も言わないで、（その人が）降りるときに、軒の高さくらいになって、「けがをするな。気をつけて降りろ」と声をかけましたので、「これくらいの高さになれば、飛び降りても降りられるでしょう。どうしてそのように言うのか」と申しましたところ、「そのことでございます。目がくらむほど高く、枝が危ないうちは、本人が自分で恐れておりますので、（私は）何も申しません。けがは、安全な所になってから、必ずするものでございます」と言う。</p><p>身分の低い者であるけれども、その言葉は聖人の戒めと一致している。蹴鞠でも、難しい所を蹴り出したあと、（もう）簡単だと思うと、必ず落とすと申すようです。</p>',
+ qs:[
+  {n:'問1',type:T_WORD,q:'傍線部①「<span class="kb">あやまちすな。心して降りよ</span>」とあるが、この言葉を言ったのは誰か。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['作者（兼好法師）','その場で見物していた人々','高い木に登った人','木登りの名人といわれた男'],a:3,
+   exp:'直前が「（男が人を）<b>掟てて</b>、高き木に<b>登せて</b>梢を切らせしに」なので、動作の主体は一貫して「高名の木登りといひしをのこ」。声をかけられた側が「いかにかく言ふぞ」と問い返している点からも確認できます。<b>主語（動作主）を問う問題は埼玉県の定番</b>です。'},
+  {n:'問2',type:T_KANA,q:'傍線部②「<span class="kb">危ふく</span>」を現代仮名遣いに直したものとして正しいものを、次のア〜エの中から一つ選びなさい。',
+   opts:['あやゆく','あやふく','あやうく','あやおく'],a:2,
+   exp:'語頭以外の「ふ」は「う」に直すので、「あやふく」→「<b>あやうく</b>」。'},
+  {n:'問3',type:T_CONT,q:'傍線部③について、男が、高い所では何も言わず、安全な高さになってから注意したのはなぜか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['高い所では、声をかけても相手に届かないから。','危険な所では本人が自分で恐れて用心しているが、安全な所になると油断してけがをするものだから。','高い所で声をかけると、相手が驚いて落ちてしまうから。','高い所での作業は、自分が指図できる範囲を超えているから。'],a:1,
+   exp:'本文に「<b>おのれが恐れ侍れば申さず</b>」「あやまちは、<b>安き所になりて、必ず仕る事</b>に候ふ」とあります。「声をかけると驚いて落ちてしまうから」という理由は、一見もっともらしいですが本文には書かれていません。'},
+  {n:'問4',type:T_THEME,talk:'<span class="sp">先生</span>「作者は、この木登りの言葉をどう受け止めていますか。」<br><span class="sp">Ａさん</span>「『あやしき下臈なれども、聖人の戒めにかなへり』と述べています。」<br><span class="sp">Ｂさん</span>「つまり作者は、<span class="blank">　　</span>と考えているのですね。」<br><span class="sp">先生</span>「そうですね。だから最後に蹴鞠の例も挙げているのです。」',
+   q:'次は、この文章を読んだ生徒たちと先生の話し合いの一部である。空欄にあてはまる内容として最も適切なものを、あとのア〜エの中から一つ選びなさい。',
+   opts:['身分は低くても、その言葉は聖人の教えに通じる道理を含み、あらゆる事にあてはまる','危険な仕事をする者は、聖人と同じように尊敬されなければならない','身分の低い者の言うことは、たいてい聖人の教えと同じ内容になる','木登りや蹴鞠のような技芸は、書物による学問よりもすぐれている'],a:0,
+   exp:'「あやしき下臈<b>なれども</b>（＝身分は低いけれども）」という逆接がポイント。さらに蹴鞠の例を挙げて、この教えが<b>他の物事にも広くあてはまる</b>ことを示しています。'}
+ ]
+},
+/* ---------------- 4 ---------------- */
+{
+ id:'s4', src:'徒然草', title:'仁和寺にある法師', lead:'長年の願いを果たしたはずが……。',
+ honbun:
+  '<p>仁和寺にある法師、年寄るまで石清水を拝まざりければ、心うく覚えて、あるとき思ひ立ちて、ただひとり、徒歩より<span class="ul"><span class="mk">②</span>まうでけり</span>。極楽寺・高良などを拝みて、<span class="ul"><span class="mk">①</span>かばかりと心得て帰りにけり</span>。</p>'+
+  '<p>さて、かたへの人にあひて、「年ごろ思ひつること、果たし侍りぬ。聞きしにも過ぎて尊くこそおはしけれ。<span class="ul"><span class="mk">③</span>そも、参りたる人ごとに山へ登りしは、何事かありけん、ゆかしかりしかど、神へ参るこそ本意なれと思ひて、山までは見ず</span>」とぞ言ひける。</p>'+
+  '<p>少しのことにも、先達はあらまほしきことなり。</p>',
+ chu:'<b>仁和寺</b>＝京都にある寺。　<b>石清水</b>＝石清水八幡宮。京都府八幡市の男山の山上にある。　<b>心うく</b>＝物足りなく。　<b>徒歩より</b>＝徒歩で。　<b>極楽寺・高良</b>＝いずれも男山のふもとにある寺社。　<b>かばかり</b>＝これだけ。　<b>かたへの人</b>＝仲間。　<b>年ごろ</b>＝長年。　<b>ゆかしかりしかど</b>＝知りたかったけれど。　<b>本意</b>＝本来の目的。　<b>先達</b>＝案内者。指導者。',
+ yaku:'<p>仁和寺にいるある法師が、年をとるまで石清水八幡宮を参拝したことがなかったので、物足りなく思って、あるとき思い立って、ただ一人、徒歩で参拝した。（ふもとの）極楽寺や高良神社などを拝んで、これだけのものだと思い込んで帰ってしまった。</p><p>さて、仲間に会って、「長年思っていたことを、果たしました。聞いていた以上に尊くていらっしゃった。それにしても、参拝する人がみな山へ登っていたのは、何事があったのだろうか、知りたかったけれど、神にお参りすることこそが本来の目的だと思って、山の上までは見ませんでした」と言った。</p><p>ちょっとしたことにも、案内者はいてほしいものである。</p>',
+ qs:[
+  {n:'問1',type:T_WORD,q:'傍線部①「<span class="kb">かばかりと心得て帰りにけり</span>」の意味として最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['これだけのものだと思い込んで帰ってしまった','これほど尊いものかと感激して帰った','これくらいの時間で帰れると見当をつけて帰った','これでは足りないと気づいて帰った'],a:0,
+   exp:'「かばかり」＝これだけ、これほど。「心得」＝理解する、思い込む。ふもとの寺社だけを拝んで「石清水はこれだけのものだ」と<b>早合点した</b>ことを表します。'},
+  {n:'問2',type:T_KANA,q:'傍線部②「<span class="kb">まうでけり</span>」を現代仮名遣いに直したものとして正しいものを、次のア〜エの中から一つ選びなさい。',
+   opts:['まうでけり','もうでけり','まいでけり','まおでけり'],a:1,
+   exp:'「<b>au</b>」と続く音は「<b>ô（オー）</b>」と読み、現代仮名遣いでは「おう」と書きます。「まうで（ma-u-de）」→「<b>もうで</b>」。同じ例に「けふ（kefu→kyô）→きょう」「やうやう→ようよう」があります。'},
+  {n:'問3',type:T_CONT,q:'傍線部③から、この法師が石清水八幡宮を拝めなかった理由が分かる。その理由として最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['参拝の作法を知らず、社殿に入れてもらえなかったから。','一人で出かけたため、途中で道に迷ってしまったから。','山道が険しく、途中で引き返してしまったから。','ふもとの極楽寺・高良などを石清水八幡宮だと思い込み、山上まで登らなかったから。'],a:3,
+   exp:'石清水八幡宮は<b>男山の山上</b>にあります。法師はふもとの極楽寺・高良を拝んだだけで満足し、他の参拝者が山へ登る意味も分からないまま帰ってしまいました。'},
+  {n:'問4',type:T_THEME,talk:'<span class="sp">先生</span>「最後の一文『少しのことにも、先達はあらまほしきことなり』は、どういうことですか。」<br><span class="sp">Ａさん</span>「法師は、ほかの参拝者が山へ登るのを見ながらも、自分の思い込みで<span class="blank">　　</span>。」<br><span class="sp">Ｂさん</span>「だから作者は、ちょっとしたことでも案内してくれる人がいてほしいものだ、と述べているのですね。」',
+   q:'次は、この文章を読んだ生徒たちと先生の話し合いの一部である。空欄にあてはまる内容として最も適切なものを、あとのア〜エの中から一つ選びなさい。',
+   opts:['仲間に自慢話をして、かえって笑われてしまいました','何度も同じ場所をお参りして、時間を無駄にしてしまいました','人にたずねることをせず、肝心の石清水八幡宮を拝まずに帰ってしまいました','山の上からの景色を楽しむことを、あきらめてしまいました'],a:2,
+   exp:'法師は「ゆかしかりしかど」と<b>疑問を感じながらも人にたずねず</b>、目的を果たせないまま満足して帰りました。だからこそ「先達（案内者）はあらまほしき」と結ばれるのです。'}
+ ]
+},
+/* ---------------- 5 ---------------- */
+{
+ id:'s5', src:'宇治拾遺物語', title:'児のそら寝', lead:'ぼたもちを待つ児の、いじらしい寝たふり。',
+ honbun:
+  '<p>これも今は昔、比叡の山に児ありけり。僧たち、宵のつれづれに、「いざ、かいもちひせむ」と言ひけるを、この児、心寄せに聞きけり。さりとて、し出ださむを待ちて寝ざらむも、わろかりなむと思ひて、片方に寄りて、寝たるよしにて、出で来るを待ちけるに、すでにし出だしたるさまにて、ひしめき合ひたり。</p>'+
+  '<p>この児、さだめて驚かさむずらむと待ちゐたるに、僧の、「もの申しさぶらはむ。驚かせたまへ」と言ふを、<span class="ul"><span class="mk">①</span>うれしとは思へども、ただ一度に<span class="mk">②</span>いらへむも、待ちけるかともぞ思ふ</span>とて、今一声呼ばれていらへむと、念じて寝たるほどに、「や、な起こしたてまつりそ。幼き人は寝入りたまひにけり」と言ふ声のしければ、<span class="ul"><span class="mk">③</span>あな、わびし</span>と思ひて、いま一度起こせかしと、思ひ寝に聞けば、ひしひしと、ただ食ひに食ふ音のしければ、ずちなくて、無期ののちに、「えい」といらへたりければ、<span class="ul"><span class="mk">④</span>僧たち笑ふこと限りなし</span>。</p>',
+ chu:'<b>児</b>＝寺で修行しながら育てられる少年。　<b>比叡の山</b>＝比叡山延暦寺。　<b>宵</b>＝夜のはじめ。　<b>つれづれに</b>＝手持ちぶさたで。　<b>かいもちひ</b>＝ぼたもち。　<b>心寄せに</b>＝期待して。　<b>わろかりなむ</b>＝みっともないだろう。　<b>よし</b>＝ふり。　<b>ひしめき合ひたり</b>＝大騒ぎしている。　<b>驚かす</b>＝目を覚まさせる。　<b>もの申しさぶらはむ</b>＝もしもし。　<b>いらへ</b>＝返事。　<b>念じて</b>＝我慢して。　<b>な起こしたてまつりそ</b>＝お起こし申し上げるな。　<b>わびし</b>＝つらい。がっかりだ。　<b>ずちなくて</b>＝どうしようもなくて。　<b>無期ののちに</b>＝ずいぶん時間がたってから。',
+ yaku:'<p>これも今となっては昔のことだが、比叡山に児がいた。僧たちが、宵の手持ちぶさたなときに、「さあ、ぼたもちを作ろう」と言ったのを、この児は期待して聞いた。とはいっても、作り上げるのを待って寝ないでいるのもみっともないだろうと思って、部屋の片隅に寄って、寝たふりをして、出てくるのを待っていたところ、もう作り上げた様子で、大騒ぎしている。</p><p>この児は、きっと（僧たちが）起こしてくれるだろうと待っていたところ、僧が「もしもし。お目をお覚ましください」と言うのを、うれしいとは思うけれども、たった一度で返事をするのも、待っていたのかと思われては困ると思って、もう一声呼ばれてから返事をしようと、我慢して寝ているうちに、「これ、お起こし申し上げるな。幼い人は寝入っておしまいになった」と言う声がしたので、ああ、がっかりだと思って、もう一度起こしてくれよと思いながら寝て聞いていると、むしゃむしゃとひたすら食べる音がしたので、どうしようもなくて、ずいぶん時間がたってから、「はい」と返事をしたので、僧たちは笑うことこのうえなかった。</p>',
+ qs:[
+  {n:'問1',type:T_CONT,q:'傍線部①「<span class="kb">うれしとは思へども、ただ一度にいらへむも、待ちけるかともぞ思ふ</span>」とあるが、児がすぐに返事をしなかったのはなぜか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['ほんとうに眠ってしまい、目を覚ますことができなかったから。','ぼたもちが好きではなく、食べたいと思わなかったから。','すぐに返事をすると、ぼたもちを待っていたのだと僧たちに思われそうだったから。','僧たちの呼ぶ声が小さくて、よく聞き取れなかったから。'],a:2,
+   exp:'「待ちけるか<b>ともぞ思ふ</b>」＝「待っていたのかと（僧たちが）思うといけない」の意。「もぞ」は<b>心配・危惧</b>を表します。ぼたもちを待ちわびていたと思われたくない、という児の見えっぱりな心情です。'},
+  {n:'問2',type:T_KANA,q:'傍線部②「<span class="kb">いらへむ</span>」を現代仮名遣いに直したものとして正しいものを、次のア〜エの中から一つ選びなさい。',
+   opts:['いらえん','いらえむ','いらへむ','いらへん'],a:0,
+   exp:'語頭以外の「へ」は「え」に直し、さらに<b>助動詞「む」は「ん」</b>と書き直します。「いらへむ」→「<b>いらえん</b>」。'},
+  {n:'問3',type:T_CONT,q:'傍線部③「<span class="kb">あな、わびし</span>」とあるが、児がこう思ったのはなぜか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['僧たちが自分をきらって、わざと起こさなかったのだと気づいたから。','ぼたもちを作る手伝いをさせられそうになったから。','寝たふりをしていたことを、僧たちに見破られてしまったから。','もう一度呼んでもらえず、そのまま寝入ったものと思われてしまったから。'],a:3,
+   exp:'直前の僧の言葉「な起こしたてまつりそ。<b>幼き人は寝入りたまひにけり</b>」がきっかけ。もう一声呼ばれるのを待っていたのに、呼ばれなくなってしまった、というがっかり感です。'},
+  {n:'問4',type:T_THEME,talk:'<span class="sp">先生</span>「傍線部④で僧たちが『笑ふこと限りなし』となったのは、なぜでしょう。」<br><span class="sp">Ａさん</span>「児が『えい』と返事をしたのが、<span class="blank">　　</span>だったからです。」<br><span class="sp">先生</span>「そうですね。その一言で、寝たふりをして待っていたことがすっかり分かってしまう。児のいじらしくもおかしみのある姿が、生き生きと描かれていますね。」',
+   q:'次は、この文章を読んだ生徒と先生の話し合いの一部である。空欄にあてはまる内容として最も適切なものを、あとのア〜エの中から一つ選びなさい。',
+   opts:['声をかけられてすぐの、たいへん元気のよい返事','呼ばれてからずいぶん時間がたったあとの、間の抜けた返事','僧たちの問いかけとは、まったく関係のない返事','寝言のように小さく、ほとんど聞き取れない返事'],a:1,
+   exp:'「<b>無期ののちに</b>（＝ずいぶん時間がたってから）」がポイント。食べる音がしてからようやく「えい」と答えたので、寝たふりをして待っていたことが見え見えになってしまったのです。'}
+ ]
+},
+/* ---------------- 6 ---------------- */
+{
+ id:'s6', src:'伊曽保物語', title:'鳩と蟻のこと', lead:'助けられた蟻が、恩を返す。',
+ honbun:
+  '<p>ある川のほとりに、蟻遊ぶことありけり。にはかに水かさまさりて、かの蟻を誘ひ流る。浮きぬ沈みぬする所に、鳩、<span class="ul"><span class="mk">②</span>こずゑ</span>よりこれを見て、「<span class="ul"><span class="mk">①</span>あはれなるありさまかな</span>」と、こずゑをちと食ひ切つて川の中へ落としければ、蟻これに乗りて、渚に上がりぬ。</p>'+
+  '<p>かかりける所に、ある人、竿の先に鳥もちを付けて、かの鳩をささんとす。<span class="ul"><span class="mk">③</span>蟻、心に思ふやう、「ただ今の恩を送らん」と思ひ、かの人の足にしつかと食ひつきければ</span>、おびえあがつて、竿をかしこに投げ捨てけり。鳩これを悟りて、はるかの空へぞ逃げ延びにける。</p>'+
+  '<p>そのごとく、<span class="ul"><span class="mk">④</span>人の恩を受けたらん者は、いかさまにもその報いをなすべきなり</span>。</p>',
+ chu:'<b>伊曽保物語</b>＝ヨーロッパの「イソップ物語」を、江戸時代の初めに日本語に訳した本。　<b>こずゑ</b>＝木の枝の先。　<b>ちと</b>＝少し。　<b>渚</b>＝水ぎわ。　<b>かかりける所に</b>＝そうしているところに。　<b>鳥もち</b>＝鳥を捕らえるための、粘り気のあるもの。　<b>ささんとす</b>＝（竿で）刺して捕らえようとする。　<b>恩を送らん</b>＝恩を返そう。　<b>しつかと</b>＝しっかりと。　<b>おびえあがつて</b>＝驚いて。　<b>悟りて</b>＝気づいて。　<b>いかさまにも</b>＝どのようにしてでも。',
+ yaku:'<p>ある川のほとりで、蟻が遊んでいることがあった。急に水かさが増して、その蟻を（水が）さらって流す。浮いたり沈んだりしているところに、鳩が枝の先からこれを見て、「かわいそうなありさまだなあ」と（思い）、枝を少し食い切って川の中へ落としたところ、蟻はこれに乗って、水ぎわに上がった。</p><p>そうしているところに、ある人が、竿の先に鳥もちを付けて、その鳩を捕らえようとする。蟻が心に思うことには、「たった今受けた恩を返そう」と思い、その人の足にしっかりとかみついたので、（その人は）驚いて、竿をあちらへ投げ捨ててしまった。鳩はこれに気づいて、はるかな空へと逃げのびた。</p><p>そのように、人の恩を受けたような者は、どのようにしてでもその恩に報いるべきである。</p>',
+ qs:[
+  {n:'問1',type:T_WORD,q:'傍線部①「<span class="kb">あはれなるありさまかな</span>」とあるが、このように思ったのは誰か。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['蟻','鳩','ある人','作者'],a:1,
+   exp:'直前が「鳩、こずゑよりこれを見て」なので、主語は<b>鳩</b>。このあと「こずゑをちと食ひ切つて」と、鳩が蟻を助ける行動へと続きます。'},
+  {n:'問2',type:T_KANA,q:'傍線部②「<span class="kb">こずゑ</span>」を現代仮名遣いに直したものとして正しいものを、次のア〜エの中から一つ選びなさい。',
+   opts:['こずゑ','こづえ','こずへ','こずえ'],a:3,
+   exp:'「<b>ゑ</b>」は「<b>え</b>」に直します（「ゐ」→「い」、「を」→「お」も同様）。現代仮名遣いでは「梢」は「<b>こずえ</b>」と書くので、「こづえ」ではありません。'},
+  {n:'問3',type:T_CONT,q:'傍線部③について、蟻が人の足にかみついたのはなぜか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['自分の通り道をふさがれて、腹を立てたから。','川に流された仕返しをしようと思ったから。','命を助けてくれた鳩の恩に報いようと思ったから。','鳥もちのにおいが、気に入らなかったから。'],a:2,
+   exp:'蟻の心内語「<b>ただ今の恩を送らん</b>（＝たった今受けた恩を返そう）」が根拠。鳩が捕らえられそうになっているのを見て、助けようとしたのです。'},
+  {n:'問4',type:T_THEME,talk:'<span class="sp">先生</span>「この話の結びには、作者の考えが述べられていますね。」<br><span class="sp">Ａさん</span>「はい。傍線部④に『人の恩を受けたらん者は、いかさまにもその報いをなすべきなり』とあります。」<br><span class="sp">Ｂさん</span>「つまり、<span class="blank">　　</span>ということですね。」<br><span class="sp">先生</span>「そのとおりです。物語の出来事から教訓を引き出す、という書き方になっています。」',
+   q:'次は、この文章を読んだ生徒たちと先生の話し合いの一部である。空欄にあてはまる内容として最も適切なものを、あとのア〜エの中から一つ選びなさい。',
+   opts:['恩を受けた者は、どのような方法であってもその恩に報いるべきだ','恩を受けたら、必ずそれと同じだけの品物を返すべきだ','弱い者どうしは、助け合わなければ生きていくことができない','人に恩を売っておけば、いつか自分が得をすることがある'],a:0,
+   exp:'「<b>いかさまにも</b>」＝どのようにしてでも。「同じだけの品物を返せ」とも、「恩を売れば得をする」とも述べていません。小さな蟻が、体は小さくとも自分にできるやり方で恩を返した点が要旨です。'}
+ ]
+},
+/* ---------------- 7 ---------------- */
+{
+ id:'s7', src:'宇治拾遺物語', title:'小野篁、広才のこと', lead:'「子」の字十二文字を、どう読む。',
+ honbun:
+  '<p>今は昔、小野篁といふ人おはしけり。嵯峨の帝の御時に、内裏に札を立てたりけるに、「無悪善」と書きたりけり。帝、篁に、「読め」と仰せられたりければ、「読みは読み候ひなん。されど、恐れにて候へば、<span class="ul"><span class="mk">①</span>え申し候はじ</span>」と奏しければ、「ただ申せ」と、たびたび仰せられければ、「さがなくてよからんと申して候ふぞ。されば、君を呪ひ参らせて候ふなり」と申しければ、「<span class="ul"><span class="mk">②</span>おのれ放ちては、誰か書かん</span>」と仰せられければ、「さればこそ、申し候はじとは申して候ひつれ」と申すに、帝、「さて、何も書きたらん物は、読みてんや」と仰せられければ、「何にても読み候ひなん」と申しければ、片仮名の子文字を十二書かせ<span class="ul"><span class="mk">③</span>給ひて</span>、「読め」と仰せられければ、「ねこの子のこねこ、ししの子のこじし」と読みたりければ、帝、<span class="ul"><span class="mk">④</span>ほほ笑ませ給ひて、事なくてやみにけり</span>。</p>',
+ chu:'<b>小野篁</b>＝平安時代前期の学者・歌人。　<b>嵯峨の帝</b>＝嵯峨天皇。　<b>内裏</b>＝天皇の住む御殿。　<b>無悪善</b>＝「悪（さが）無くて善からん」と読める。　<b>さが</b>＝「嵯峨」と「性（さが＝悪いところ）」を掛けている。　<b>奏す</b>＝天皇に申し上げる。　<b>え申し候はじ</b>＝申し上げることができません。　<b>おのれ放ちては</b>＝おまえ以外には。　<b>子文字</b>＝「子」という文字。　<b>事なくてやみにけり</b>＝何事もなく終わった。',
+ yaku:'<p>今となっては昔のことだが、小野篁という人がいらっしゃった。嵯峨天皇の御代に、内裏に札が立ててあったが、（そこには）「無悪善」と書いてあった。帝が篁に「読め」とおっしゃったので、（篁は）「読むことは読めるでしょう。しかし、恐れ多いことでございますので、申し上げることはできません」と申し上げたところ、「かまわないから申せ」と、たびたびおっしゃったので、「『さが（＝嵯峨天皇）なくてよからん』と書いてございます。つまり、帝を呪い申し上げているのでございます」と申し上げたところ、（帝は）「おまえのほかに、誰がこんなものを書くだろうか」とおっしゃったので、「だからこそ、申し上げますまいと申したのでございます」と申し上げると、帝は「それでは、どんなものが書いてあっても読めるのか」とおっしゃったので、「何であっても読めましょう」と申したので、片仮名の「子」という文字を十二お書かせになって、「読め」とおっしゃったところ、「ねこの子のこねこ、ししの子のこじし」と読んだので、帝はほほえみなさって、何事もなく終わった。</p>',
+ qs:[
+  {n:'問1',type:T_CONT,q:'傍線部①「<span class="kb">え申し候はじ</span>」とあるが、篁が初めこのように言ったのはなぜか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['帝の命令に従うのが面倒で、断ろうとしたから。','札を書いた者をかばってやろうと思ったから。','文字が難しすぎて、本当に読むことができなかったから。','読めば帝を呪う内容になってしまい、自分に罪が及ぶことを恐れたから。'],a:3,
+   exp:'「読みは読み候ひなん（＝読むことは読めます）。<b>されど、恐れにて候へば</b>」とあるので、読めないのではありません。内容が天皇を呪うものだと分かったので、口に出すことをはばかったのです。'},
+  {n:'問2',type:T_CONT,q:'傍線部②「<span class="kb">おのれ放ちては、誰か書かん</span>」とあるが、この言葉には帝のどのような気持ちが表れているか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['この札を書いたのは篁に違いない、と疑う気持ち。','篁に、その札を書き直させようとする気持ち。','誰にも読めないだろうと、あきらめる気持ち。','篁の学識の広さを、心からほめたたえる気持ち。'],a:0,
+   exp:'「誰か書かん」は<b>反語</b>で「誰が書くだろうか、いや、おまえ以外にいない」の意。読めるということは書いた本人だろう、という疑いです。篁が「さればこそ（＝だからこそ）」と返しているのも手がかり。'},
+  {n:'問3',type:T_KANA,q:'傍線部③「<span class="kb">給ひて</span>」を現代仮名遣いに直したものとして正しいものを、次のア〜エの中から一つ選びなさい。',
+   opts:['たまひて','たまいて','たもうて','たまえて'],a:1,
+   exp:'語頭以外の「ひ」は「い」に直します。「給ひて」→「<b>たまいて</b>」。'},
+  {n:'問4',type:T_THEME,talk:'<span class="sp">先生</span>「傍線部④で帝が『ほほ笑ませ給ひて、事なくてやみにけり』となったのは、なぜでしょう。」<br><span class="sp">Ａさん</span>「帝は篁を疑っていましたが、<span class="blank">　　</span>ので、機嫌を直したのだと思います。」<br><span class="sp">先生</span>「そうですね。題名の『広才』とは、学識が広いという意味です。この話は篁の才知をたたえた話なのですね。」',
+   q:'次は、この文章を読んだ生徒と先生の話し合いの一部である。空欄にあてはまる内容として最も適切なものを、あとのア〜エの中から一つ選びなさい。',
+   opts:['篁が、帝をたたえるすぐれた歌をその場でよんでみせた','篁が、札を書いた犯人を突き止めて帝に報告した','篁が「子」の字十二文字をみごとに読み解き、その学識の広さを示した','篁が、札を書いたのは自分であると素直に認めて謝った'],a:2,
+   exp:'帝が出した「子子子子子子子子子子子子」という難題を、篁は「<b>ねこの子のこねこ、ししの子のこじし</b>」と読み解きました。その才知に感心したので、疑いはうやむやになって終わったのです。'}
+ ]
+},
+/* ---------------- 8 ---------------- */
+{
+ id:'s8', src:'徒然草', title:'ある人、弓射ることを習ふに', lead:'「二つの矢を持つことなかれ」。師の戒めの意味は。',
+ honbun:
+  '<p>ある人、弓射ることを習ふに、諸矢をたばさみて的に向かふ。師の<span class="ul"><span class="mk">②</span>言はく</span>、「<span class="ul"><span class="mk">①</span>初心の人、二つの矢を持つことなかれ</span>。後の矢を頼みて、初めの矢に等閑の心あり。毎度ただ得失なく、この一矢に定むべしと思へ」と言ふ。わづかに二つの矢、師の前にて一つをおろかにせんと思はんや。<span class="ul"><span class="mk">③</span>懈怠の心、みづから知らずといへども、師これを知る</span>。この戒め、万事にわたるべし。</p>'+
+  '<p>道を学する人、夕べには朝あらんことを思ひ、朝には夕べあらんことを思ひて、重ねてねんごろに修せんことを期す。いはんや一刹那のうちにおいて、懈怠の心あることを知らんや。なんぞ、<span class="ul"><span class="mk">④</span>ただ今の一念において、直ちにすることの、はなはだ難き</span>。</p>',
+ chu:'<b>諸矢</b>＝二本一組の矢。　<b>たばさみて</b>＝手にはさんで。　<b>初心の人</b>＝初心者。　<b>頼みて</b>＝あてにして。　<b>等閑の心</b>＝いいかげんな気持ち。　<b>得失なく</b>＝当たり外れを考えず。　<b>おろかに</b>＝いいかげんに。　<b>懈怠</b>＝なまけ心。　<b>万事</b>＝すべてのこと。　<b>道を学する人</b>＝仏道を学ぶ人。　<b>ねんごろに修せん</b>＝念入りに修行しよう。　<b>期す</b>＝あてにする。　<b>一刹那</b>＝ごくわずかな時間。　<b>一念</b>＝ほんの一瞬の心。',
+ yaku:'<p>ある人が弓を射ることを習うときに、二本の矢を手にはさんで的に向かった。師が言うことには、「初心者は二本の矢を持ってはならない。あとの矢をあてにして、初めの矢をいいかげんに射る心が生じる。毎回、ただ当たり外れを考えず、この一本の矢で決めようと思え」と言う。わずか二本の矢を、師の前で一本をいいかげんにしようと思うだろうか（いや、思わない）。しかし、なまけ心は、自分では気づかないけれども、師はこれを見抜いている。この戒めは、すべてのことにあてはまるはずだ。</p><p>仏道を学ぶ人は、夜には翌朝があると思い、朝には夕方があると思って、あらためて念入りに修行しようとあてにする。まして、ほんの一瞬のうちに、なまけ心があることに気づくだろうか（いや、気づかない）。どうして、ただ今のこの一瞬において、すぐに実行することが、こんなにも難しいのか。</p>',
+ qs:[
+  {n:'問1',type:T_CONT,q:'傍線部①「<span class="kb">初心の人、二つの矢を持つことなかれ</span>」とあるが、師がこのように言うのはなぜか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['二本目をあてにして、一本目を射る心がいいかげんになるから。','二本の矢を同時に射るのは、たいへん危険だから。','初心者のうちは、矢を無駄に使ってはいけないから。','二本持つと手が重くなり、的をねらいにくくなるから。'],a:0,
+   exp:'すぐあとに理由が示されています。「<b>後の矢を頼みて、初めの矢に等閑の心あり</b>」＝あとの矢をあてにして、初めの矢をいいかげんに扱う心が生じる。'},
+  {n:'問2',type:T_KANA,q:'傍線部②「<span class="kb">言はく</span>」を現代仮名遣いに直したものとして正しいものを、次のア〜エの中から一つ選びなさい。',
+   opts:['いあく','いはく','いわく','ゆわく'],a:2,
+   exp:'語頭以外の「は」は「わ」に直します。「言はく」→「<b>いわく</b>」。「〜の言はく」は「〜が言うことには」という決まった言い方です。'},
+  {n:'問3',type:T_WORD,q:'傍線部③「<span class="kb">懈怠の心、みづから知らずといへども、師これを知る</span>」の意味として最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['なまけ心は、師から教えられて初めて生まれるものである。','なまけ心は、自分では気づかないけれども、師は見抜いている。','なまけ心は、自分だけが知っていて、師にはわからない。','なまけ心は、自分にも師にも、決して知られることはない。'],a:1,
+   exp:'「みづから」＝自分で。「〜といへども」＝〜けれども（逆接）。<b>本人は無自覚でも、師には見えている</b>という対比を読み取ります。'},
+  {n:'問4',type:T_THEME,talk:'<span class="sp">先生</span>「後半で作者は、話をどのように広げていますか。」<br><span class="sp">Ａさん</span>「弓の稽古の話から、仏道を学ぶ人の話へと広げています。」<br><span class="sp">Ｂさん</span>「そして傍線部④で、『ただ今の一念において、直ちにすること』の難しさを述べています。つまり作者が言いたいのは、<span class="blank">　　</span>ということですね。」<br><span class="sp">先生</span>「そうですね。『この戒め、万事にわたるべし』という一文が、そのつなぎ目になっています。」',
+   q:'次は、この文章を読んだ生徒たちと先生の話し合いの一部である。空欄にあてはまる内容として最も適切なものを、あとのア〜エの中から一つ選びなさい。',
+   opts:['弓の稽古は、仏道の修行よりもはるかに難しいものである','師の教えといっても、必ずしも正しいとは限らない','朝と夕方とでは、人の心は大きく変わってしまうものだ','何事も、次の機会をあてにせず、今この一瞬に実行することが大切だ'],a:3,
+   exp:'「二本目の矢をあてにする」＝「明日をあてにする」という同じ構造でとらえます。<b>今この一瞬に、すぐ実行せよ</b>というのが、弓の話から導かれた作者の主張です。'}
+ ]
+},
+/* ---------------- 9 ---------------- */
+{
+ id:'s9', src:'沙石集', title:'無言の行', lead:'四人の僧が始めた無言の行。その結末は。',
+ honbun:
+  '<p>ある山寺に、四人の僧集まりて、七日の間、無言の行をぞ始めける。一夜、風吹きて、灯明の消えたりけるに、下座の僧、こらへかねて、「火が消えたり。とく点せ」と言ふ。</p>'+
+  '<p>第二の僧、これを聞きて、「<span class="ul"><span class="mk">①</span>無言の行に、もの<span class="mk">②</span>言ふべきか</span>」と、にがにがしげにとがめけり。第三の僧、「二人ながらもの言ひたり。口惜しきことなり」と言ふ。</p>'+
+  '<p>上座の僧、うちうなづきて、「<span class="ul"><span class="mk">③</span>われ一人こそもの言はね</span>」と言ひけり。</p>',
+ chu:'<b>無言の行</b>＝一定の期間、いっさい口をきかない修行。　<b>灯明</b>＝仏前のあかり。　<b>下座</b>＝いちばん位の低い者。　<b>とく</b>＝早く。　<b>点せ</b>＝ともせ。　<b>にがにがしげに</b>＝不愉快そうに。　<b>とがめけり</b>＝非難した。　<b>二人ながら</b>＝二人とも。　<b>口惜しき</b>＝残念な。情けない。　<b>上座</b>＝いちばん位の高い者。　※読みやすいように表記を一部改めています。',
+ yaku:'<p>ある山寺で、四人の僧が集まって、七日の間、無言の行を始めた。ある夜、風が吹いて、仏前のあかりが消えてしまったので、いちばん下位の僧が、こらえきれずに「火が消えた。早くともせ」と言う。</p><p>二番目の僧が、これを聞いて、「無言の行なのに、ものを言ってよいものか」と、不愉快そうに非難した。三番目の僧は、「二人ともものを言ってしまった。情けないことだ」と言う。</p><p>いちばん上位の僧は、うなずいて、「私一人だけは、ものを言っていない」と言った。</p>',
+ qs:[
+  {n:'問1',type:T_CONT,q:'傍線部①「<span class="kb">無言の行に、もの言ふべきか</span>」とあるが、第二の僧がこう言ったのはどのような気持ちからか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['自分もそろそろ話をしてみたいという気持ち。','下座の僧が行の約束を破ったことを、非難する気持ち。','暗いままでは危ないと、仲間の身を心配する気持ち。','自分も早く火をつけてほしいと、願う気持ち。'],a:1,
+   exp:'「<b>にがにがしげにとがめけり</b>」＝不愉快そうに非難した、が根拠。「べきか」は反語で「言ってよいものか、いや、よくない」の意です。'},
+  {n:'問2',type:T_KANA,q:'傍線部②「<span class="kb">言ふべきか</span>」を現代仮名遣いに直したものとして正しいものを、次のア〜エの中から一つ選びなさい。',
+   opts:['いふべきか','ゆうべきか','いうべきか','いをべきか'],a:2,
+   exp:'語頭以外の「ふ」は「う」に直すので、「言ふ」→「<b>いう</b>」。読み方が「ゆう」であっても、<b>書き表すときは「いう」</b>となる点に注意しましょう。'},
+  {n:'問3',type:T_CONT,q:'傍線部③「<span class="kb">われ一人こそもの言はね</span>」とあるが、この言葉のおかしさはどこにあるか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['自分だけ行を続けようとして、仲間の僧たちを見捨てている点。','あかりを消したのが自分であることを、最後まで隠している点。','ほかの三人の僧の言葉を、まったく聞いていなかった点。','自分だけは口をきいていないと言いながら、そう言うこと自体が口をきいていることになる点。'],a:3,
+   exp:'「こそ〜ね」は<b>係り結び</b>で、「〜だけは…ない」と強調する言い方。「自分だけは言っていない」と<b>口に出した瞬間に</b>、その主張が成り立たなくなるところがおかしみです。'},
+  {n:'問4',type:T_THEME,talk:'<span class="sp">先生</span>「四人の僧が、次々に口をきいてしまいますね。」<br><span class="sp">Ａさん</span>「はい。しかも、あとの僧ほど<span class="blank">　　</span>という形になっています。」<br><span class="sp">先生</span>「そのくり返しが、この話のおもしろさを生んでいるのですね。」',
+   q:'次は、この文章を読んだ生徒と先生の話し合いの一部である。空欄にあてはまる内容として最も適切なものを、あとのア〜エの中から一つ選びなさい。',
+   opts:['人を責めることに気を取られ、自分も同じ過ちを犯していることに気づいていない','修行の厳しさに耐えかねて、寺を出ていこうとしている','声がしだいに小さくなり、少しずつ無言の行に戻っている','位が低くなっていき、発言の重みが失われていく'],a:0,
+   exp:'下座→第二→第三→上座と、<b>人を非難するその言葉じたいが行を破っている</b>という同じ失敗をくり返します。最後の上座の僧がその極みで、他人には厳しく自分には気づかない人間の姿を笑った話です。'}
+ ]
+},
+/* ---------------- 10 ---------------- */
+{
+ id:'s10', src:'徒然草', title:'九月二十日のころ', lead:'人が見ていないときのふるまいこそ。',
+ honbun:
+  '<p>九月二十日のころ、ある人に誘はれたてまつりて、明くるまで月見ありくこと侍りしに、<span class="ul"><span class="mk">①</span>思し出づる所ありて、案内せさせて入り給ひぬ</span>。荒れたる庭の露しげきに、わざとならぬ匂ひ、しめやかにうち薫りて、忍びたるけはひ、いとものあはれなり。</p>'+
+  '<p>よきほどにて出で給ひぬれど、なほ事ざまの優におぼえて、物の隠れよりしばし<span class="ul"><span class="mk">②</span>見ゐたる</span>に、<span class="ul"><span class="mk">③</span>妻戸をいま少し押し開けて、月見るけしきなり</span>。やがてかけこもらましかば、口惜しからまし。<span class="ul"><span class="mk">④</span>あとまで見る人ありとは、いかでか知らん。かやうのことは、ただ朝夕の心づかひによるべし</span>。</p>'+
+  '<p>その人、ほどなく失せにけりと聞き侍りし。</p>',
+ chu:'<b>九月二十日</b>＝陰暦九月二十日。月の出がおそい。　<b>案内せさせて</b>＝取り次ぎを頼んで。　<b>露しげき</b>＝露が多く降りている。　<b>わざとならぬ匂ひ</b>＝わざとらしくない、自然な香のかおり。　<b>しめやかに</b>＝しっとりと。　<b>忍びたるけはひ</b>＝ひっそりと暮らしている様子。　<b>よきほどにて</b>＝ちょうどよい頃合いで。　<b>事ざまの優に</b>＝その場のようすが優雅に。　<b>妻戸</b>＝両開きの戸。　<b>かけこもらましかば</b>＝（戸を）閉めて引きこもってしまったなら。　<b>口惜しからまし</b>＝残念であっただろう。　<b>いかでか知らん</b>＝どうして知っていようか。　<b>失せにけり</b>＝亡くなってしまった。',
+ yaku:'<p>陰暦九月二十日ごろ、ある人にお誘いいただいて、夜明けまで月を見て歩き回ることがありましたが、（その人が）思い出しなさる家があって、取り次ぎを頼んでお入りになった。荒れた庭に露がたくさん降りているところに、わざとらしくない自然な香のかおりがしっとりと漂って、ひっそりと暮らしている様子が、たいそうしみじみと趣深い。</p><p>ちょうどよい頃合いで（その人は）お出になったけれど、やはりその場のようすが優雅に思われて、物陰からしばらく見ていたところ、（家の女主人は）両開きの戸をもう少し押し開けて、月を見ている様子である。もし（客を送り出して）すぐに戸を閉めて引きこもってしまったなら、残念であっただろう。（客が帰った）あとまで見ている人がいようとは、どうして知っていようか。このようなことは、ただ、ふだんからの心がけによるものであろう。</p><p>その人は、まもなく亡くなってしまったと聞きました。</p>',
+ qs:[
+  {n:'問1',type:T_CONT,q:'傍線部①「<span class="kb">思し出づる所ありて、案内せさせて入り給ひぬ</span>」とあるが、「ある人」がこのようにしたのはなぜか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['その家のようすを、作者に見せたいと思ったから。','夜が更けてきたので、休む場所を探していたから。','月を見て歩くうちに、ふと思い出した家があったから。','道に迷ってしまい、人にたずねようとしたから。'],a:2,
+   exp:'「思し出づる所ありて」＝<b>思い出しなさる家があって</b>。「思し出づ」は「思ひ出づ」の尊敬語で、主語は「ある人」です。'},
+  {n:'問2',type:T_KANA,q:'傍線部②「<span class="kb">見ゐたる</span>」を現代仮名遣いに直したものとして正しいものを、次のア〜エの中から一つ選びなさい。',
+   opts:['みゐたる','みいたる','みひたる','みうたる'],a:1,
+   exp:'「<b>ゐ</b>」は「<b>い</b>」に直します。「見ゐたる」→「<b>みいたる</b>」。「ゐ→い」「ゑ→え」「を→お」はセットで覚えましょう。'},
+  {n:'問3',type:T_CONT,q:'傍線部③のとき、この家の女主人はどうしていたか。最も適切なものを、次のア〜エの中から一つ選びなさい。',
+   opts:['妻戸をもう少し押し開けて、月を眺めていた。','帰る客を追いかけて、外へ出てきた。','あかりをともして、書物を読み始めた。','すぐに戸を閉めて、奥へ引きこもってしまった。'],a:0,
+   exp:'本文そのままに「妻戸を<b>いま少し押し開けて</b>、月見るけしきなり」とあります。「すぐに戸を閉めて奥へ引きこもった」というのは、そのあとの「やがてかけこもら<b>ましかば</b>、口惜しから<b>まし</b>（＝もし〜だったら残念だっただろう）」という<b>反実仮想</b>の内容で、実際には起きていません。'},
+  {n:'問4',type:T_THEME,talk:'<span class="sp">先生</span>「作者は、この女性のふるまいをどのように評価していますか。」<br><span class="sp">Ａさん</span>「傍線部④に『あとまで見る人ありとは、いかでか知らん』とあります。見られているとは思っていなかったのですね。」<br><span class="sp">Ｂさん</span>「それでも月を眺め続けていたのですから、作者は<span class="blank">　　</span>と考えているのだと思います。」<br><span class="sp">先生</span>「そうですね。『ただ朝夕の心づかひによるべし』という一文が、その考えを表しています。」',
+   q:'次は、この文章を読んだ生徒たちと先生の話し合いの一部である。空欄にあてはまる内容として最も適切なものを、あとのア〜エの中から一つ選びなさい。',
+   opts:['夜遅くまで起きて月を見るのは、感心できないことである','月見をするなら、一人よりも大勢で楽しむほうがよい','客が帰ったあとは誰も見ていないのだから、気を抜いてもかまわない','人が見ていないときのふるまいこそが、その人のふだんの心づかいを表す'],a:3,
+   exp:'「<b>朝夕の心づかひ</b>」＝ふだんからの心がけ。誰も見ていないと思われる場面でなお美しくふるまえるのは、日ごろの心がけによるものだ、というのが作者の考えです。'}
+ ]
+}
+];
+
+/* ============================================================
+   状態管理
+   ============================================================ */
+var KEY='kobun4-quest-v1';
+var MARK=['ア','イ','ウ','エ'];
+var SAVE=load();
+var CUR=null, PICKS=[], GRADED=false, T0=0, TICK=null, TATE=true;
+
+function load(){
+  var d={best:{},stats:{},wrong:[]};
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(raw){ var o=JSON.parse(raw);
+      if(o&&typeof o==='object'){ d.best=o.best||{}; d.stats=o.stats||{}; d.wrong=o.wrong||[]; } }
+  }catch(e){}
+  TYPES.forEach(function(t){ if(!d.stats[t]) d.stats[t]={c:0,t:0}; });
+  return d;
+}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(SAVE)); }catch(e){} }
+
+var RANKS=[
+  {min:108,name:'古典マスター'},{min:84,name:'古典の師範'},{min:60,name:'助動詞の達人'},
+  {min:36,name:'仮名遣い名人'},{min:12,name:'説話の読み手'},{min:0,name:'古文の旅人'}
+];
+function rankOf(pt){ for(var i=0;i<RANKS.length;i++){ if(pt>=RANKS[i].min) return RANKS[i].name; } return RANKS[RANKS.length-1].name; }
+function totalPoints(){ var s=0; STAGES.forEach(function(st){ s+=(SAVE.best[st.id]||0); }); return s; }
+function qKey(st,i){ return st.id+'-q'+(i+1); }
+function findQ(key){
+  var p=key.split('-q'), st=null;
+  STAGES.forEach(function(s){ if(s.id===p[0]) st=s; });
+  if(!st) return null;
+  var idx=parseInt(p[1],10)-1;
+  if(!st.qs[idx]) return null;
+  return {stage:st, q:st.qs[idx], idx:idx, key:key};
+}
+
+/* ============================================================
+   画面切り替え
+   ============================================================ */
+function show(id){
+  ['home','play','result','review'].forEach(function(s){
+    document.getElementById(s).classList.toggle('hidden', s!==id);
+  });
+  window.scrollTo(0,0);
+}
+function goHome(){ stopTimer(); renderHome(); show('home'); }
+
+/* ============================================================
+   ホーム
+   ============================================================ */
+function renderHome(){
+  var pt=totalPoints(), cleared=0, full=0;
+  STAGES.forEach(function(st){ if(SAVE.best[st.id]!=null) cleared++; if(SAVE.best[st.id]===12) full++; });
+  document.getElementById('kTotal').innerHTML=pt+'<small>/120</small>';
+  document.getElementById('kClear').innerHTML=cleared+'<small>/10</small>';
+  var tc=0,tt=0; TYPES.forEach(function(t){ tc+=SAVE.stats[t].c; tt+=SAVE.stats[t].t; });
+  document.getElementById('kRate').innerHTML=(tt?Math.round(tc/tt*100):'–')+'<small>%</small>';
+  var rk=rankOf(pt);
+  document.getElementById('kRank').textContent=rk;
+  document.getElementById('rankChip').textContent=rk+'（'+pt+'pt）';
+
+  var bars=TYPES.map(function(t){
+    var s=SAVE.stats[t], r=s.t?Math.round(s.c/s.t*100):0;
+    var weak=(s.t>=3 && r<60);
+    return '<div class="barrow"><span class="name">'+t+'</span>'+
+      '<span class="track"><span class="fill'+(weak?' weak':'')+'" style="width:'+(s.t?r:0)+'%"></span></span>'+
+      '<span class="num">'+(s.t? r+'%':'—')+'</span></div>';
+  }).join('');
+  document.getElementById('typeBars').innerHTML=bars;
+
+  var hint='';
+  if(!tt){ hint='まだ記録がありません。ステージ1から挑戦してみましょう。'; }
+  else{
+    var worst=null;
+    TYPES.forEach(function(t){ var s=SAVE.stats[t]; if(s.t>=3){ var r=s.c/s.t; if(!worst||r<worst.r) worst={t:t,r:r}; } });
+    if(worst && worst.r<0.8){ hint='いま最も伸びしろがあるのは「'+worst.t+'」です（正答率'+Math.round(worst.r*100)+'％）。'+
+      (worst.t===T_KANA?'「は行転呼・ゐゑを・ぢづ・au→おう」の4パターンを見直しましょう。':
+       worst.t===T_WORD?'主語は「言ふ／思ふ」の直前をたどり、敬語の有無で人物を見分けましょう。':
+       worst.t===T_CONT?'傍線部の直前・直後に必ず根拠があります。本文の言葉に線を引いて確かめましょう。':
+       '話し合い文は本文の要旨のまとめです。最後の一文（教訓・感想）に注目しましょう。'); }
+    else{ hint='どのタイプも安定しています。満点でないステージを解き直して仕上げましょう。'+(full?'（満点：'+full+'ステージ）':''); }
+  }
+  document.getElementById('typeHint').textContent=hint;
+
+  var rb=document.getElementById('reviewBtn');
+  rb.textContent='まちがえた問題を復習（'+SAVE.wrong.length+'問）';
+  rb.disabled=SAVE.wrong.length===0;
+
+  document.getElementById('stageGrid').innerHTML=STAGES.map(function(st,i){
+    var b=SAVE.best[st.id];
+    var foot = (b==null) ? '<span>未挑戦</span>'
+      : '<span>最高得点 <span class="score">'+b+'/12点</span></span>'+(b===12?'<span class="full">満点</span>':'');
+    return '<button class="stage" onclick="openStage('+i+')">'+
+      '<div class="top"><span class="no">STAGE '+(i+1)+'</span><span class="src">'+st.src+'</span></div>'+
+      '<h3>'+st.title+'</h3><p>'+st.lead+'</p>'+
+      '<div class="foot">'+foot+'<span class="go">解く →</span></div></button>';
+  }).join('');
+}
+
+/* ============================================================
+   ステージ
+   ============================================================ */
+function openStage(i){
+  CUR=i; GRADED=false; PICKS=[null,null,null,null];
+  var st=STAGES[i];
+  document.getElementById('pTitle').textContent='STAGE '+(i+1)+'　'+st.title;
+  document.getElementById('pSrc').textContent='（'+st.src+'より）　12点満点・目安5分';
+  document.getElementById('pHonbun').innerHTML=st.honbun;
+  document.getElementById('pChu').innerHTML='<span class="lab">（注）</span>'+st.chu;
+  document.getElementById('pQs').innerHTML=st.qs.map(function(q,qi){
+    return '<div class="q" id="q'+qi+'">'+
+      '<div class="qhead"><span class="qno">'+q.n+'</span><span class="tag">'+q.type+'</span><span class="pt">3点</span></div>'+
+      (q.talk?'<p class="qtext">'+q.q+'</p><div class="talk">'+q.talk+'</div>'
+             :'<p class="qtext">'+q.q+'</p>')+
+      '<div class="opts">'+q.opts.map(function(o,oi){
+        return '<button class="opt" id="o'+qi+'_'+oi+'" onclick="pick('+qi+','+oi+')">'+
+               '<span class="mk">'+MARK[oi]+'</span><span>'+o+'</span></button>';
+      }).join('')+'</div><div id="e'+qi+'"></div></div>';
+  }).join('');
+  document.getElementById('gradeBtn').disabled=true;
+  setTate(TATE);
+  startTimer();
+  show('play');
+}
+
+function setTate(v){
+  TATE=v;
+  var h=document.getElementById('pHonbun');
+  h.classList.toggle('tate',v); h.classList.toggle('yoko',!v);
+  document.getElementById('tateBtn').classList.toggle('on',v);
+  document.getElementById('yokoBtn').classList.toggle('on',!v);
+  if(v) h.scrollLeft=h.scrollWidth;
+}
+
+function pick(qi,oi){
+  if(GRADED) return;
+  PICKS[qi]=oi;
+  STAGES[CUR].qs[qi].opts.forEach(function(_,k){
+    document.getElementById('o'+qi+'_'+k).classList.toggle('sel',k===oi);
+  });
+  document.getElementById('gradeBtn').disabled = PICKS.some(function(p){ return p===null; });
+}
+
+function startTimer(){
+  stopTimer(); T0=Date.now();
+  var el=document.getElementById('pTimer');
+  el.classList.remove('over'); el.textContent='00:00';
+  TICK=setInterval(function(){
+    var s=Math.floor((Date.now()-T0)/1000);
+    el.textContent=('0'+Math.floor(s/60)).slice(-2)+':'+('0'+(s%60)).slice(-2);
+    el.classList.toggle('over', s>300);
+  },1000);
+}
+function stopTimer(){ if(TICK){ clearInterval(TICK); TICK=null; } }
+
+/* ============================================================
+   採点
+   ============================================================ */
+function grade(){
+  if(GRADED) return;
+  GRADED=true; stopTimer();
+  var secs=Math.floor((Date.now()-T0)/1000);
+  var st=STAGES[CUR], score=0;
+
+  st.qs.forEach(function(q,qi){
+    var mine=PICKS[qi], ok=(mine===q.a);
+    if(ok) score+=3;
+    q.opts.forEach(function(_,k){
+      var b=document.getElementById('o'+qi+'_'+k);
+      b.disabled=true; b.classList.remove('sel');
+      if(k===q.a) b.classList.add('correct');
+      else if(k===mine) b.classList.add('wrong');
+    });
+    document.getElementById('e'+qi).innerHTML=expHtml(q,mine,ok);
+    var s=SAVE.stats[q.type]; s.t++; if(ok) s.c++;
+    var key=qKey(st,qi), at=SAVE.wrong.indexOf(key);
+    if(ok){ if(at>=0) SAVE.wrong.splice(at,1); }
+    else if(at<0){ SAVE.wrong.push(key); }
+  });
+
+  if(SAVE.best[st.id]==null || score>SAVE.best[st.id]) SAVE.best[st.id]=score;
+  save();
+  document.getElementById('rankChip').textContent=rankOf(totalPoints())+'（'+totalPoints()+'pt）';
+
+  document.getElementById('rTitle').textContent='STAGE '+(CUR+1)+'　'+st.title+'　結果';
+  document.getElementById('rScore').innerHTML=score+'<small>/12点</small>';
+  var msg = score===12?'満点です。文句なしの出来ばえ。'
+          : score>=9 ?'合格ライン。取りこぼした1問の根拠を本文で確かめましょう。'
+          : score>=6 ?'あと一歩。解説を読んでから、もう一度解き直すと定着します。'
+          : score>=3 ?'まずは現代語訳を読んでから、本文をもう一度たどってみましょう。'
+                     :'現代語訳→本文→設問の順で読み直すのがおすすめです。';
+  document.getElementById('rMsg').textContent=msg;
+  document.getElementById('rMeta').textContent='解答時間 '+Math.floor(secs/60)+'分'+(secs%60)+'秒　／　自己最高 '+SAVE.best[st.id]+'点　／　累計 '+totalPoints()+'pt・'+rankOf(totalPoints());
+  document.getElementById('rYakuBody').innerHTML=st.yaku;
+  document.getElementById('rYaku').open=false;
+
+  document.getElementById('rReview').innerHTML=st.qs.map(function(q,qi){
+    var mine=PICKS[qi], ok=(mine===q.a);
+    return '<div class="q"><div class="qhead"><span class="qno">'+q.n+'</span><span class="tag">'+q.type+'</span>'+
+      '<span class="pt" style="color:'+(ok?'var(--ok)':'var(--ng)')+';font-weight:700">'+(ok?'正解 +3点':'不正解 0点')+'</span></div>'+
+      '<p class="qtext" style="font-size:13.5px;color:var(--muted)">'+q.q.replace(/<span class="kb">/g,'<span>')+'</p>'+
+      '<p style="margin:0 0 8px;font-size:14px">正解　<b class="mincho" style="color:var(--navy)">'+MARK[q.a]+'</b>　'+q.opts[q.a]+
+      (ok?'':'<br><span style="font-size:13px;color:var(--ng)">あなたの解答　'+MARK[mine]+'　'+q.opts[mine]+'</span>')+'</p>'+
+      '<div class="exp">'+q.exp+'</div></div>';
+  }).join('');
+
+  document.getElementById('rNext').classList.toggle('hidden', CUR>=STAGES.length-1);
+  document.getElementById('rNext').textContent='STAGE '+(CUR+2)+' へ進む';
+  show('result');
+}
+
+function expHtml(q,mine,ok){
+  return '<div class="exp"><span class="jd '+(ok?'o':'x')+'">'+(ok?'○ 正解':'× 不正解')+'</span>'+
+    (ok?'':'　正解は <b>'+MARK[q.a]+'</b>')+'<br>'+q.exp+'</div>';
+}
+
+function retry(){ openStage(CUR); }
+function nextStage(){ if(CUR<STAGES.length-1) openStage(CUR+1); else goHome(); }
+
+/* ============================================================
+   復習モード
+   ============================================================ */
+function startReview(){
+  renderReview(); show('review');
+}
+function renderReview(){
+  var box=document.getElementById('vList');
+  if(!SAVE.wrong.length){
+    box.innerHTML='<div class="panel"><div class="pad" style="color:var(--muted);font-size:14px">復習リストは空です。おつかれさまでした。</div></div>';
+    return;
+  }
+  box.innerHTML=SAVE.wrong.map(function(key,n){
+    var f=findQ(key); if(!f) return '';
+    var q=f.q, st=f.stage;
+    return '<div class="q" id="v'+n+'">'+
+      '<div class="qhead"><span class="qno">'+q.n+'</span><span class="tag">'+q.type+'</span>'+
+      '<span class="pt">STAGE '+(STAGES.indexOf(st)+1)+'　'+st.title+'（'+st.src+'）</span></div>'+
+      '<details class="yaku" style="margin:0 0 12px"><summary>本文と（注）を開く</summary>'+
+        '<div class="inner"><div class="honbun yoko" style="margin-top:0">'+st.honbun+'</div>'+
+        '<div class="chu"><span class="lab">（注）</span>'+st.chu+'</div></div></details>'+
+      (q.talk?'<p class="qtext">'+q.q+'</p><div class="talk">'+q.talk+'</div>':'<p class="qtext">'+q.q+'</p>')+
+      '<div class="opts">'+q.opts.map(function(o,oi){
+        return '<button class="opt" id="v'+n+'_'+oi+'" onclick="vPick(\''+key+'\','+n+','+oi+')">'+
+               '<span class="mk">'+MARK[oi]+'</span><span>'+o+'</span></button>';
+      }).join('')+'</div><div id="ve'+n+'"></div></div>';
+  }).join('');
+}
+function vPick(key,n,oi){
+  var f=findQ(key); if(!f) return;
+  var q=f.q, ok=(oi===q.a);
+  q.opts.forEach(function(_,k){
+    var b=document.getElementById('v'+n+'_'+k);
+    if(!b) return;
+    b.disabled=true;
+    if(k===q.a) b.classList.add('correct'); else if(k===oi) b.classList.add('wrong');
+  });
+  document.getElementById('ve'+n).innerHTML=expHtml(q,oi,ok)+
+    (ok?'<p style="margin:8px 0 0;font-size:12.5px;color:var(--ok)">復習リストから外しました。</p>'
+       :'<p style="margin:8px 0 0;font-size:12.5px;color:var(--muted)">復習リストに残ります。解説を読んでから、あとでもう一度挑戦しましょう。</p>');
+  var s=SAVE.stats[q.type]; s.t++; if(ok) s.c++;
+  if(ok){ var at=SAVE.wrong.indexOf(key); if(at>=0) SAVE.wrong.splice(at,1); }
+  save();
+}
+
+/* ============================================================
+   リセット
+   ============================================================ */
+function resetAll(){
+  if(!confirm('得点・弱点分析・復習リストをすべて消去します。よろしいですか。')) return;
+  SAVE={best:{},stats:{},wrong:[]};
+  TYPES.forEach(function(t){ SAVE.stats[t]={c:0,t:0}; });
+  save(); renderHome();
+}
+
+window.addEventListener('load', renderHome);
+</script>
+</body>
+</html>
