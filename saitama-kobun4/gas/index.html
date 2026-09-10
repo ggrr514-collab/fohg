@@ -100,6 +100,9 @@
   .honbun.tate{writing-mode:vertical-rl; width:100%; max-width:100%; height:min(64vh,520px); padding:22px 26px; overflow-x:auto; overflow-y:hidden}
   .honbun.yoko{writing-mode:horizontal-tb; padding:22px 24px}
   .honbun .ul{text-decoration:underline; text-underline-offset:4px; text-decoration-thickness:1px}
+  /* 入試と同じく、難しい箇所だけ本文中に口語訳を添える */
+  .honbun .gl > i{font-style:normal; font-size:.84em; color:#6f7889; letter-spacing:.01em}
+  .honbun.notr .gl > i{display:none}
   .honbun .mk{font-size:.72em; vertical-align:super; color:var(--navy); font-weight:700}
   .honbun.tate .mk{vertical-align:baseline}
   .honbun p{margin:0 0 .4em}
@@ -294,7 +297,7 @@
 <main id="home" class="wrap hidden">
   <section class="hero">
     <h1 class="mincho">埼玉県公立高校入試<br>大問4「古文」対策クエスト</h1>
-    <p>1ステージ＝本文1つ＋小問4問。<b>1問3点・合計12点満点</b>で、すべて<b>ア〜エの4択記号問題</b>です。解いた記録は自動で保存され、弱点分析にも反映されます。</p>
+    <p>1ステージ＝本文1つ＋小問4問。<b>1問3点・合計12点満点</b>で、すべて<b>ア〜エの4択記号問題</b>です。入試と同じく、難しい箇所には本文中に口語訳が添えてあります。解いた記録は自動で保存され、弱点分析にも反映されます。</p>
     <div class="msg warn" id="blockedMsg"></div>
   </section>
 
@@ -347,6 +350,8 @@
   <div class="toolrow">
     <button class="btn sm on" id="tateBtn" onclick="setTate(true)">縦書き</button>
     <button class="btn sm" id="yokoBtn" onclick="setTate(false)">横書き</button>
+    <span style="flex:1"></span>
+    <button class="btn sm on" id="trBtn" onclick="setTr(!TR)" title="難しい箇所に添えられた口語訳を出し入れします">口語訳あり</button>
   </div>
   <div class="chu" id="pChu"></div>
   <div id="pQs"></div>
@@ -411,7 +416,7 @@ var TYPES = ['仮名遣い','主語・語意','内容理解','要旨・話し合
 var KINDS = ['正解が複数ある','正解が選択肢にない','読みや表記の誤り','その他'];
 
 var ME=null, STAGES=[], PROG=null, SETTINGS={}, BLOCKED='', SESSION=null;
-var CUR=null, PICKS=[], GRADED=false, T0=0, TICK=null, TATE=true, BLUR=0, STARTED='';
+var CUR=null, PICKS=[], GRADED=false, T0=0, TICK=null, TATE=true, TR=true, BLUR=0, STARTED='';
 var LAST=null;                 // 直近の採点結果（疑義報告に使う）
 var REP={qid:null, mine:-1, kind:KINDS[0]};
 
@@ -662,7 +667,7 @@ function openStage(i){
   }).join('');
   document.getElementById('gradeBtn').disabled=true;
   document.getElementById('gradeBtn').textContent='採点して記録する';
-  setTate(TATE);
+  setTate(TATE); setTr(TR);
   startTimer();
   show('play');
 }
@@ -674,6 +679,15 @@ function setTate(v){
   document.getElementById('tateBtn').classList.toggle('on',v);
   document.getElementById('yokoBtn').classList.toggle('on',!v);
   if(v) h.scrollLeft=h.scrollWidth;
+}
+/* 口語訳の表示切り替え。入試と同じ「訳あり」が既定 */
+function setTr(v){
+  TR=v;
+  var h=document.getElementById('pHonbun'), b=document.getElementById('trBtn');
+  h.classList.toggle('notr', !v);
+  b.classList.toggle('on', v);
+  b.textContent = v ? '口語訳あり' : '口語訳なし';
+  if(TATE) h.scrollLeft=h.scrollWidth;
 }
 
 function pick(qi,oi){

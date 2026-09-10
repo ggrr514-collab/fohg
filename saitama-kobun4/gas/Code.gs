@@ -16,8 +16,8 @@
  * ============================================================
  */
 
-const SPREADSHEET_ID = "ここに集計用スプレッドシートのIDを貼る";
-const MASTER_ID      = "ここに問題マスターのIDを貼る";
+const SPREADSHEET_ID = "1Yuf_jzWZYfQKaYuZV6LN6-RDAODoOLeX-uyn9nYecwU";
+const MASTER_ID      = "1OaMsGfk_-s-BMa_osO3d8hwK04ikP0G34J7TWbs2lJo";
 
 /** index.html 側の CLIENT_VERSION と必ず同じ値にすること */
 const CLIENT_VERSION = 2;
