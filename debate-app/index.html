@@ -1,0 +1,2105 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <title>ディベート振り返り</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+      margin: 0; padding: 16px;
+      background: #f5f5f7; color: #1d1d1f; line-height: 1.6;
+    }
+    /* 教員の操作バーが出ている間は、その分だけ下に余白を作る */
+    body.has-tbar { padding-bottom: 104px; }
+    body.has-tbar-panel { padding-bottom: 380px; }
+    body.has-force-countdown { padding-bottom: 190px; }
+
+    .container {
+      max-width: 900px; margin: 0 auto; background: white;
+      padding: 24px; border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .loading { text-align: center; padding: 60px 20px; }
+    .spinner {
+      display: inline-block; width: 32px; height: 32px;
+      border: 3px solid #e0e0e0; border-top-color: #0066cc;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error {
+      background: #fff4f4; border-left: 4px solid #d32f2f;
+      padding: 14px 18px; border-radius: 6px; color: #c62828; margin: 12px 0;
+    }
+    .success {
+      background: #f4fff4; border-left: 4px solid #2e7d32;
+      padding: 14px 18px; border-radius: 6px; color: #1b5e20; margin: 12px 0;
+    }
+    .info {
+      background: #f0f7ff; border-left: 4px solid #0066cc;
+      padding: 14px 18px; border-radius: 6px; margin: 12px 0;
+    }
+    .badge {
+      display: inline-block; padding: 3px 10px; background: #666; color: white;
+      border-radius: 20px; font-size: 0.8em; font-weight: 600; margin-left: 6px;
+    }
+    .badge-teacher { background: #6a1b9a; }
+    .badge-voting { background: #e65100; }
+    .badge-reveal { background: #0066cc; }
+    .badge-gd { background: #bf7000; }
+    .badge-summary { background: #2e7d32; }
+    .badge-private { background: #555; }
+
+    h1 { margin: 0 0 12px; font-size: 1.4em; }
+    h2 { font-size: 1.15em; margin-top: 20px; }
+
+    .user-info {
+      padding: 10px 14px; background: #fafafa;
+      border-radius: 8px; margin-bottom: 16px; font-size: 0.95em;
+    }
+    .viewing-class {
+      margin-left: 12px; padding: 2px 10px; border-radius: 14px;
+      background: #f3edf7; color: #6a1b9a; font-size: 0.85em; font-weight: bold;
+    }
+
+    /* フェーズ別の色 */
+    .phase-IDLE { background: #eee; color: #666; }
+    .phase-LOTTERY_READY, .phase-LOTTERY_DONE { background: #ffe0b2; color: #d32f2f; }
+    .phase-VOTING { background: #ffd9b3; color: #e65100; }
+    .phase-VOTE_CLOSED_PRIVATE { background: #ddd; color: #555; }
+    .phase-REVEAL_WINNER { background: #c5dffc; color: #0066cc; }
+    .phase-REVEAL_GD { background: #ffe082; color: #bf7000; }
+    .phase-SUMMARY, .phase-SUMMARY_FORCE_COUNTDOWN { background: #c8e6c9; color: #2e7d32; }
+    .phase-CLOSED { background: #d1c4e9; color: #6a1b9a; }
+
+    .topic-box {
+      background: #fff9e6; border: 1px solid #f0c040;
+      padding: 12px 16px; border-radius: 8px; margin: 14px 0;
+    }
+    .topic-title { font-weight: bold; font-size: 1.05em; }
+
+    .wait-card {
+      text-align: center; padding: 40px 20px;
+      background: #fafafa; border-radius: 10px; margin: 20px 0;
+    }
+    .wait-icon { font-size: 3em; margin-bottom: 12px; }
+    .wait-message { font-size: 1.2em; font-weight: bold; color: #333; }
+    .wait-sub { margin-top: 8px; color: #666; font-size: 0.95em; }
+
+    /* ===== 教員操作バー(画面下部固定) ===== */
+    .tbar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 9000;
+      background: #2b1b3d; color: #f3edf7;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.25);
+    }
+    .tbar-inner {
+      max-width: 980px; margin: 0 auto;
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; flex-wrap: wrap;
+    }
+    .tbar-label {
+      font-size: 0.75em; letter-spacing: .08em; opacity: .7;
+      text-transform: uppercase;
+    }
+    .tbar select {
+      background: #fff; color: #2b1b3d; border: none;
+      border-radius: 8px; padding: 7px 10px; font-size: 0.92em;
+      font-family: inherit; max-width: 46vw;
+    }
+    .tbar-phase {
+      display: inline-block; padding: 3px 10px; border-radius: 12px;
+      font-size: 0.78em; font-weight: bold;
+    }
+    .tbar-spacer { flex: 1; min-width: 4px; }
+    .tbar-msg { font-size: 0.85em; min-height: 1em; }
+    .tbar-msg.ok { color: #a5d6a7; }
+    .tbar-msg.ng { color: #ffab91; }
+    .tbar button {
+      font-family: inherit; border: none; border-radius: 8px;
+      cursor: pointer; font-weight: bold;
+    }
+    .tbar-primary {
+      background: #ffb300; color: #3b2600;
+      padding: 11px 20px; font-size: 1em;
+    }
+    .tbar-primary:hover:not(:disabled) { background: #ffc233; }
+    .tbar-primary:disabled { background: #6b5b7a; color: #cbbcd8; cursor: not-allowed; }
+    .tbar-ghost {
+      background: rgba(255,255,255,0.14); color: #f3edf7;
+      padding: 9px 13px; font-size: 0.9em;
+    }
+    .tbar-ghost:hover { background: rgba(255,255,255,0.24); }
+    .tbar-panel {
+      border-top: 1px solid rgba(255,255,255,0.16);
+      max-width: 980px; margin: 0 auto;
+      padding: 12px 16px 16px; max-height: 270px; overflow-y: auto;
+    }
+    .tbar-panel h4 {
+      margin: 4px 0 8px; font-size: 0.8em; letter-spacing: .08em;
+      opacity: .7; font-weight: 600;
+    }
+    .tbar-panel-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+    .tbar-fab {
+      position: fixed; right: 14px; bottom: 14px; z-index: 9000;
+      background: #2b1b3d; color: #ffb300; border: none;
+      width: 48px; height: 48px; border-radius: 50%;
+      font-size: 1.3em; cursor: pointer;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.3);
+    }
+
+    /* 操作バー内の全クラス一覧 */
+    .class-overview {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;
+    }
+    .class-overview-card {
+      border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+      padding: 8px 10px; background: rgba(255,255,255,0.06);
+      cursor: pointer; text-align: left; color: inherit; width: 100%;
+      font-family: inherit;
+    }
+    .class-overview-card:hover { background: rgba(255,255,255,0.14); }
+    .class-overview-card.active { border-color: #ffb300; background: rgba(255,179,0,0.16); }
+    .class-overview-name { font-weight: bold; font-size: 0.95em; }
+    .class-overview-topic {
+      font-size: 0.75em; opacity: .75; margin-top: 3px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    /* ===== 投票UI ===== */
+    .vote-section {
+      border: 2px solid #0066cc; border-radius: 10px;
+      padding: 16px 20px; margin: 18px 0; background: #fcfcff;
+    }
+    .winner-choice { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+    .winner-choice label {
+      flex: 1; min-width: 140px; border: 2px solid #ccc;
+      border-radius: 8px; padding: 14px; text-align: center;
+      cursor: pointer; font-weight: bold; transition: all 0.15s; background: white;
+    }
+    .winner-choice label:hover { border-color: #0066cc; }
+    .winner-choice label.selected { border-color: #0066cc; background: #e8f2ff; color: #0066cc; }
+    .winner-choice.locked label { cursor: not-allowed; opacity: 0.8; }
+    .winner-choice.locked label:hover { border-color: #ccc; }
+    .winner-choice.locked label.selected { border-color: #0066cc; background: #e8f2ff; }
+
+    .debater-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 10px; margin-top: 12px;
+    }
+    .debater-card {
+      border: 2px solid #ddd; border-radius: 8px;
+      padding: 10px 12px; cursor: pointer; background: white;
+      transition: all 0.15s; position: relative;
+    }
+    .debater-card:hover { border-color: #0066cc; }
+    .debater-card.selected { border-color: #0066cc; background: #e8f2ff; }
+    .debater-grid.locked .debater-card { cursor: not-allowed; opacity: 0.8; }
+    .debater-grid.locked .debater-card:hover { border-color: #ddd; }
+    .debater-grid.locked .debater-card.selected { border-color: #0066cc; background: #e8f2ff; }
+    .debater-card .team {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 0.75em; font-weight: bold; margin-right: 6px;
+    }
+    .team-affirmative { background: #ffe0b2; color: #bf4f00; }
+    .team-negative { background: #c5e1ff; color: #0050a0; }
+    .debater-card .role-label { font-size: 0.8em; color: #666; margin-top: 4px; }
+    .debater-card .selected-order {
+      position: absolute; top: -8px; right: -8px; background: #0066cc;
+      color: white; width: 24px; height: 24px;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-weight: bold; font-size: 0.85em;
+    }
+    .selection-count { font-weight: bold; color: #0066cc; margin: 10px 0; }
+
+    button.primary {
+      background: #0066cc; color: white; border: none;
+      padding: 12px 28px; border-radius: 8px;
+      font-weight: bold; font-size: 1em; cursor: pointer;
+      transition: background 0.15s; font-family: inherit;
+    }
+    button.primary:hover:not(:disabled) { background: #0055aa; }
+    button.primary:disabled { background: #ccc; cursor: not-allowed; }
+    button.secondary {
+      background: #fafafa; color: #333; border: 1px solid #ccc;
+      padding: 8px 16px; border-radius: 8px;
+      cursor: pointer; font-size: 0.9em; font-family: inherit;
+    }
+    button.secondary:hover { background: #f0f0f0; }
+    button.big { padding: 14px 40px; font-size: 1.15em; }
+
+    .submitted-lock {
+      background: #eef; border: 1px solid #aac;
+      padding: 10px 14px; border-radius: 6px;
+      margin-bottom: 14px; font-size: 0.9em; color: #446;
+    }
+    .teacher-preview-note {
+      background: #f3edf7; border: 1px solid #c8b6d4; color: #6a1b9a;
+      padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 0.9em;
+    }
+
+    /* ===== 結果 ===== */
+    .result-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; background: #fafafa;
+      border-radius: 6px; margin: 6px 0;
+    }
+    .result-bar { flex: 1; height: 32px; background: #eee; border-radius: 16px; overflow: hidden; }
+    .result-bar-fill {
+      height: 100%; display: flex; align-items: center;
+      padding-left: 12px; color: white; font-weight: bold; font-size: 0.9em;
+      transition: width 0.8s ease-out;
+    }
+    .bar-affirmative { background: #e65100; }
+    .bar-negative { background: #0050a0; }
+
+    .winner-announcement {
+      text-align: center; padding: 20px;
+      background: linear-gradient(135deg, #fff9e6, #fff0c0);
+      border: 2px solid #f0c040; border-radius: 10px; margin: 20px 0;
+    }
+    .winner-announcement .label { font-size: 0.95em; color: #666; }
+    .winner-announcement .name { font-size: 2em; font-weight: bold; color: #bf7000; margin: 6px 0; }
+
+    .teacher-vote-notice {
+      margin: 18px 0; padding: 14px 18px;
+      background: #f3edf7; border: 2px solid #9370b0; border-radius: 8px;
+    }
+    .teacher-vote-title { font-weight: bold; color: #6a1b9a; font-size: 0.95em; margin-bottom: 8px; }
+    .teacher-vote-rows { font-size: 0.9em; color: #333; line-height: 1.8; }
+
+    /* ===== GD ===== */
+    .gd-reveal-container { text-align: center; padding: 30px 20px; }
+    .gd-title { font-size: 1.3em; font-weight: bold; margin-bottom: 24px; color: #bf7000; }
+    .gd-stage {
+      min-height: 220px; display: flex;
+      flex-direction: column; align-items: center; justify-content: center;
+    }
+    .gd-rank-card {
+      background: linear-gradient(135deg, #fff9e6, #fff0c0);
+      border: 3px solid #f0c040; border-radius: 16px;
+      padding: 28px 40px; min-width: 280px;
+      animation: popIn 0.5s ease-out;
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.3); opacity: 0; }
+      50% { transform: scale(1.05); opacity: 1; }
+      100% { transform: scale(1); }
+    }
+    .gd-rank-num { font-size: 2.4em; font-weight: bold; color: #bf7000; }
+    .gd-rank-name { font-size: 1.6em; font-weight: bold; margin: 8px 0; color: #333; }
+    .gd-rank-votes { color: #666; font-size: 0.95em; }
+    .gd-grid { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .gd-grid .gd-rank-card { min-width: 240px; padding: 22px 32px; }
+    .gd-champion { display: flex; justify-content: center; }
+    .gd-champion .gd-rank-card {
+      background: linear-gradient(135deg, #fff4cc, #ffd966);
+      border-color: #d4a017; box-shadow: 0 4px 16px rgba(212,160,23,0.3);
+      padding: 34px 48px; min-width: 320px;
+    }
+    .gd-champion .gd-rank-num { font-size: 2.8em; }
+    .gd-champion .gd-rank-name { font-size: 2em; }
+
+    /* ===== 同期インジケータ ===== */
+    .sync-indicator {
+      position: fixed; bottom: 12px; left: 12px; z-index: 8000;
+      background: rgba(0,102,204,0.08); color: #777;
+      font-size: 0.75em; padding: 4px 10px; border-radius: 12px;
+      pointer-events: none;
+    }
+    .sync-indicator.warn { background: #fff3e0; color: #bf4f00; pointer-events: auto; }
+    body.has-tbar .sync-indicator { bottom: 76px; }
+
+    .sync-flash {
+      position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 9500;
+      background: linear-gradient(90deg, #0066cc, #00c2ff, #0066cc);
+      animation: syncSlide 0.7s ease-out;
+    }
+    @keyframes syncSlide { from { opacity: 1; } to { opacity: 0; } }
+
+    /* ===== くじ(ルーレット)===== */
+    .lottery-container { padding: 24px; text-align: center; }
+    .roulette-stage {
+      margin: 36px auto; display: flex;
+      justify-content: center; align-items: center; min-height: 200px;
+    }
+    .roulette-number {
+      width: 180px; height: 180px; border-radius: 50%;
+      background: linear-gradient(135deg, #ff6f00, #d32f2f);
+      color: white; font-size: 6em; font-weight: bold;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 8px 24px rgba(211,47,47,0.4);
+      transition: transform 0.3s;
+    }
+    .roulette-number.spinning { animation: rouletteShake 0.15s infinite; }
+    @keyframes rouletteShake {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    .roulette-number.decided {
+      background: linear-gradient(135deg, #ffa000, #ff6f00);
+      animation: popIn 0.6s ease-out;
+      box-shadow: 0 0 32px rgba(255,160,0,0.6);
+    }
+
+    .lottery-result { text-align: center; padding: 30px 20px; }
+    .lottery-result-icon { font-size: 3em; margin-bottom: 8px; }
+    .lottery-topic {
+      font-size: 1.4em; font-weight: bold;
+      background: #fff9e6; border: 2px solid #f0c040;
+      border-radius: 10px; padding: 16px 24px;
+      margin: 20px auto; max-width: 600px;
+    }
+    .lottery-teams {
+      display: flex; justify-content: center; align-items: center;
+      gap: 20px; margin-top: 24px; flex-wrap: wrap;
+    }
+    .lottery-team {
+      flex: 1; min-width: 160px; max-width: 220px;
+      padding: 20px; border-radius: 12px; text-align: center;
+    }
+    .lottery-team-affirmative { background: #fff0d6; border: 3px solid #e65100; color: #bf4f00; }
+    .lottery-team-negative { background: #d9e8ff; border: 3px solid #0050a0; color: #0050a0; }
+    .lottery-team .team-label { font-size: 0.95em; font-weight: bold; margin-bottom: 6px; }
+    .lottery-team .team-group { font-size: 1.8em; font-weight: bold; }
+    .lottery-vs { font-size: 1.5em; font-weight: bold; color: #666; }
+
+    /* ===== フィードバック表示 ===== */
+    .fb-topic-block {
+      margin-top: 16px; padding: 12px 16px;
+      background: #fafafa; border-radius: 8px; border-left: 4px solid #ef6c00;
+    }
+    .fb-topic-title { font-size: 0.95em; font-weight: bold; color: #bf4f00; margin-bottom: 10px; }
+    .fb-card {
+      background: white; border: 1px solid #ffd6a8; border-radius: 8px;
+      padding: 12px 14px; margin: 8px 0; font-size: 0.93em;
+    }
+    .fb-position {
+      display: inline-block; padding: 2px 10px;
+      background: #fff4e5; color: #bf4f00; border-radius: 12px;
+      font-size: 0.78em; font-weight: bold; margin-bottom: 8px;
+    }
+    .fb-which { margin: 8px 0; padding: 8px 10px; background: #fffaf0; border-radius: 6px; line-height: 1.6; }
+    .fb-how { margin: 8px 0; padding: 8px 10px; background: #f0f7ff; border-radius: 6px; line-height: 1.6; }
+
+    /* ===== 強制提出カウントダウン ===== */
+    .force-countdown-banner {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(90deg, #d32f2f, #c62828);
+      color: white; padding: 16px 20px; text-align: center; font-size: 1.15em;
+      box-shadow: 0 -4px 12px rgba(211,47,47,0.4);
+      animation: countdownPulse 1s ease-in-out infinite; z-index: 10000;
+    }
+    body.has-tbar .force-countdown-banner { bottom: 62px; }
+    @keyframes countdownPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.92; }
+    }
+
+    /* ===== まとめ画面 ===== */
+    .rule-notice {
+      background: #fff3e0; border: 2px solid #ef6c00; border-radius: 8px;
+      padding: 12px 16px; margin: 16px 0; color: #bf4f00; font-size: 0.95em;
+    }
+    .violation-banner {
+      background: #ffebee; border: 3px solid #c62828; color: #c62828;
+      padding: 14px 18px; border-radius: 10px; margin: 0 0 14px 0;
+      box-shadow: 0 2px 8px rgba(198,40,40,0.2);
+    }
+    .violation-lock-card {
+      text-align: center; padding: 30px 20px;
+      background: #ffebee; border: 2px solid #c62828; border-radius: 10px; margin: 16px 0;
+    }
+    .violation-detail-box {
+      text-align: left; background: white; border: 1px solid #ffcdd2;
+      border-radius: 6px; padding: 10px 14px; margin: 16px 0;
+      font-size: 0.9em; word-break: break-all;
+    }
+    .summary-section {
+      margin: 20px 0; padding: 16px 20px;
+      background: #fafafa; border-radius: 10px; border-left: 4px solid #2e7d32;
+    }
+    .summary-section h3 { margin: 0 0 12px; font-size: 1.02em; color: #333; }
+    .pos-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    @media (min-width: 640px) { .pos-options { grid-template-columns: repeat(4, 1fr); } }
+    .pos-option {
+      display: flex; align-items: center; justify-content: center;
+      padding: 12px; border: 2px solid #ccc; border-radius: 8px;
+      cursor: pointer; background: white; transition: all 0.15s; font-size: 0.95em;
+    }
+    .pos-option:has(input:checked) {
+      border-color: #2e7d32; background: #f1f9f1; color: #1b5e20; font-weight: bold;
+    }
+    .pos-option input { margin-right: 8px; }
+    select, textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid #bbb;
+      border-radius: 8px; font-size: 1em; font-family: inherit; resize: vertical;
+    }
+    select:focus, textarea:focus { outline: 2px solid #0066cc; border-color: #0066cc; }
+    textarea:disabled, select:disabled { background: #f2f2f2; color: #777; }
+    .field-label { display: block; font-weight: bold; font-size: 0.9em; color: #555; margin-bottom: 6px; }
+    .summary-readonly h3 { font-size: 0.95em; color: #666; margin: 14px 0 4px; }
+    .summary-readonly p { margin: 0 0 8px; padding: 10px 14px; background: #fafafa; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="app">
+      <div class="loading">
+        <div class="spinner"></div>
+        <p>読み込み中...</p>
+      </div>
+    </div>
+  </div>
+  <div id="teacherBarHost"></div>
+  <div class="sync-indicator" id="syncIndicator" style="display:none;">自動更新中</div>
+
+  <script>
+    // ==================================================================
+    // 状態
+    // ==================================================================
+    // サーバと完全一致させること
+    const PHASES = {
+      IDLE: '待機中',
+      LOTTERY_READY: 'くじ準備中',
+      LOTTERY_DONE: '論題決定',
+      VOTING: '投票受付中',
+      VOTE_CLOSED_PRIVATE: '締切(集計中・結果非公開)',
+      REVEAL_WINNER: '勝敗発表中',
+      REVEAL_GD: 'グッドディベーター発表中',
+      SUMMARY: 'まとめ受付中',
+      SUMMARY_FORCE_COUNTDOWN: 'まとめ強制提出カウント中',
+      CLOSED: '終了',
+    };
+
+    let appContext = null;
+    let currentRev = null;
+    let currentTargetKumi = '';
+
+    let pollTimerId = null;
+    let pollInFlight = false;
+    let pollFailCount = 0;
+
+    let controlsHidden = false;   // 教員が投影用に操作バーを隠しているか
+    let panelOpen = false;        // 操作バーの詳細パネル
+
+    let selectedWinner = null;
+    let selectedGdEmails = [];
+    let voteLocked = false;
+
+    let summaryLocal = { position: '', debaterEmail: '', whichOpinion: '', howExpanded: '' };
+    let summaryViolations = [];
+    let summaryViolationLocked = false;
+    let summaryMonitorsInstalled = false;
+    let summaryMonitorActive = false;
+
+    let forceDeadlineLocal = 0;        // サーバの残り時間を端末時計に変換したもの
+    let forceCountdownIntervalId = null;
+    let forceAutoSubmitted = false;
+
+    let gdAutoAdvanceTimerId = null;
+    let rouletteSpinning = false;
+    let playLotteryAnimation = false;  // くじ準備中 → 論題決定 の瞬間だけtrue
+    let skipLotteryAnimation = false;  // 教員端末で演出済みのときは再生しない
+
+    // ==================================================================
+    // 起動
+    // ==================================================================
+    window.addEventListener('load', function() {
+      console.log('[debate app] load start');
+      loadContext();
+    });
+
+    function isTeacher() {
+      return !!(appContext && appContext.auth && appContext.auth.user && appContext.auth.user.role === '教員');
+    }
+    function showControls() { return isTeacher() && !controlsHidden; }
+    function phase() { return appContext && appContext.state ? appContext.state.phase : null; }
+
+    function loadContext() {
+      const timeoutId = setTimeout(function() {
+        renderError('サーバー応答がありません(15秒)。通信環境を確認して、ページを再読み込みしてください。');
+      }, 15000);
+
+      google.script.run
+        .withSuccessHandler(function(ctx) {
+          clearTimeout(timeoutId);
+          console.log('[debate app] getAppContext success', ctx);
+          if (!ctx) { renderError('起動情報が取得できませんでした。'); return; }
+          applyContext(ctx, { initial: true });
+          startPolling();
+        })
+        .withFailureHandler(function(err) {
+          clearTimeout(timeoutId);
+          console.error('[debate app] getAppContext failure', err);
+          renderError('起動エラー: ' + ((err && err.message) || err));
+        })
+        .getAppContext(currentTargetKumi || null);
+    }
+
+    /**
+     * 新しいコンテキストを取り込んで画面を更新する。
+     * 入力中のまとめは失わないよう、再描画の直前に必ず値を退避する。
+     */
+    function applyContext(ctx, opts) {
+      opts = opts || {};
+      if (!ctx) return;
+
+      captureSummaryInputs();
+
+      const prev = appContext && appContext.state ? appContext.state : null;
+      const next = ctx.state || {};
+
+      const topicChanged = !!prev && prev.topicId !== next.topicId;
+      const classChanged = !!appContext && appContext.targetKumi !== ctx.targetKumi;
+      playLotteryAnimation = !skipLotteryAnimation &&
+        !!prev && prev.phase === PHASES.LOTTERY_READY && next.phase === PHASES.LOTTERY_DONE;
+      skipLotteryAnimation = false;
+
+      appContext = ctx;
+      currentRev = ctx.rev || null;
+      currentTargetKumi = ctx.targetKumi || currentTargetKumi || '';
+
+      // サーバから残り時間(ms)で受け取るので、端末の時計がずれていても正しく数えられる
+      forceDeadlineLocal = ctx.forceRemainingMs > 0 ? (Date.now() + ctx.forceRemainingMs) : 0;
+
+      if (topicChanged || classChanged) {
+        selectedWinner = null;
+        selectedGdEmails = [];
+        voteLocked = false;
+        summaryLocal = { position: '', debaterEmail: '', whichOpinion: '', howExpanded: '' };
+        summaryViolations = [];
+        summaryViolationLocked = false;
+        forceAutoSubmitted = false;
+        stopForceCountdown();
+      }
+      if (ctx.hasVoted) voteLocked = true;
+
+      if (!opts.initial && !opts.silent) flashSync();
+
+      try {
+        route();
+      } catch (err) {
+        console.error('[debate app] route() error:', err, err && err.stack);
+        renderError('画面描画エラー: ' + ((err && err.message) || err));
+      }
+    }
+
+    /** まとめ入力欄の現在値を summaryLocal に取り込み、下書きも保存する */
+    function captureSummaryInputs() {
+      const q2 = document.getElementById('whichOpinion');
+      const q3 = document.getElementById('howExpanded');
+      const sel = document.getElementById('debaterSelect');
+      if (!q2 && !q3 && !sel) return;
+      if (q2) summaryLocal.whichOpinion = q2.value;
+      if (q3) summaryLocal.howExpanded = q3.value;
+      if (sel && sel.value) summaryLocal.debaterEmail = sel.value;
+      saveDraft_();
+    }
+
+    // ==================================================================
+    // ポーリング(1往復でフェーズ判定 + 画面データ取得)
+    // ==================================================================
+    function pollIntervalMs() {
+      const p = phase();
+      if (p === PHASES.SUMMARY_FORCE_COUNTDOWN) return 1500;
+      if (p === PHASES.IDLE || p === PHASES.CLOSED) return 6000;
+      return 2500;
+    }
+
+    function startPolling() {
+      if (pollTimerId) return;
+      document.getElementById('syncIndicator').style.display = 'block';
+      schedulePoll();
+    }
+
+    function schedulePoll(delayOverride) {
+      if (pollTimerId) clearTimeout(pollTimerId);
+      pollTimerId = setTimeout(doPoll, delayOverride || pollIntervalMs());
+    }
+
+    function doPoll() {
+      pollTimerId = null;
+      if (pollInFlight) { schedulePoll(); return; }
+      pollInFlight = true;
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          pollInFlight = false;
+          if (!res || !res.ok) { onPollProblem(res && res.message); return; }
+
+          pollFailCount = 0;
+          setSyncIndicator('自動更新中', false);
+
+          if (res.allClassSummaries && appContext) {
+            appContext.allClassSummaries = res.allClassSummaries;
+          }
+
+          if (res.changed && res.context) {
+            // 入力中のまとめ画面を壊さずに済む変化か判定する
+            if (isSoftSummaryChange_(res.context)) {
+              softApplySummaryChange_(res.context);
+            } else {
+              applyContext(res.context);
+            }
+          } else {
+            // 変化なし。カウントダウンの時刻ずれだけ補正する
+            if (res.forceRemainingMs > 0) forceDeadlineLocal = Date.now() + res.forceRemainingMs;
+            if (showControls()) renderTeacherBar();
+          }
+          schedulePoll();
+        })
+        .withFailureHandler(function(err) {
+          pollInFlight = false;
+          console.error('[debate app] poll failure', err);
+          onPollProblem((err && err.message) || err);
+        })
+        .pollState(currentTargetKumi || null, currentRev);
+    }
+
+    function onPollProblem(message) {
+      pollFailCount++;
+      console.warn('[debate app] poll problem (' + pollFailCount + '):', message);
+      if (pollFailCount >= 2) {
+        setSyncIndicator('接続が不安定です(再試行中 ' + pollFailCount + ')', true);
+      }
+      // 失敗が続くほど間隔を空ける(最大15秒)
+      schedulePoll(Math.min(15000, 2500 * Math.pow(1.7, pollFailCount - 1)));
+    }
+
+    function setSyncIndicator(text, warn) {
+      const el = document.getElementById('syncIndicator');
+      if (!el) return;
+      el.style.display = 'block';
+      el.textContent = text;
+      el.classList.toggle('warn', !!warn);
+    }
+
+    /** 画面が切り替わったことを示す控えめなフラッシュ(押すボタンは出さない) */
+    function flashSync() {
+      const old = document.getElementById('syncFlash');
+      if (old) old.remove();
+      const bar = document.createElement('div');
+      bar.id = 'syncFlash';
+      bar.className = 'sync-flash';
+      document.body.appendChild(bar);
+      setTimeout(function() { if (bar.parentNode) bar.remove(); }, 700);
+    }
+
+    /**
+     * まとめ受付中 ⇄ 強制提出カウント中 の遷移かどうか。
+     * ここで全画面を描き直すと生徒の入力中テキストの選択位置やIME変換が飛ぶので、
+     * バナーの出し入れだけで済ませる。
+     */
+    function isSoftSummaryChange_(nextCtx) {
+      if (!appContext || !appContext.state || !nextCtx || !nextCtx.state) return false;
+      const a = appContext.state, b = nextCtx.state;
+      if (a.topicId !== b.topicId) return false;
+      const soft = [PHASES.SUMMARY, PHASES.SUMMARY_FORCE_COUNTDOWN];
+      if (soft.indexOf(a.phase) < 0 || soft.indexOf(b.phase) < 0) return false;
+      // まとめ入力欄が実際に画面にあるときだけ(教員の操作バーだけなら通常描画でよい)
+      return !!document.getElementById('howExpanded');
+    }
+
+    function softApplySummaryChange_(ctx) {
+      appContext = ctx;
+      currentRev = ctx.rev || null;
+      forceDeadlineLocal = ctx.forceRemainingMs > 0 ? (Date.now() + ctx.forceRemainingMs) : 0;
+      if (ctx.state.phase === PHASES.SUMMARY_FORCE_COUNTDOWN) startForceCountdownIfNeeded();
+      else stopForceCountdown();
+      renderTeacherBar();
+    }
+
+    // ==================================================================
+    // ルーティング: 教員も生徒も「同じ画面」を見る。
+    // 教員アカウントのときだけ、画面下部に操作バーを重ねる。
+    // ==================================================================
+    function route() {
+      if (!appContext) { renderError('起動情報が取得できませんでした。'); return; }
+      const auth = appContext.auth;
+      if (!auth.ok) { renderError(auth.message || '認証に失敗しました。'); return; }
+
+      if (appContext.isStudentClassMismatch) {
+        renderStudentClassMismatch();
+        renderTeacherBar();
+        return;
+      }
+
+      const p = appContext.state.phase;
+      console.log('[debate app] route phase=' + p + ' kumi=' + appContext.targetKumi);
+
+      if (p !== PHASES.SUMMARY_FORCE_COUNTDOWN) stopForceCountdown();
+      if (p !== PHASES.REVEAL_GD && gdAutoAdvanceTimerId) {
+        clearTimeout(gdAutoAdvanceTimerId);
+        gdAutoAdvanceTimerId = null;
+      }
+
+      // 違反監視は「生徒がまとめを書いている画面」でだけ有効。教員は対象外。
+      summaryMonitorActive = !isTeacher() && (p === PHASES.SUMMARY || p === PHASES.SUMMARY_FORCE_COUNTDOWN);
+
+      if (p === PHASES.LOTTERY_READY) renderLotteryReady();
+      else if (p === PHASES.LOTTERY_DONE) renderLotteryDone();
+      else if (p === PHASES.VOTING) renderVoting();
+      else if (p === PHASES.VOTE_CLOSED_PRIVATE) renderWaitTallying();
+      else if (p === PHASES.REVEAL_WINNER) renderWinnerOnly();
+      else if (p === PHASES.REVEAL_GD) renderGdReveal();
+      else if (p === PHASES.SUMMARY || p === PHASES.SUMMARY_FORCE_COUNTDOWN) renderSummary();
+      else if (p === PHASES.CLOSED) renderSummaryClosed();
+      else renderHome();
+
+      renderTeacherBar();
+    }
+
+    // ==================================================================
+    // 教員操作バー(教員アカウントのときだけ画面下部に出る)
+    // ==================================================================
+
+    /** 現在のフェーズで「次にやること」1つ。ここが常に主ボタンになる */
+    function primaryActionFor(p) {
+      const step = Number(appContext.state.gdStep) || 0;
+      switch (p) {
+        case PHASES.IDLE:
+          return { action: 'startLottery', label: '🎲 くじを引く準備' };
+        case PHASES.LOTTERY_READY:
+          return { action: 'spin', label: '🎲 ルーレットを回す' };
+        case PHASES.LOTTERY_DONE:
+          return { action: 'openVoting', label: '① 投票受付を開始' };
+        case PHASES.VOTING:
+          return { action: 'closeVoting', label: '② 投票を締切(集計)' };
+        case PHASES.VOTE_CLOSED_PRIVATE:
+          return { action: 'revealWinner', label: '③ 勝敗を発表' };
+        case PHASES.REVEAL_WINNER:
+          return { action: 'revealGd', label: '④ グッドディベーター発表へ' };
+        case PHASES.REVEAL_GD:
+          if (step === 0) return { action: 'advanceGd', label: '⑤ 第5位・第4位を発表' };
+          if (step === 1) return { action: null, label: '⏰ 自動で1〜3位を発表中...' };
+          return { action: 'openSummary', label: '⑥ まとめ受付を開始' };
+        case PHASES.SUMMARY:
+          return {
+            action: 'startForceSubmit',
+            label: '⑦ 全員強制提出(20秒)',
+            confirm: '全員強制提出を開始します。20秒後に各生徒の画面で自動送信され、受付は終了します。よろしいですか?',
+          };
+        case PHASES.SUMMARY_FORCE_COUNTDOWN:
+          return { action: null, label: '⏰ カウントダウン中...' };
+        case PHASES.CLOSED:
+          return { action: 'startLottery', label: '🎲 次のくじを引く' };
+        default:
+          return { action: 'startLottery', label: '🎲 くじを引く準備' };
+      }
+    }
+
+    function renderTeacherBar() {
+      const host = document.getElementById('teacherBarHost');
+      if (!host) return;
+
+      if (!isTeacher()) {
+        host.innerHTML = '';
+        document.body.classList.remove('has-tbar', 'has-tbar-panel');
+        return;
+      }
+      if (controlsHidden) {
+        host.innerHTML = '<button class="tbar-fab" title="操作バーを表示" onclick="setControlsHidden(false)">⚙</button>';
+        document.body.classList.remove('has-tbar', 'has-tbar-panel');
+        return;
+      }
+
+      if (!appContext.allClasses || appContext.allClasses.length === 0) {
+        host.innerHTML =
+          '<div class="tbar"><div class="tbar-inner">' +
+          '<span class="tbar-msg ng">班マスタにクラスが登録されていないため操作できません。' +
+          'スプレッドシートのメニュー「ディベートアプリ → 初期セットアップ」を実行してください。</span>' +
+          '</div></div>';
+        document.body.classList.add('has-tbar');
+        document.body.classList.remove('has-tbar-panel');
+        return;
+      }
+
+      const p = appContext.state.phase;
+      const kumi = appContext.targetKumi || '';
+      const summaries = appContext.allClassSummaries || [];
+      const primary = primaryActionFor(p);
+
+      const classOptions = (appContext.allClasses || []).map(function(c) {
+        const s = summaries.filter(function(x) { return x.kumi === c; })[0];
+        const suffix = s ? '(' + s.phase + ')' : '';
+        return '<option value="' + escapeHtml(c) + '"' + (c === kumi ? ' selected' : '') + '>' +
+          escapeHtml(c) + ' ' + escapeHtml(suffix) + '</option>';
+      }).join('');
+
+      const primaryBtn = primary.action
+        ? '<button class="tbar-primary" id="tbarPrimary" onclick="runPrimaryAction()">' + escapeHtml(primary.label) + '</button>'
+        : '<button class="tbar-primary" disabled>' + escapeHtml(primary.label) + '</button>';
+
+      let html =
+        '<div class="tbar">' +
+        '<div class="tbar-inner">' +
+        '<span class="tbar-label">操作</span>' +
+        '<select onchange="onClassSelect(this.value)" aria-label="クラス">' + classOptions + '</select>' +
+        '<span class="tbar-phase ' + phaseToCssClass_(p) + '">' + escapeHtml(p) + '</span>' +
+        '<span class="tbar-spacer"></span>' +
+        '<span class="tbar-msg" id="tbarMsg"></span>' +
+        '<button class="tbar-ghost" onclick="togglePanel()">' + (panelOpen ? '× 閉じる' : '⋯ その他') + '</button>' +
+        primaryBtn +
+        '</div>';
+
+      if (panelOpen) html += buildTeacherPanel_(p, kumi, summaries);
+      html += '</div>';
+
+      host.innerHTML = html;
+      document.body.classList.add('has-tbar');
+      document.body.classList.toggle('has-tbar-panel', panelOpen);
+    }
+
+    function buildTeacherPanel_(p, kumi, summaries) {
+      const phaseKeys = [
+        'IDLE', 'LOTTERY_READY', 'VOTING', 'VOTE_CLOSED_PRIVATE',
+        'REVEAL_WINNER', 'REVEAL_GD', 'SUMMARY', 'CLOSED',
+      ];
+      const currentKey = phaseNameToKey_(p);
+      const phaseOptions = phaseKeys.map(function(k) {
+        return '<option value="' + k + '"' + (k === currentKey ? ' selected' : '') + '>' +
+          escapeHtml(PHASES[k]) + '</option>';
+      }).join('');
+
+      const inSummary = (p === PHASES.SUMMARY || p === PHASES.SUMMARY_FORCE_COUNTDOWN);
+
+      let actions =
+        '<button class="tbar-ghost" onclick="teacherRun(\'resetToIdle\', \'' +
+        escapeAttr(kumi + ' を「待機中」に戻します。投票・まとめのデータは残ります。') + '\')">待機中に戻す</button>' +
+        '<button class="tbar-ghost" onclick="teacherRun(\'resetLotteryHistory\', \'' +
+        escapeAttr(kumi + ' のくじ履歴をリセットしますか?使用済みの班も再びくじに出るようになります。') + '\')">くじ履歴をリセット</button>';
+      if (inSummary) {
+        actions +=
+          '<button class="tbar-ghost" onclick="teacherRun(\'closeSummary\', \'' +
+          escapeAttr(kumi + ' のまとめ受付を締め切ります。締切後は全員の提出が固定されます。よろしいですか?') +
+          '\')">まとめ受付を締切</button>';
+      }
+      actions += '<button class="tbar-ghost" onclick="setControlsHidden(true)">操作バーを隠す(投影用)</button>';
+
+      const jump =
+        '<select id="tbarPhaseJump">' + phaseOptions + '</select>' +
+        '<button class="tbar-ghost" onclick="applyPhaseJump()">このフェーズにする</button>';
+
+      const cards = summaries.map(function(s, idx) {
+        return (
+          '<button class="class-overview-card' + (s.kumi === kumi ? ' active' : '') + '" ' +
+          'onclick="switchClassByIndex(' + idx + ')">' +
+          '<div class="class-overview-name">' + escapeHtml(s.kumi) + '</div>' +
+          '<div><span class="tbar-phase ' + phaseToCssClass_(s.phase) + '">' + escapeHtml(s.phase) + '</span></div>' +
+          '<div class="class-overview-topic">' + (s.topicTitle ? '📌 ' + escapeHtml(s.topicTitle) : '(論題未設定)') + '</div>' +
+          '</button>'
+        );
+      }).join('');
+
+      return (
+        '<div class="tbar-panel">' +
+        '<h4>この画面は生徒にも同じものが表示されています</h4>' +
+        '<div class="tbar-panel-row">' + actions + '</div>' +
+        '<h4>フェーズを直接変更</h4>' +
+        '<div class="tbar-panel-row">' + jump + '</div>' +
+        '<h4>全クラスの状況(クリックで表示を切替)</h4>' +
+        '<div class="class-overview">' + cards + '</div>' +
+        '</div>'
+      );
+    }
+
+    function togglePanel() { panelOpen = !panelOpen; renderTeacherBar(); }
+    function setControlsHidden(hidden) {
+      controlsHidden = hidden;
+      if (hidden) panelOpen = false;
+      renderTeacherBar();
+    }
+
+    function tbarMessage(text, kind) {
+      const el = document.getElementById('tbarMsg');
+      if (!el) return;
+      el.className = 'tbar-msg' + (kind ? ' ' + kind : '');
+      el.textContent = text || '';
+      if (text && kind === 'ok') {
+        setTimeout(function() {
+          const cur = document.getElementById('tbarMsg');
+          if (cur && cur.textContent === text) cur.textContent = '';
+        }, 3000);
+      }
+    }
+
+    function runPrimaryAction() {
+      const primary = primaryActionFor(appContext.state.phase);
+      if (!primary || !primary.action) return;
+      if (primary.action === 'spin') { spinRoulette(); return; }
+      teacherRun(primary.action, primary.confirm || null);
+    }
+
+    /** 教員操作の唯一の入口。成功レスポンスに新しい画面データが入っている */
+    function teacherRun(action, confirmMessage, arg) {
+      if (confirmMessage && !confirm(confirmMessage)) return;
+
+      const btn = document.getElementById('tbarPrimary');
+      if (btn) btn.disabled = true;
+      tbarMessage('処理中...');
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (btn) btn.disabled = false;
+          if (res && res.ok) {
+            tbarMessage('✓ ' + (res.message || '完了'), 'ok');
+            if (res.context) applyContext(res.context, { silent: true });
+            else schedulePoll(200);
+          } else {
+            tbarMessage('✗ ' + ((res && res.message) || '失敗'), 'ng');
+          }
+        })
+        .withFailureHandler(function(err) {
+          if (btn) btn.disabled = false;
+          tbarMessage('✗ ' + ((err && err.message) || err), 'ng');
+        })
+        .teacherAction(currentTargetKumi, action, arg === undefined ? null : arg);
+    }
+
+    function applyPhaseJump() {
+      const sel = document.getElementById('tbarPhaseJump');
+      if (!sel) return;
+      const key = sel.value;
+      const currentKey = phaseNameToKey_(appContext.state.phase);
+      if (key === currentKey) { tbarMessage('(変更なし)'); return; }
+      let confirmMsg = null;
+      if (currentKey === 'SUMMARY' && key !== 'SUMMARY' && key !== 'CLOSED') {
+        confirmMsg = currentTargetKumi + ' は「まとめ受付中」です。\n' +
+          '別のフェーズに変更すると、入力中の生徒の画面が切り替わります。よろしいですか?';
+      }
+      teacherRun('setPhase', confirmMsg, key);
+    }
+
+    function onClassSelect(kumi) { switchTargetKumi(kumi); }
+
+    function switchClassByIndex(idx) {
+      const summaries = appContext.allClassSummaries || [];
+      if (!summaries[idx]) return;
+      switchTargetKumi(summaries[idx].kumi);
+    }
+
+    /** 教員の表示クラス切替 */
+    function switchTargetKumi(newKumi) {
+      if (!newKumi || newKumi === currentTargetKumi) return;
+      currentTargetKumi = newKumi;
+      currentRev = null;
+      stopForceCountdown();
+      if (gdAutoAdvanceTimerId) { clearTimeout(gdAutoAdvanceTimerId); gdAutoAdvanceTimerId = null; }
+      tbarMessage('切替中...');
+      google.script.run
+        .withSuccessHandler(function(ctx) {
+          if (!ctx) return;
+          applyContext(ctx, { silent: true });
+          tbarMessage('');
+        })
+        .withFailureHandler(function(err) {
+          tbarMessage('✗ ' + ((err && err.message) || err), 'ng');
+        })
+        .getAppContext(newKumi);
+    }
+
+    function phaseNameToKey_(phaseName) {
+      for (const k in PHASES) if (PHASES[k] === phaseName) return k;
+      return 'IDLE';
+    }
+    function phaseToCssClass_(phaseName) {
+      return 'phase-' + phaseNameToKey_(phaseName);
+    }
+
+    // ==================================================================
+    // 共通ヘッダ(教員も生徒も同じ)
+    // ==================================================================
+    function renderHeader() {
+      const user = appContext.auth.user;
+      const p = appContext.state.phase;
+
+      let phaseBadge = '<span class="badge">' + escapeHtml(p) + '</span>';
+      if (p === PHASES.LOTTERY_READY || p === PHASES.LOTTERY_DONE) {
+        phaseBadge = '<span class="badge" style="background:#d32f2f;">' + escapeHtml(p) + '</span>';
+      } else if (p === PHASES.VOTING) phaseBadge = '<span class="badge badge-voting">投票受付中</span>';
+      else if (p === PHASES.VOTE_CLOSED_PRIVATE) phaseBadge = '<span class="badge badge-private">集計中</span>';
+      else if (p === PHASES.REVEAL_WINNER) phaseBadge = '<span class="badge badge-reveal">勝敗発表中</span>';
+      else if (p === PHASES.REVEAL_GD) phaseBadge = '<span class="badge badge-gd">GD発表中</span>';
+      else if (p === PHASES.SUMMARY) phaseBadge = '<span class="badge badge-summary">まとめ受付中</span>';
+
+      const viewing = isTeacher() && appContext.targetKumi
+        ? '<span class="viewing-class">表示中: ' + escapeHtml(appContext.targetKumi) + '</span>'
+        : '';
+
+      let topicBox = '';
+      if (appContext.topic) {
+        topicBox =
+          '<div class="topic-box">' +
+          '<div>論題 [' + escapeHtml(appContext.topic.id) + ']</div>' +
+          '<div class="topic-title">' + escapeHtml(appContext.topic.title) + '</div>' +
+          '</div>';
+      }
+
+      return (
+        '<h1>ディベート振り返り</h1>' +
+        '<div class="user-info">' +
+        '<strong>' + escapeHtml(user.name) + '</strong> さん (' +
+        escapeHtml(user.kumi) + ' ' + escapeHtml(user.ban) + '番)' +
+        (isTeacher() ? '<span class="badge badge-teacher">教員</span>' : '') +
+        '<span style="margin-left:12px;">フェーズ: ' + phaseBadge + '</span>' +
+        viewing +
+        '</div>' +
+        topicBox
+      );
+    }
+
+    function setApp(html) { document.getElementById('app').innerHTML = html; }
+
+    function renderError(message) {
+      setApp(
+        '<h1>ディベート振り返り</h1>' +
+        '<div class="error">' + escapeHtml(message) + '</div>' +
+        '<button class="secondary" onclick="location.reload()">再読み込み</button>'
+      );
+    }
+
+    function renderStudentClassMismatch() {
+      const user = appContext.auth.user;
+      setApp(
+        '<h1>ディベート振り返り</h1>' +
+        '<div class="user-info"><strong>' + escapeHtml(user.name) + '</strong> さん (' +
+        escapeHtml(user.kumi || '?') + ' ' + escapeHtml(user.ban || '?') + '番)</div>' +
+        '<div class="error">あなたのクラス「' + escapeHtml(user.kumi || '(未設定)') + '」は班マスタに登録されていません。<br>' +
+        '教員に連絡してください。</div>'
+      );
+    }
+
+    // ===== 待機中 =====
+    function renderHome() {
+      const state = appContext.state;
+      const msg = !state.topicId
+        ? '<div class="info">現在、対象となるディベートが設定されていません。</div>'
+        : '<div class="wait-card">' +
+          '<div class="wait-icon">⏳</div>' +
+          '<div class="wait-message">つぎの合図をお待ちください</div>' +
+          '<div class="wait-sub">先生が進めると、この画面は自動で切り替わります</div>' +
+          '</div>';
+      setApp(renderHeader() + msg + buildPastSummarySection_() + buildFeedbackSection_());
+    }
+
+    function buildPastSummarySection_() {
+      const past = appContext.myLatestPastSummary;
+      if (!past) {
+        return '<div style="margin-top:32px; padding-top:24px; border-top:2px solid #e0e0e0;">' +
+          '<p style="color:#888; font-size:0.92em; text-align:center;">あなたの過去のまとめはまだありません。</p></div>';
+      }
+      const evalBadge = past.evaluation
+        ? '<span style="display:inline-block; padding:3px 12px; background:#6a1b9a; color:white; border-radius:20px; font-weight:bold; margin-left:8px; font-size:0.85em;">評価: ' + escapeHtml(past.evaluation) + '</span>'
+        : '';
+      const teacherCommentBlock = past.teacherComment
+        ? '<div class="info" style="margin:12px 0;"><strong>教員コメント:</strong><br>' +
+          escapeHtml(past.teacherComment).replace(/\n/g, '<br>') + '</div>'
+        : '';
+      return (
+        '<div style="margin-top:32px; padding-top:24px; border-top:2px solid #e0e0e0;">' +
+        '<h2 style="font-size:1.1em; color:#555;">📖 あなたの前回のまとめ' + evalBadge + '</h2>' +
+        '<p style="color:#666; font-size:0.92em;">論題: <strong>' + escapeHtml(past.topicTitle) + '</strong>' +
+        (past.lastUpdated ? ' <span style="color:#999;">(' + escapeHtml(past.lastUpdated) + ')</span>' : '') + '</p>' +
+        teacherCommentBlock +
+        '<div class="summary-readonly">' +
+        '<h3>立場</h3><p>' + escapeHtml(past.position || '(未入力)') + '</p>' +
+        '<h3>その人のどの意見か</h3><p style="white-space:pre-wrap;">' + escapeHtml(past.whichOpinion || '(未入力)') + '</p>' +
+        '<h3>どのように広がり深まったか</h3><p style="white-space:pre-wrap;">' + escapeHtml(past.howExpanded || '(未入力)') + '</p>' +
+        '</div></div>'
+      );
+    }
+
+    function buildFeedbackSection_() {
+      const feedbacksByTopic = appContext.myFeedbacksByTopic || [];
+      if (feedbacksByTopic.length === 0) return '';
+
+      let totalCount = 0;
+      for (const t of feedbacksByTopic) totalCount += t.feedbacks.length;
+
+      const topicBlocks = feedbacksByTopic.map(function(t) {
+        const cards = t.feedbacks.map(function(fb) {
+          return (
+            '<div class="fb-card">' +
+            (fb.position ? '<span class="fb-position">' + escapeHtml(fb.position) + '</span>' : '') +
+            (fb.whichOpinion ? '<div class="fb-which"><strong>あなたの意見:</strong><br>' + escapeHtml(fb.whichOpinion).replace(/\n/g, '<br>') + '</div>' : '') +
+            (fb.howExpanded ? '<div class="fb-how"><strong>その人の考えがこう変わった:</strong><br>' + escapeHtml(fb.howExpanded).replace(/\n/g, '<br>') + '</div>' : '') +
+            '</div>'
+          );
+        }).join('');
+        return (
+          '<div class="fb-topic-block">' +
+          '<div class="fb-topic-title">📌 ' + escapeHtml(t.topicTitle) +
+          ' <span style="color:#888; font-weight:normal;">(' + t.feedbacks.length + '件)</span></div>' +
+          cards + '</div>'
+        );
+      }).join('');
+
+      return (
+        '<div style="margin-top:32px; padding-top:24px; border-top:2px solid #e0e0e0;">' +
+        '<h2 style="font-size:1.1em; color:#bf4f00;">💬 あなたの意見が広げた・深めたもの' +
+        ' <span style="font-size:0.85em; color:#888; font-weight:normal;">(全' + totalCount + '件)</span></h2>' +
+        '<p style="color:#666; font-size:0.9em; margin-bottom:16px;">' +
+        '過去のディベートで、あなたの意見が同じクラスの友達の考えを広げたり深めたりしました。書いた人は匿名です。</p>' +
+        topicBlocks + '</div>'
+      );
+    }
+
+    // ==================================================================
+    // くじ(教員も生徒も同じルーレットを見る)
+    // ==================================================================
+    function renderLotteryReady() {
+      const state = appContext.state;
+      const usedInfo = (showControls() && state.usedGroups && state.usedGroups.length > 0)
+        ? '<div class="info" style="font-size:0.92em;">使用済みの班: <strong>' +
+          escapeHtml(state.usedGroups.join(', ')) + '班</strong> ' +
+          '<span style="color:#888;">(これらは次のくじには出ません)</span></div>'
+        : '';
+
+      setApp(renderHeader() +
+        '<div class="lottery-container">' +
+        '<h2 style="text-align:center;">🎲 ' + escapeHtml(appContext.targetKumi || '') + ' のくじ</h2>' +
+        usedInfo +
+        '<div class="roulette-stage"><div class="roulette-number" id="rouletteNumber">?</div></div>' +
+        '<div id="lotteryStatus" style="margin-top:12px;">' +
+        (showControls()
+          ? '<p style="color:#666; font-size:0.9em;">下の操作バーの「ルーレットを回す」で抽選します。</p>'
+          : '<p style="color:#666;">まもなく抽選します。お待ちください。</p>') +
+        '</div></div>');
+    }
+
+    function spinRoulette() {
+      if (rouletteSpinning) return;
+      rouletteSpinning = true;
+
+      const numEl = document.getElementById('rouletteNumber');
+      const statusEl = document.getElementById('lotteryStatus');
+      tbarMessage('抽選中...');
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (!res || !res.ok) {
+            rouletteSpinning = false;
+            tbarMessage('✗ ' + ((res && res.message) || '失敗'), 'ng');
+            return;
+          }
+          if (res.allDone || !res.available || res.available.length === 0) {
+            rouletteSpinning = false;
+            if (numEl) { numEl.textContent = '✓'; numEl.classList.remove('spinning'); }
+            if (statusEl) {
+              statusEl.innerHTML = '<div class="info">このクラスのディベートはすべて終了しました(全' +
+                (res.used ? res.used.length : 0) + '班分)。<br>' +
+                'もう一度引きたい場合は、操作バーの「その他 → くじ履歴をリセット」を実行してください。</div>';
+            }
+            tbarMessage('全班終了', 'ok');
+            return;
+          }
+
+          const candidates = res.available;
+          const finalNumber = candidates[Math.floor(Math.random() * candidates.length)];
+          if (numEl) numEl.classList.add('spinning');
+
+          let spinCount = 0;
+          const totalSpins = 20 + Math.floor(Math.random() * 6);
+          (function tick() {
+            spinCount++;
+            const remaining = totalSpins - spinCount;
+            let delay = 80;
+            if (remaining < 10) delay = 120;
+            if (remaining < 6) delay = 180;
+            if (remaining < 3) delay = 280;
+            if (remaining < 1) delay = 400;
+
+            if (spinCount < totalSpins) {
+              if (numEl) numEl.textContent = candidates[Math.floor(Math.random() * candidates.length)];
+              setTimeout(tick, delay);
+            } else {
+              if (numEl) {
+                numEl.textContent = finalNumber;
+                numEl.classList.remove('spinning');
+                numEl.classList.add('decided');
+              }
+              finalizeLottery(finalNumber);
+            }
+          })();
+        })
+        .withFailureHandler(function(err) {
+          rouletteSpinning = false;
+          tbarMessage('✗ ' + ((err && err.message) || err), 'ng');
+        })
+        .getAvailableLotteryNumbers(currentTargetKumi);
+    }
+
+    function finalizeLottery(num) {
+      const statusEl = document.getElementById('lotteryStatus');
+      if (statusEl) statusEl.innerHTML = '<div class="info">数字が決定しました。反映中...</div>';
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          rouletteSpinning = false;
+          if (res && res.ok) {
+            if (statusEl) {
+              statusEl.innerHTML = '<div class="success">✓ ' + escapeHtml(res.topicTitle) + '<br>' +
+                '肯定側: <strong>' + escapeHtml(res.affirmativeGroup) + '班</strong> / 否定側: <strong>' +
+                escapeHtml(res.negativeGroup) + '班</strong> / 発表者 ' + res.debatersRegistered + '名を登録' +
+                (res.warning ? '<br><span style="color:#c00;">⚠️ ' + escapeHtml(res.warning) + '</span>' : '') +
+                '</div>';
+            }
+            tbarMessage('✓ 論題決定', 'ok');
+            // 教員端末はルーレット演出を見せた直後なので、もう一度演出しない。
+            // 先にrevを進めておくことで、演出中にポーリングが割り込んで再描画するのも防ぐ。
+            if (res.context) {
+              skipLotteryAnimation = true;
+              currentRev = res.context.rev || currentRev;
+            }
+            // 生徒側はポーリングで自動追従する
+            setTimeout(function() { if (res.context) applyContext(res.context, { silent: true }); }, 1400);
+          } else {
+            if (statusEl) statusEl.innerHTML = '<div class="error">' + escapeHtml((res && res.message) || '失敗') + '</div>';
+            tbarMessage('✗ ' + ((res && res.message) || '失敗'), 'ng');
+          }
+        })
+        .withFailureHandler(function(err) {
+          rouletteSpinning = false;
+          if (statusEl) statusEl.innerHTML = '<div class="error">エラー: ' + escapeHtml((err && err.message) || err) + '</div>';
+        })
+        .confirmLottery(currentTargetKumi, num);
+    }
+
+    function renderLotteryDone() {
+      const state = appContext.state;
+      const topic = appContext.topic;
+
+      const resultHtml =
+        '<div class="lottery-result">' +
+        '<div class="lottery-result-icon">🎉</div>' +
+        '<h2>本日の論題が決まりました!</h2>' +
+        (topic ? '<div class="lottery-topic">' + escapeHtml(topic.title) + '</div>' : '') +
+        '<div class="lottery-teams">' +
+        '<div class="lottery-team lottery-team-affirmative">' +
+        '<div class="team-label">肯定側</div>' +
+        '<div class="team-group">' + escapeHtml(state.affirmativeGroup) + ' 班</div></div>' +
+        '<div class="lottery-vs">VS</div>' +
+        '<div class="lottery-team lottery-team-negative">' +
+        '<div class="team-label">否定側</div>' +
+        '<div class="team-group">' + escapeHtml(state.negativeGroup) + ' 班</div></div>' +
+        '</div>' +
+        (showControls() ? '' : '<div style="text-align:center; margin-top:24px; color:#666; font-size:0.9em;">これからディベートが始まります。</div>') +
+        '</div>';
+
+      // くじ準備中から切り替わった瞬間だけ、生徒の画面でもルーレット演出を見せる
+      if (playLotteryAnimation && state.lotteryResult) {
+        playLotteryAnimation = false;
+        setApp(renderHeader() +
+          '<div class="lottery-container" id="lotteryAnimBox">' +
+          '<div class="roulette-stage"><div class="roulette-number spinning" id="rouletteNumber">?</div></div>' +
+          '<p style="color:#666;">抽選中...</p></div>');
+
+        const numEl = document.getElementById('rouletteNumber');
+        const target = String(state.lotteryResult);
+        const revealAt = Date.now() + 1500;
+        const shuffle = setInterval(function() {
+          if (Date.now() >= revealAt) {
+            clearInterval(shuffle);
+            if (numEl) {
+              numEl.textContent = target;
+              numEl.classList.remove('spinning');
+              numEl.classList.add('decided');
+            }
+            setTimeout(function() {
+              // 演出中にフェーズが進んでいたら上書きしない
+              if (appContext && appContext.state && appContext.state.phase === PHASES.LOTTERY_DONE) {
+                setApp(renderHeader() + resultHtml);
+              }
+            }, 700);
+            return;
+          }
+          if (numEl) numEl.textContent = String(1 + Math.floor(Math.random() * 6));
+        }, 90);
+        return;
+      }
+
+      setApp(renderHeader() + resultHtml);
+    }
+
+    // ==================================================================
+    // 投票(教員も同じ画面。教員の勝敗票は3票換算される)
+    // ==================================================================
+    function renderVoting() {
+      if (appContext.hasVoted || voteLocked) { renderVotingLocked(); return; }
+
+      if (!appContext.debaters || appContext.debaters.length === 0) {
+        setApp(renderHeader() + '<div class="error">発表者が登録されていません。教員に連絡してください。</div>');
+        return;
+      }
+
+      const teacherNote = isTeacher()
+        ? '<div class="teacher-preview-note">先生も投票できます。先生の勝敗票は3票分として集計されます(グッドディベーターの集計には入りません)。</div>'
+        : '';
+
+      const winnerBlock =
+        '<div class="vote-section">' +
+        '<h2>① 肯定・否定どちらの論がよかったか</h2>' +
+        '<div class="winner-choice" id="winnerChoice">' +
+        '<label data-winner="肯定側" onclick="selectWinner(\'肯定側\')"><span>肯定側の勝ち</span></label>' +
+        '<label data-winner="否定側" onclick="selectWinner(\'否定側\')"><span>否定側の勝ち</span></label>' +
+        '</div></div>';
+
+      const debaterCards = appContext.debaters.map(function(d) {
+        const teamClass = d.team === '肯定側' ? 'team-affirmative' : 'team-negative';
+        return (
+          '<div class="debater-card" data-email="' + escapeHtml(d.email) + '" onclick="toggleDebater(\'' + escapeAttr(d.email) + '\')">' +
+          '<span class="team ' + teamClass + '">' + escapeHtml(d.team) + '</span>' +
+          '<strong>' + escapeHtml(d.name) + '</strong>' +
+          '<div class="role-label">' + escapeHtml(d.role) + '</div></div>'
+        );
+      }).join('');
+
+      const gdBlock =
+        '<div class="vote-section">' +
+        '<h2>② グッドディベーター5名を選んでください</h2>' +
+        '<div class="selection-count" id="selectionCount">0 / 5 人選択中</div>' +
+        '<div class="debater-grid" id="debaterGrid">' + debaterCards + '</div></div>';
+
+      const submitBlock =
+        '<div style="text-align:center; margin:20px 0;">' +
+        '<button class="primary big" id="submitBtn" onclick="submitVote()" disabled>投票を送信(再送信不可)</button>' +
+        '<div id="submitStatus" style="margin-top:10px;"></div></div>';
+
+      setApp(renderHeader() + teacherNote + winnerBlock + gdBlock + submitBlock);
+
+      if (selectedWinner) selectWinner(selectedWinner);
+      if (selectedGdEmails.length > 0) updateDebaterUI();
+      updateSubmitState();
+    }
+
+    function renderVotingLocked() {
+      const winnerBlock =
+        '<div class="vote-section">' +
+        '<h2>① 肯定・否定どちらの論がよかったか</h2>' +
+        '<div class="winner-choice locked" id="winnerChoice">' +
+        '<label data-winner="肯定側"' + (selectedWinner === '肯定側' ? ' class="selected"' : '') + '><span>肯定側の勝ち</span></label>' +
+        '<label data-winner="否定側"' + (selectedWinner === '否定側' ? ' class="selected"' : '') + '><span>否定側の勝ち</span></label>' +
+        '</div></div>';
+
+      const debaterCards = (appContext.debaters || []).map(function(d) {
+        const teamClass = d.team === '肯定側' ? 'team-affirmative' : 'team-negative';
+        const selIdx = selectedGdEmails.indexOf(d.email);
+        return (
+          '<div class="debater-card' + (selIdx >= 0 ? ' selected' : '') + '" data-email="' + escapeHtml(d.email) + '">' +
+          '<span class="team ' + teamClass + '">' + escapeHtml(d.team) + '</span>' +
+          '<strong>' + escapeHtml(d.name) + '</strong>' +
+          '<div class="role-label">' + escapeHtml(d.role) + '</div>' +
+          (selIdx >= 0 ? '<div class="selected-order">' + (selIdx + 1) + '</div>' : '') +
+          '</div>'
+        );
+      }).join('');
+
+      setApp(renderHeader() +
+        '<div class="submitted-lock">✓ 投票を受け付けました。内容は変更できません。結果発表をお待ちください。</div>' +
+        winnerBlock +
+        '<div class="vote-section"><h2>② グッドディベーター5名</h2>' +
+        '<div class="debater-grid locked">' + debaterCards + '</div></div>');
+    }
+
+    function selectWinner(winner) {
+      if (voteLocked || appContext.hasVoted) return;
+      selectedWinner = winner;
+      document.querySelectorAll('#winnerChoice label').forEach(function(l) {
+        l.classList.toggle('selected', l.getAttribute('data-winner') === winner);
+      });
+      updateSubmitState();
+    }
+
+    function toggleDebater(email) {
+      if (voteLocked || appContext.hasVoted) return;
+      const idx = selectedGdEmails.indexOf(email);
+      if (idx >= 0) {
+        selectedGdEmails.splice(idx, 1);
+      } else {
+        if (selectedGdEmails.length >= 5) {
+          alert('5名選択済みです。別の人を外してから選んでください。');
+          return;
+        }
+        selectedGdEmails.push(email);
+      }
+      updateDebaterUI();
+      updateSubmitState();
+    }
+
+    function updateDebaterUI() {
+      document.querySelectorAll('#debaterGrid .debater-card').forEach(function(c) {
+        const idx = selectedGdEmails.indexOf(c.getAttribute('data-email'));
+        c.classList.toggle('selected', idx >= 0);
+        const existing = c.querySelector('.selected-order');
+        if (existing) existing.remove();
+        if (idx >= 0) {
+          const badge = document.createElement('div');
+          badge.className = 'selected-order';
+          badge.textContent = (idx + 1);
+          c.appendChild(badge);
+        }
+      });
+      const countEl = document.getElementById('selectionCount');
+      if (countEl) countEl.textContent = selectedGdEmails.length + ' / 5 人選択中';
+    }
+
+    function updateSubmitState() {
+      const btn = document.getElementById('submitBtn');
+      if (btn) btn.disabled = !(selectedWinner && selectedGdEmails.length === 5);
+    }
+
+    function submitVote() {
+      if (!selectedWinner || selectedGdEmails.length !== 5) return;
+      if (voteLocked) return;
+      voteLocked = true;
+
+      const btn = document.getElementById('submitBtn');
+      const statusEl = document.getElementById('submitStatus');
+      const winnerChoice = document.getElementById('winnerChoice');
+      const debaterGrid = document.getElementById('debaterGrid');
+      if (btn) { btn.disabled = true; btn.textContent = '送信中...'; }
+      if (statusEl) statusEl.innerHTML = '';
+      if (winnerChoice) winnerChoice.classList.add('locked');
+      if (debaterGrid) debaterGrid.classList.add('locked');
+
+      const unlock = function(message) {
+        if (statusEl) statusEl.innerHTML = '<div class="error">' + escapeHtml(message) + '</div>';
+        voteLocked = false;
+        if (btn) { btn.disabled = false; btn.textContent = '投票を送信(再送信不可)'; }
+        if (winnerChoice) winnerChoice.classList.remove('locked');
+        if (debaterGrid) debaterGrid.classList.remove('locked');
+      };
+
+      const timeoutId = setTimeout(function() {
+        unlock('サーバー応答がありません(15秒)。もう一度お試しください。');
+      }, 15000);
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          clearTimeout(timeoutId);
+          if (res && res.ok) {
+            if (statusEl) statusEl.innerHTML = '<div class="success">✓ ' + escapeHtml(res.message) + '</div>';
+            if (appContext) appContext.hasVoted = true;
+            setTimeout(function() { route(); }, 400);
+          } else {
+            unlock((res && res.message) || '送信失敗');
+          }
+        })
+        .withFailureHandler(function(err) {
+          clearTimeout(timeoutId);
+          unlock('送信エラー: ' + ((err && err.message) || err));
+        })
+        .submitVote({ winner: selectedWinner, gdEmails: selectedGdEmails, kumi: currentTargetKumi });
+    }
+
+    function renderWaitTallying() {
+      setApp(renderHeader() +
+        '<div class="wait-card">' +
+        '<div class="wait-icon">🗒️</div>' +
+        '<div class="wait-message">投票ありがとうございました</div>' +
+        '<div class="wait-sub">ただいま集計中です。結果発表までお待ちください。</div></div>');
+    }
+
+    // ==================================================================
+    // 勝敗発表
+    // ==================================================================
+    function renderWinnerOnly() {
+      const r = appContext.results;
+      if (!r) { setApp(renderHeader() + '<div class="error">集計結果が取得できませんでした。</div>'); return; }
+
+      const total = Math.max(1, r.affirmativeCount + r.negativeCount);
+      const affPct = Math.round(r.affirmativeCount / total * 100);
+      const negPct = Math.round(r.negativeCount / total * 100);
+
+      let winnerLabel = '引き分け', winnerColor = '#666';
+      if (r.affirmativeCount > r.negativeCount) { winnerLabel = '肯定側の勝ち'; winnerColor = '#bf4f00'; }
+      else if (r.negativeCount > r.affirmativeCount) { winnerLabel = '否定側の勝ち'; winnerColor = '#0050a0'; }
+
+      let teacherBlock = '';
+      if (r.teacherVoterCount > 0) {
+        teacherBlock =
+          '<div class="teacher-vote-notice">' +
+          '<div class="teacher-vote-title">📣 国語科教員の票が入りました(1票 = ' + r.teacherWeight + '票換算)</div>' +
+          '<div class="teacher-vote-rows">' +
+          '<div>生徒票: <strong>肯定 ' + r.studentAffirmative + '票 / 否定 ' + r.studentNegative + '票</strong></div>' +
+          '<div>教員票: <strong>肯定 ' + r.teacherAffirmative + '人 → ' + (r.teacherAffirmative * r.teacherWeight) +
+          '票 / 否定 ' + r.teacherNegative + '人 → ' + (r.teacherNegative * r.teacherWeight) + '票</strong></div>' +
+          '</div></div>';
+      }
+
+      setApp(renderHeader() +
+        '<h2>勝敗投票結果</h2>' +
+        '<div class="winner-announcement">' +
+        '<div class="label">投票の結果</div>' +
+        '<div class="name" style="color:' + winnerColor + ';">' + winnerLabel + '</div></div>' +
+        '<div class="result-row"><div style="min-width:80px; font-weight:bold;">肯定側</div>' +
+        '<div class="result-bar"><div class="result-bar-fill bar-affirmative" style="width:' + affPct + '%;">' +
+        r.affirmativeCount + '票 (' + affPct + '%)</div></div></div>' +
+        '<div class="result-row"><div style="min-width:80px; font-weight:bold;">否定側</div>' +
+        '<div class="result-bar"><div class="result-bar-fill bar-negative" style="width:' + negPct + '%;">' +
+        r.negativeCount + '票 (' + negPct + '%)</div></div></div>' +
+        '<p style="color:#666; font-size:0.9em; text-align:center;">投票総数: ' + r.totalVoters + '人</p>' +
+        teacherBlock);
+    }
+
+    // ==================================================================
+    // グッドディベーター発表(サーバのgdStepで全端末が同期)
+    // ==================================================================
+    function renderGdReveal() {
+      const r = appContext.results;
+      if (!r || !r.topFive || r.topFive.length === 0) {
+        setApp(renderHeader() + '<div class="info">グッドディベーター該当者がいません。</div>');
+        return;
+      }
+
+      const topFive = r.topFive;
+      const available = Math.min(5, topFive.length);
+      const step = Number(appContext.state.gdStep) || 0;
+
+      const rankCard = function(rank) {
+        if (rank > topFive.length) return '';
+        const p = topFive[rank - 1];
+        return '<div class="gd-rank-card">' +
+          '<div class="gd-rank-num">第 ' + rank + ' 位</div>' +
+          '<div class="gd-rank-name">' + escapeHtml(p.name) + '</div>' +
+          '<div class="gd-rank-votes">' + p.votes + '票</div></div>';
+      };
+
+      let stage = '';
+      if (step === 0) {
+        stage =
+          '<div class="wait-card" style="background:transparent;">' +
+          '<div class="wait-icon">🏆</div>' +
+          '<div class="wait-message">これよりグッドディベーターを発表します</div>' +
+          '<div class="wait-sub">' +
+          (showControls() ? '下の操作バーのボタンで順に発表します' : '順に発表されます。お待ちください') +
+          '</div></div>';
+      } else if (step === 1) {
+        const cards = [];
+        if (available >= 5) cards.push(rankCard(5));
+        if (available >= 4) cards.push(rankCard(4));
+        stage = '<div class="gd-grid">' + cards.join('') + '</div>';
+      } else {
+        const mid = [];
+        if (available >= 2) mid.push(rankCard(2));
+        if (available >= 3) mid.push(rankCard(3));
+        const bottom = [];
+        if (available >= 4) bottom.push(rankCard(4));
+        if (available >= 5) bottom.push(rankCard(5));
+        stage =
+          '<div class="gd-champion">' + (available >= 1 ? rankCard(1) : '') + '</div>' +
+          (mid.length ? '<div class="gd-grid" style="margin-top:18px;">' + mid.join('') + '</div>' : '') +
+          (bottom.length ? '<div class="gd-grid" style="margin-top:14px;">' + bottom.join('') + '</div>' : '');
+      }
+
+      setApp(renderHeader() +
+        '<div class="gd-reveal-container">' +
+        '<div class="gd-title">🏆 グッドディベーター発表</div>' +
+        '<div class="gd-stage">' + stage + '</div></div>');
+
+      if (gdAutoAdvanceTimerId) { clearTimeout(gdAutoAdvanceTimerId); gdAutoAdvanceTimerId = null; }
+      // 4・5位を見せたあと、3秒後に自動で1〜3位へ(教員端末が進行役)
+      if (showControls() && step === 1) {
+        gdAutoAdvanceTimerId = setTimeout(function() {
+          gdAutoAdvanceTimerId = null;
+          teacherRun('advanceGd');
+        }, 3000);
+      }
+    }
+
+    // ==================================================================
+    // まとめ
+    // ==================================================================
+
+    // localStorage 下書き(論題ID + メールで一意)
+    function draftKey_() {
+      const topicId = (appContext && appContext.state && appContext.state.topicId) || '';
+      const email = (appContext && appContext.auth && appContext.auth.user && appContext.auth.user.email) || '';
+      if (!topicId || !email) return '';
+      return 'debateAppDraft:' + topicId + ':' + email;
+    }
+
+    function saveDraft_() {
+      try {
+        const key = draftKey_();
+        if (!key) return;
+        localStorage.setItem(key, JSON.stringify({
+          position: summaryLocal.position || '',
+          debaterEmail: summaryLocal.debaterEmail || '',
+          whichOpinion: summaryLocal.whichOpinion || '',
+          howExpanded: summaryLocal.howExpanded || '',
+          savedAt: new Date().toISOString(),
+        }));
+      } catch (err) {
+        console.warn('[debate app] saveDraft failed:', err);
+      }
+    }
+
+    function loadDraft_() {
+      try {
+        const key = draftKey_();
+        if (!key) return null;
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
+      } catch (err) { return null; }
+    }
+
+    function clearDraft_() {
+      try {
+        const key = draftKey_();
+        if (key) localStorage.removeItem(key);
+      } catch (err) { /* ignore */ }
+    }
+
+    // ---- 違反検知 ----
+    function nowStr_() {
+      const d = new Date();
+      const pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+      return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+
+    // 'lock': 送信ロック(タブ・ウィンドウ切替) / 'warn': 記録のみ(コピー等)
+    function getViolationSeverity(type) {
+      return (type === 'タブ切替' || type === 'ウィンドウ切替') ? 'lock' : 'warn';
+    }
+
+    function recordViolation(type) {
+      if (!summaryMonitorActive) return;
+      const severity = getViolationSeverity(type);
+      if (severity === 'lock' && summaryViolationLocked) return;
+
+      summaryViolations.push({ type: type, at: nowStr_(), severity: severity });
+      if (severity === 'lock') {
+        summaryViolationLocked = true;
+        showViolationWarning(true);
+        updateSubmitSummaryButton();
+      } else {
+        showViolationWarning(false);
+      }
+    }
+
+    function installSummaryMonitors() {
+      if (summaryMonitorsInstalled) return;
+      summaryMonitorsInstalled = true;
+      document.addEventListener('visibilitychange', function() {
+        if (document.hidden) recordViolation('タブ切替');
+      });
+      window.addEventListener('blur', function() { recordViolation('ウィンドウ切替'); });
+    }
+
+    function installTextareaMonitors() {
+      [document.getElementById('whichOpinion'), document.getElementById('howExpanded')].forEach(function(el) {
+        if (!el) return;
+        ['copy', 'paste', 'cut'].forEach(function(evt) {
+          el.addEventListener(evt, function(e) {
+            recordViolation({ copy: 'コピー', paste: 'ペースト', cut: 'カット' }[evt]);
+            e.preventDefault();
+          });
+        });
+        el.addEventListener('contextmenu', function(e) {
+          e.preventDefault();
+          recordViolation('右クリック');
+        });
+      });
+    }
+
+    function showViolationWarning(isLock) {
+      let banner = document.getElementById('violationBanner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'violationBanner';
+        banner.className = 'violation-banner';
+        const container = document.querySelector('.container');
+        if (container) container.insertBefore(banner, container.firstChild);
+      }
+      if (isLock) {
+        banner.style.cssText = 'border-color:#c62828; background:#ffebee; color:#c62828;';
+      } else {
+        banner.style.cssText = 'border-color:#ef6c00; background:#fff3e0; color:#bf4f00;';
+      }
+      const list = summaryViolations.map(function(v) {
+        return (v.severity === 'lock' ? '🚫' : '⚠️') + '[' + v.at + '] ' + v.type;
+      }).join(' / ');
+
+      banner.innerHTML = isLock
+        ? '<strong>🚫 タブ・ウィンドウ切替が検知されました</strong>' +
+          '<div style="font-size:0.9em; margin-top:4px;">' + escapeHtml(list) + '</div>' +
+          '<div style="font-size:0.9em; margin-top:6px;">送信できません。「やり直す」ボタンで再開できます(入力内容は復元されます)。</div>'
+        : '<strong>⚠️ コピー・ペースト・右クリックは禁止されています</strong>' +
+          '<div style="font-size:0.9em; margin-top:4px;">' + escapeHtml(list) + '</div>' +
+          '<div style="font-size:0.9em; margin-top:6px;">提出は可能ですが、操作履歴は教員に記録されます。自分の言葉で書いてください。</div>';
+    }
+
+    function updateSubmitSummaryButton() {
+      const btn = document.getElementById('summarySubmitBtn');
+      if (!btn) return;
+      if (forceAutoSubmitted) {
+        btn.disabled = true; btn.textContent = '強制提出中...'; btn.style.background = '#aaa';
+      } else if (summaryViolationLocked) {
+        btn.disabled = true; btn.textContent = '送信できません(やり直しが必要)'; btn.style.background = '#aaa';
+      } else {
+        btn.disabled = false;
+        btn.textContent = (appContext && appContext.mySummary) ? '提出内容を更新' : 'まとめを提出';
+        btn.style.background = '';
+      }
+    }
+
+    // ---- 強制提出カウントダウン ----
+    function stopForceCountdown() {
+      if (forceCountdownIntervalId) { clearInterval(forceCountdownIntervalId); forceCountdownIntervalId = null; }
+      const banner = document.getElementById('forceCountdownBanner');
+      if (banner) banner.remove();
+      document.body.classList.remove('has-force-countdown');
+    }
+
+    function startForceCountdownIfNeeded() {
+      const state = appContext && appContext.state;
+      if (!state || state.phase !== PHASES.SUMMARY_FORCE_COUNTDOWN) { stopForceCountdown(); return; }
+      if (!forceDeadlineLocal) return;
+      if (forceCountdownIntervalId) return;
+
+      forceAutoSubmitted = false;
+      let banner = document.getElementById('forceCountdownBanner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'forceCountdownBanner';
+        banner.className = 'force-countdown-banner';
+        document.body.appendChild(banner);
+      }
+      document.body.classList.add('has-force-countdown');
+
+      const tick = function() {
+        const el = document.getElementById('forceCountdownBanner');
+        if (!el) return;
+        const remaining = Math.max(0, Math.ceil((forceDeadlineLocal - Date.now()) / 1000));
+        if (remaining > 0) {
+          el.innerHTML = '⏰ <strong>あと ' + remaining + ' 秒</strong>で強制提出・終了になります。' +
+            '<span style="font-size:0.88em; margin-left:10px;">今の入力内容のまま自動送信されます。</span>';
+          return;
+        }
+        el.innerHTML = '📤 <strong>送信中...</strong>';
+        if (forceCountdownIntervalId) { clearInterval(forceCountdownIntervalId); forceCountdownIntervalId = null; }
+        if (!forceAutoSubmitted) {
+          forceAutoSubmitted = true;
+          updateSubmitSummaryButton();
+          doForceAutoSubmit();
+        }
+      };
+      tick();
+      forceCountdownIntervalId = setInterval(tick, 250);
+    }
+
+    function doForceAutoSubmit() {
+      if (isTeacher()) {
+        // 教員端末は生徒の送信を待ってから締め切る
+        setTimeout(function() { teacherRun('finalizeForceSubmit'); }, 5000);
+        return;
+      }
+      captureSummaryInputs();
+      const statusEl = document.getElementById('summaryStatus');
+      if (statusEl) statusEl.innerHTML = '<div class="info">強制提出中...</div>';
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          console.log('[debate app] force submit done', res);
+          clearDraft_();
+          schedulePoll(800);
+        })
+        .withFailureHandler(function(err) {
+          console.error('[debate app] force submit failure', err);
+          if (statusEl) statusEl.innerHTML = '<div class="error">強制提出でエラー: ' + escapeHtml((err && err.message) || err) + '</div>';
+        })
+        .submitSummary({
+          position: summaryLocal.position || '',
+          debaterEmail: summaryLocal.debaterEmail || '',
+          whichOpinion: summaryLocal.whichOpinion || '',
+          howExpanded: summaryLocal.howExpanded || '',
+          forceSubmit: true,
+          violations: [],
+        });
+    }
+
+    // ---- まとめ本体 ----
+    function renderSummary() {
+      const debaters = appContext.debaters || [];
+      const my = appContext.mySummary;
+      const teacherPreview = isTeacher();
+
+      if (!teacherPreview) {
+        if (my && my.violationLocked) { renderSummaryViolationLocked(my); return; }
+        if (my && my.confirmed) { renderSummaryConfirmed(my); return; }
+
+        // 既存提出 > localStorage下書き > 空 の優先順で初期値を決める(初回のみ)
+        const empty = !summaryLocal.position && !summaryLocal.debaterEmail &&
+          !summaryLocal.whichOpinion && !summaryLocal.howExpanded;
+        if (empty) {
+          const src = my || loadDraft_();
+          if (src) {
+            summaryLocal.position = src.position || '';
+            summaryLocal.debaterEmail = src.debaterEmail || '';
+            summaryLocal.whichOpinion = src.whichOpinion || '';
+            summaryLocal.howExpanded = src.howExpanded || '';
+          }
+        }
+      }
+
+      const dis = teacherPreview ? ' disabled' : '';
+      const positions = ['肯定', 'どちらかといえば肯定', 'どちらかといえば否定', '否定'];
+      const positionOptions = positions.map(function(p) {
+        return '<label class="pos-option">' +
+          '<input type="radio" name="position" value="' + escapeHtml(p) + '"' +
+          (summaryLocal.position === p ? ' checked' : '') + dis +
+          ' onchange="onPositionChange(this.value)"><span>' + escapeHtml(p) + '</span></label>';
+      }).join('');
+
+      const optionFor = function(d) {
+        return '<option value="' + escapeHtml(d.email) + '"' +
+          (summaryLocal.debaterEmail === d.email ? ' selected' : '') + '>' +
+          escapeHtml(d.name) + ' (' + escapeHtml(d.role) + ')</option>';
+      };
+      const affirmativeOpts = debaters.filter(function(d) { return d.team === '肯定側'; });
+      const negativeOpts = debaters.filter(function(d) { return d.team === '否定側'; });
+      const debaterSelect =
+        '<select id="debaterSelect"' + dis + ' onchange="summaryLocal.debaterEmail = this.value; saveDraft_();">' +
+        '<option value="">-- 選んでください --</option>' +
+        (affirmativeOpts.length ? '<optgroup label="肯定側">' + affirmativeOpts.map(optionFor).join('') + '</optgroup>' : '') +
+        (negativeOpts.length ? '<optgroup label="否定側">' + negativeOpts.map(optionFor).join('') + '</optgroup>' : '') +
+        '</select>';
+
+      const teacherNote = teacherPreview
+        ? '<div class="teacher-preview-note">📄 これは生徒に表示されている画面です(教員は提出不要のため入力できません)。' +
+          '締切・全員強制提出は下の操作バーから行えます。</div>'
+        : '';
+
+      const submittedHint = (!teacherPreview && my)
+        ? '<div class="submitted-lock">✓ 提出済み(最終更新: ' + escapeHtml(my.lastUpdated || '') + ')。教員が確認済みにするまで修正できます。</div>'
+        : '';
+
+      const teacherCommentBlock = (!teacherPreview && my && my.teacherComment)
+        ? '<div class="info" style="margin:16px 0;"><strong>教員コメント:</strong><br>' +
+          escapeHtml(my.teacherComment).replace(/\n/g, '<br>') + '</div>'
+        : '';
+
+      const ruleNotice = teacherPreview ? '' :
+        '<div class="rule-notice">' +
+        '<strong>📝 このまとめはAI・検索の使用を禁止しています</strong>' +
+        '<div style="font-size:0.88em; margin:6px 0 0 0;"><strong>送信ロックされる行為:</strong></div>' +
+        '<ul style="font-size:0.85em; margin:2px 0 0 18px;"><li>別タブ・別ウィンドウ・別アプリへの切替</li></ul>' +
+        '<div style="font-size:0.88em; margin:6px 0 0 0;"><strong>警告対象(履歴に記録される行為):</strong></div>' +
+        '<ul style="font-size:0.85em; margin:2px 0 0 18px;"><li>記述欄でのコピー・ペースト・カット・右クリック</li></ul>' +
+        '<div style="font-size:0.85em; margin-top:6px; color:#666;">※ 入力内容はブラウザに自動保存されるので、万一ロックされても復元できます。</div>' +
+        '</div>';
+
+      const submitBlock = teacherPreview ? '' :
+        '<div style="text-align:center; margin: 24px 0;">' +
+        '<button class="primary big" id="summarySubmitBtn" onclick="submitSummary()">' +
+        (my ? '提出内容を更新' : 'まとめを提出') + '</button>' +
+        '<div id="summaryStatus" style="margin-top:12px;"></div></div>';
+
+      setApp(renderHeader() +
+        '<h2>ディベートのまとめ</h2>' +
+        (appContext.topic ? '<p style="color:#555;">論題: <strong>' + escapeHtml(appContext.topic.title) + '</strong></p>' : '') +
+        teacherNote + submittedHint + teacherCommentBlock + ruleNotice +
+
+        '<div class="summary-section">' +
+        '<h3>Q1. 発表を聞いた後、この論題に対するあなたの立場は?</h3>' +
+        '<div class="pos-options">' + positionOptions + '</div></div>' +
+
+        '<div class="summary-section">' +
+        '<h3>Q2. 誰のどの意見が、あなたの考えを広げて/深めるのに一番役立ちましたか?</h3>' +
+        '<label class="field-label">発表者を選択</label>' + debaterSelect +
+        '<label class="field-label" style="margin-top:12px;">その人のどの意見ですか?(具体的に)</label>' +
+        '<textarea id="whichOpinion" rows="3"' + dis +
+        ' oninput="summaryLocal.whichOpinion = this.value; saveDraft_();" ' +
+        'placeholder="例: 〇〇さんの「…」という意見">' + escapeHtml(summaryLocal.whichOpinion) + '</textarea></div>' +
+
+        '<div class="summary-section">' +
+        '<h3>Q3. その意見を聞いて、あなたの考えはどのように広がり、深まりましたか?</h3>' +
+        '<textarea id="howExpanded" rows="7"' + dis +
+        ' oninput="summaryLocal.howExpanded = this.value; saveDraft_();" ' +
+        'placeholder="例: 最初は〇〇と考えていたが、〇〇さんの意見を聞いて…">' +
+        escapeHtml(summaryLocal.howExpanded) + '</textarea></div>' +
+
+        submitBlock);
+
+      if (!teacherPreview) {
+        installSummaryMonitors();
+        installTextareaMonitors();
+        if (summaryViolationLocked) showViolationWarning(true);
+        updateSubmitSummaryButton();
+      }
+      startForceCountdownIfNeeded();
+    }
+
+    function onPositionChange(value) {
+      summaryLocal.position = value;
+      saveDraft_();
+    }
+
+    function renderSummaryViolationLocked(my) {
+      setApp(renderHeader() +
+        '<h2>ディベートのまとめ</h2>' +
+        (appContext.topic ? '<p style="color:#555;">論題: <strong>' + escapeHtml(appContext.topic.title) + '</strong></p>' : '') +
+        '<div class="violation-lock-card">' +
+        '<div style="font-size:2.5em;">🚫</div>' +
+        '<h3 style="margin:8px 0; color:#c62828;">タブ切替・ウィンドウ切替が検知されました</h3>' +
+        '<p>ルールに違反したため、現在の送信は受け付けられていません。</p>' +
+        '<div class="violation-detail-box"><strong>違反記録:</strong><br>' +
+        escapeHtml(my.violationDetail || '(詳細なし)') + '</div>' +
+        '<p style="margin-top:16px; font-size:0.95em;">下のボタンでやり直せます。' +
+        '<strong>入力内容はブラウザに自動保存されています</strong>ので復元されます。</p>' +
+        '<div style="margin-top:16px;">' +
+        '<button class="primary big" onclick="retrySummaryAfterLock()">やり直す(入力を復元)</button>' +
+        '</div></div>');
+    }
+
+    function retrySummaryAfterLock() {
+      const lockCard = document.querySelector('.violation-lock-card');
+      if (lockCard) lockCard.innerHTML = '<div class="spinner"></div><p style="margin-top:12px;">リセット中...</p>';
+
+      google.script.run
+        .withSuccessHandler(function() {
+          summaryViolations = [];
+          summaryViolationLocked = false;
+          const draft = loadDraft_();
+          summaryLocal = {
+            position: (draft && draft.position) || '',
+            debaterEmail: (draft && draft.debaterEmail) || '',
+            whichOpinion: (draft && draft.whichOpinion) || '',
+            howExpanded: (draft && draft.howExpanded) || '',
+          };
+          const banner = document.getElementById('violationBanner');
+          if (banner) banner.remove();
+          currentRev = null;   // 次のポーリングで必ず最新を取り直す
+          schedulePoll(100);
+        })
+        .withFailureHandler(function(err) {
+          if (lockCard) {
+            lockCard.innerHTML = '<div class="error">エラー: ' + escapeHtml((err && err.message) || err) + '</div>' +
+              '<button class="secondary" onclick="location.reload()">ページを再読み込み</button>';
+          }
+        })
+        .resetMyViolationLock();
+    }
+
+    function renderSummaryConfirmed(my, titleOverride) {
+      const debaters = appContext.debaters || [];
+      let debaterName = my.debaterEmail;
+      for (const d of debaters) {
+        if (d.email === my.debaterEmail) { debaterName = d.name + ' (' + d.role + ')'; break; }
+      }
+
+      const evalBadge = my.evaluation
+        ? '<span style="display:inline-block; padding:3px 12px; background:#6a1b9a; color:white; border-radius:20px; font-weight:bold; margin-left:8px;">評価: ' + escapeHtml(my.evaluation) + '</span>'
+        : '';
+      const teacherCommentBlock = my.teacherComment
+        ? '<div class="info" style="margin:16px 0;"><strong>教員コメント:</strong><br>' +
+          escapeHtml(my.teacherComment).replace(/\n/g, '<br>') + '</div>'
+        : '';
+      const statusMessage = my.forceSubmitted
+        ? '<div class="info" style="background:#fff4e5; border-color:#ef6c00; color:#bf4f00;">⏰ 強制提出で確定しました。修正できません。</div>'
+        : '<div class="success">✓ 教員が確認済みです。修正できません。</div>';
+      const title = titleOverride || ('ディベートのまとめ' + (my.forceSubmitted ? '(提出確定)' : '(確認済み)'));
+
+      setApp(renderHeader() +
+        '<h2>' + escapeHtml(title) + evalBadge + '</h2>' +
+        (appContext.topic ? '<p style="color:#555;">論題: <strong>' + escapeHtml(appContext.topic.title) + '</strong></p>' : '') +
+        statusMessage + teacherCommentBlock +
+        '<div class="summary-readonly">' +
+        '<h3>立場</h3><p>' + escapeHtml(my.position || '(未入力)') + '</p>' +
+        '<h3>役に立った発表者</h3><p>' + escapeHtml(debaterName || '(未選択)') + '</p>' +
+        '<h3>その人のどの意見か</h3><p style="white-space:pre-wrap;">' + escapeHtml(my.whichOpinion || '(未入力)') + '</p>' +
+        '<h3>どのように広がり深まったか</h3><p style="white-space:pre-wrap;">' + escapeHtml(my.howExpanded || '(未入力)') + '</p>' +
+        '</div>');
+    }
+
+    function renderSummaryClosed() {
+      const my = appContext.mySummary;
+      if (my) {
+        renderSummaryConfirmed(my, 'ディベートのまとめ(受付終了)');
+        return;
+      }
+      const note = isTeacher()
+        ? '<div class="info">' + escapeHtml(appContext.targetKumi || '') +
+          ' のまとめ受付は終了しました。次に進む場合は下の操作バーから「次のくじを引く」を押してください。</div>'
+        : '<div class="info">まとめ受付は終了しました。あなたは未提出です。</div>';
+      setApp(renderHeader() + note);
+    }
+
+    function submitSummary() {
+      if (forceAutoSubmitted) return;
+      const statusEl = document.getElementById('summaryStatus');
+      if (summaryViolationLocked) {
+        if (statusEl) statusEl.innerHTML = '<div class="error">違反が検知されているため送信できません。</div>';
+        return;
+      }
+
+      captureSummaryInputs();
+      if (statusEl) statusEl.innerHTML = '';
+
+      const fail = function(message) {
+        if (statusEl) statusEl.innerHTML = '<div class="error">' + escapeHtml(message) + '</div>';
+      };
+      if (!summaryLocal.position) { fail('立場を選択してください'); return; }
+      if (!summaryLocal.debaterEmail) { fail('役に立った発表者を選択してください'); return; }
+      if (!String(summaryLocal.whichOpinion).trim()) { fail('「どの意見か」を記入してください'); return; }
+      if (!String(summaryLocal.howExpanded).trim()) { fail('「どう広がり深まったか」を記入してください'); return; }
+
+      const btn = document.getElementById('summarySubmitBtn');
+      if (btn) { btn.disabled = true; btn.textContent = '送信中...'; }
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res && res.ok) {
+            if (statusEl) statusEl.innerHTML = '<div class="success">✓ ' + escapeHtml(res.message) + '</div>';
+            clearDraft_();
+            currentRev = null;      // 次のポーリングで提出済み表示に更新される
+            schedulePoll(300);
+          } else if (res && res.violationLocked) {
+            fail(res.message);
+            summaryViolationLocked = true;
+            showViolationWarning(true);
+            updateSubmitSummaryButton();
+          } else {
+            fail((res && res.message) || '失敗');
+            updateSubmitSummaryButton();
+          }
+        })
+        .withFailureHandler(function(err) {
+          fail('送信エラー: ' + ((err && err.message) || err));
+          updateSubmitSummaryButton();
+        })
+        .submitSummary({
+          position: summaryLocal.position,
+          debaterEmail: summaryLocal.debaterEmail,
+          whichOpinion: summaryLocal.whichOpinion,
+          howExpanded: summaryLocal.howExpanded,
+          violations: summaryViolations,
+        });
+    }
+
+    // ==================================================================
+    // ユーティリティ
+    // ==================================================================
+    function escapeHtml(s) {
+      if (s === null || s === undefined) return '';
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    /** onclick="f('...')" のようにJS文字列リテラルとして埋め込むときの整形 */
+    function escapeAttr(s) {
+      if (s === null || s === undefined) return '';
+      return String(s)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+  </script>
+</body>
+</html>
