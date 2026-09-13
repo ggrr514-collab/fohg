@@ -698,6 +698,9 @@ function onOpen() {
     .addItem('◇ クラスのフェーズをリセット(待機中へ)', 'resetClassToIdle')
     .addItem('◇ まとめの違反ロックを解除', 'unlockStudentSummary')
     .addSeparator()
+    .addItem('論題マスタの肯定班・否定班を自動で割り当て', 'assignDebateGroups')
+    .addItem('発表者マスタを手動で作り直す', 'registerDebatersFromGroups')
+    .addSeparator()
     .addItem('シートを手で直した後のキャッシュ消去', 'flushAllCaches')
     .addToUi();
 }
@@ -738,6 +741,122 @@ function resetClassToIdle() {
   pairs[STATE_KEYS.GD_REVEAL_STEP] = '0';
   setStates_(kumi, pairs);
   ui.alert(kumi + ' のフェーズを「待機中」に戻しました。投票・まとめデータは残っています。');
+}
+
+// ======================================================
+// 論題マスタの肯定班・否定班を自動割り当て
+// ======================================================
+
+/**
+ * 論題マスタの「肯定班」(D列)・「否定班」(E列)が空欄の行に、
+ * 班マスタにある班番号を順番に2つずつ割り当てる。
+ * 既に入っている値は一切書き換えず、空欄だけを埋める。
+ * 実行前に「何をどう埋めるか」を必ず確認ダイアログで見せる。
+ */
+function assignDebateGroups() {
+  const ui = SpreadsheetApp.getUi();
+  flushAllCaches_();
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.TOPICS);
+  if (!sheet) { ui.alert('「' + SHEET_NAMES.TOPICS + '」シートが見つかりません。'); return; }
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) { ui.alert('論題マスタに論題が登録されていません。'); return; }
+
+  const data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+
+  // 班マスタのクラスごとの班番号一覧
+  const groupsByClass = {};
+  for (const g of readGroups_()) {
+    const key = normKey_(g.kumi);
+    const no = parseGroupNo_(g.groupNo);
+    if (!key || no === null) continue;
+    if (!groupsByClass[key]) groupsByClass[key] = {};
+    groupsByClass[key][no] = true;
+  }
+
+  // 論題をクラスごとにシート順でまとめる
+  const rowsByClass = {};
+  const classLabel = {};
+  for (let i = 0; i < data.length; i++) {
+    if (!data[i][0]) continue;
+    const key = normKey_(data[i][5]);
+    if (!key) continue;
+    if (!rowsByClass[key]) { rowsByClass[key] = []; classLabel[key] = String(data[i][5]).trim(); }
+    rowsByClass[key].push(i);
+  }
+
+  const plan = [];       // { rowIdx, id, kumi, aff, neg }
+  const problems = [];
+  const noClassRows = data.filter(function(r) { return r[0] && !normKey_(r[5]); }).length;
+  if (noClassRows > 0) problems.push('対象クラス(F列)が空欄の論題が ' + noClassRows + ' 件あります(割り当て対象外)');
+
+  for (const key in rowsByClass) {
+    const label = classLabel[key];
+    const all = Object.keys(groupsByClass[key] || {}).map(Number).sort(function(a, b) { return a - b; });
+    if (all.length === 0) {
+      problems.push(label + ': 班マスタに班番号が見つかりません');
+      continue;
+    }
+    // 既にこのクラスの論題で使われている班番号は候補から外す
+    const taken = {};
+    for (const idx of rowsByClass[key]) {
+      const a = parseGroupNo_(data[idx][3]);
+      const b = parseGroupNo_(data[idx][4]);
+      if (a !== null) taken[a] = true;
+      if (b !== null) taken[b] = true;
+    }
+    const pool = all.filter(function(n) { return !taken[n]; });
+
+    for (const idx of rowsByClass[key]) {
+      const hasA = parseGroupNo_(data[idx][3]) !== null;
+      const hasB = parseGroupNo_(data[idx][4]) !== null;
+      if (hasA && hasB) continue;
+      if (pool.length < (hasA ? 0 : 1) + (hasB ? 0 : 1)) {
+        problems.push(label + ': 論題[' + data[idx][0] + '] に割り当てる班が足りません(班マスタの班が ' + all.length + ' 個)');
+        continue;
+      }
+      const aff = hasA ? parseGroupNo_(data[idx][3]) : pool.shift();
+      const neg = hasB ? parseGroupNo_(data[idx][4]) : pool.shift();
+      plan.push({ rowIdx: idx, id: String(data[idx][0]).trim(), kumi: label, aff: aff, neg: neg });
+    }
+  }
+
+  if (plan.length === 0) {
+    ui.alert('割り当てるものがありません',
+      (problems.length ? problems.join('\n') : '空欄の肯定班・否定班はありませんでした。'), ui.ButtonSet.OK);
+    return;
+  }
+
+  const preview = plan.map(function(p) {
+    return '[' + p.id + '] ' + p.kumi + ' : 肯定 ' + p.aff + '班  vs  否定 ' + p.neg + '班';
+  }).join('\n');
+
+  const confirmed = ui.alert(
+    '肯定班・否定班の自動割り当て',
+    '次のとおり、空欄の行だけを埋めます。既に入っている値は変更しません。\n\n' + preview +
+    (problems.length ? '\n\n【注意】\n' + problems.join('\n') : '') +
+    '\n\n実行してよろしいですか?',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (confirmed !== ui.Button.OK) return;
+
+  // D列・E列を1回の書き込みでまとめて更新
+  for (const p of plan) {
+    data[p.rowIdx][3] = String(p.aff);
+    data[p.rowIdx][4] = String(p.neg);
+  }
+  const dCol = data.map(function(r) { return [r[3]]; });
+  const eCol = data.map(function(r) { return [r[4]]; });
+  sheet.getRange(2, 4, dCol.length, 1).setValues(dCol);
+  sheet.getRange(2, 5, eCol.length, 1).setValues(eCol);
+
+  // 見出しが「A」「B」のままだと分かりにくいので直す
+  if (String(sheet.getRange(1, 4).getValue()).trim() !== '肯定班') sheet.getRange(1, 4).setValue('肯定班');
+  if (String(sheet.getRange(1, 5).getValue()).trim() !== '否定班') sheet.getRange(1, 5).setValue('否定班');
+
+  flushAllCaches_();
+  ui.alert('完了', plan.length + '件の論題に肯定班・否定班を割り当てました。\n' +
+    'Web画面で「ルーレットを回す」を押してください。', ui.ButtonSet.OK);
 }
 
 // ======================================================
@@ -1193,14 +1312,21 @@ function getAvailableLotteryNumbers(kumi) {
     }
 
     if (allNumbers.length === 0) {
+      const show = function(v) { return String(v || '').trim() || '(空欄)'; };
       const badIds = matched.map(function(t) {
-        return '[' + t.id + '] 肯定班「' + t.affirmative + '」/ 否定班「' + t.negative + '」';
+        return '[' + t.id + '] 肯定班: ' + show(t.affirmative) + ' / 否定班: ' + show(t.negative);
       }).join('\n');
+      const allBlank = matched.every(function(t) {
+        return !String(t.affirmative || '').trim() && !String(t.negative || '').trim();
+      });
+      const hint = allBlank
+        ? 'スプレッドシートのメニュー「ディベートアプリ → 論題マスタの肯定班・否定班を自動で割り当て」で一括入力できます。\n'
+        : '';
       res.reason = 'no_group_numbers';
       res.message =
         '「' + kumi + '」の論題は ' + matched.length + ' 件ありますが、' +
         '肯定班(D列)・否定班(E列)から班番号を読み取れませんでした。\n' +
-        '半角数字で班番号を入力してください(例: 1)。\n' + badIds;
+        '半角数字で班番号を入力してください(例: 1)。\n' + hint + badIds;
       return res;
     }
 
