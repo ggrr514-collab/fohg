@@ -342,6 +342,21 @@
       box-shadow: 0 0 32px rgba(255,160,0,0.6);
     }
 
+    .lottery-plan {
+      max-width: 620px; margin: 28px auto 0; text-align: left;
+      background: #fafafa; border: 1px solid #e0e0e0; border-radius: 10px; padding: 14px 16px;
+    }
+    .lottery-plan-title { font-weight: bold; font-size: 0.95em; color: #555; margin-bottom: 8px; }
+    .lottery-plan table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+    .lottery-plan th {
+      text-align: left; font-size: 0.82em; color: #888;
+      border-bottom: 1px solid #ddd; padding: 4px 6px; font-weight: 600;
+    }
+    .lottery-plan td { padding: 6px; border-bottom: 1px solid #eee; vertical-align: top; }
+    .lottery-plan td.lp-g { white-space: nowrap; font-weight: bold; color: #bf4f00; }
+    .lottery-plan td.lp-s { white-space: nowrap; font-size: 0.8em; color: #888; }
+    .lottery-plan-note { font-size: 0.8em; color: #888; margin-top: 8px; line-height: 1.5; }
+
     .lottery-result { text-align: center; padding: 30px 20px; }
     .lottery-result-icon { font-size: 3em; margin-bottom: 8px; }
     .lottery-topic {
@@ -1165,9 +1180,39 @@
         '<div class="roulette-stage"><div class="roulette-number" id="rouletteNumber">?</div></div>' +
         '<div id="lotteryStatus" style="margin-top:12px;">' +
         (showControls()
-          ? '<p style="color:#666; font-size:0.9em;">下の操作バーの「ルーレットを回す」で抽選します。</p>'
+          ? '<p style="color:#666; font-size:0.9em;">下の操作バーの「ルーレットを回す」で抽選します。' +
+            '出た番号の班が<strong>肯定側</strong>、もう一方が<strong>否定側</strong>になります。</p>'
           : '<p style="color:#666;">まもなく抽選します。お待ちください。</p>') +
-        '</div></div>');
+        '</div>' +
+        (showControls() ? buildLotteryPlanTable_() : '') +
+        '</div>');
+    }
+
+    /**
+     * 「論題 ↔ 担当する2つの班」の対応表(教員のみ)。
+     * くじを回す前に、準備してある担当と合っているか目で確認するためのもの。
+     */
+    function buildLotteryPlanTable_() {
+      const plan = appContext.lotteryPlan || [];
+      if (plan.length === 0) return '';
+      const rows = plan.map(function(p) {
+        const groups = (p.groupA || p.groupB)
+          ? escapeHtml(p.groupA || '?') + '班 ・ ' + escapeHtml(p.groupB || '?') + '班'
+          : '<span style="color:#c62828;">未設定</span>';
+        return '<tr' + (p.done ? ' style="opacity:0.45;"' : '') + '>' +
+          '<td class="lp-g">' + groups + '</td>' +
+          '<td>' + escapeHtml(p.title) + '</td>' +
+          '<td class="lp-s">' + (p.done ? '実施済み' : '') + '</td></tr>';
+      }).join('');
+      return (
+        '<div class="lottery-plan">' +
+        '<div class="lottery-plan-title">この組の論題と担当班</div>' +
+        '<table><thead><tr><th>担当班</th><th>論題</th><th></th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table>' +
+        '<div class="lottery-plan-note">くじで出た番号の班が肯定側、もう一方が否定側になります。' +
+        '実際の担当と違う場合は、論題マスタのD列・E列を直してください。</div>' +
+        '</div>'
+      );
     }
 
     function spinRoulette() {
@@ -1531,6 +1576,12 @@
       const r = appContext.results;
       if (!r) { setApp(renderHeader() + '<div class="error">集計結果が取得できませんでした。</div>'); return; }
 
+      if (!r.totalVoters) {
+        setApp(renderHeader() +
+          '<div class="info"><strong>まだ投票がありません</strong><br>' +
+          'この論題への投票が1件も記録されていません。</div>');
+        return;
+      }
       const total = Math.max(1, r.affirmativeCount + r.negativeCount);
       const affPct = Math.round(r.affirmativeCount / total * 100);
       const negPct = Math.round(r.negativeCount / total * 100);
@@ -1572,7 +1623,25 @@
     function renderGdReveal() {
       const r = appContext.results;
       if (!r || !r.topFive || r.topFive.length === 0) {
-        setApp(renderHeader() + '<div class="info">グッドディベーター該当者がいません。</div>');
+        // なぜ0件なのかを出す。教員票はGD集計に入らないので、
+        // 先生だけで通しテストしたときは必ずここに来る。
+        const total = r ? (r.totalVoters || 0) : 0;
+        const students = r ? (r.studentVoterCount || 0) : 0;
+        const teachers = r ? (r.teacherVoterCount || 0) : 0;
+        let why;
+        if (total === 0) {
+          why = 'この論題への投票が1件も記録されていません。<br>' +
+            '投票フェーズで生徒が送信したか確認してください。';
+        } else if (students === 0) {
+          why = '投票 ' + total + '件はすべて教員の票です(教員 ' + teachers + '名)。<br>' +
+            '<strong>グッドディベーターは生徒の票だけで集計します</strong>ので、該当者が出ません。<br>' +
+            '生徒が投票すれば表示されます。';
+        } else {
+          why = '生徒 ' + students + '名が投票していますが、グッドディベーターの選択が記録されていません。<br>' +
+            '投票シートのGD1〜GD5列を確認してください。';
+        }
+        setApp(renderHeader() +
+          '<div class="info"><strong>グッドディベーターの該当者がいません</strong><br>' + why + '</div>');
         return;
       }
 

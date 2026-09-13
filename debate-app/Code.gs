@@ -494,7 +494,7 @@ function setupSheets() {
   ]));
 
   logs.push(createSheetIfNotExists_(ss, SHEET_NAMES.TOPICS, [
-    '論題ID', '論題文', '実施日', '肯定班', '否定班', '対象クラス', '備考'
+    '論題ID', '論題文', '実施日', '担当班A', '担当班B', '対象クラス', '備考'
   ]));
 
   logs.push(createSheetIfNotExists_(ss, SHEET_NAMES.DEBATERS, [
@@ -698,7 +698,7 @@ function onOpen() {
     .addItem('◇ クラスのフェーズをリセット(待機中へ)', 'resetClassToIdle')
     .addItem('◇ まとめの違反ロックを解除', 'unlockStudentSummary')
     .addSeparator()
-    .addItem('論題マスタの肯定班・否定班を自動で割り当て', 'assignDebateGroups')
+    .addItem('論題マスタの担当班(D・E列)を自動で割り当て', 'assignDebateGroups')
     .addItem('発表者マスタを手動で作り直す', 'registerDebatersFromGroups')
     .addSeparator()
     .addItem('シートを手で直した後のキャッシュ消去', 'flushAllCaches')
@@ -744,12 +744,17 @@ function resetClassToIdle() {
 }
 
 // ======================================================
-// 論題マスタの肯定班・否定班を自動割り当て
+// 論題マスタの担当班(D・E列)を自動割り当て
 // ======================================================
 
 /**
- * 論題マスタの「肯定班」(D列)・「否定班」(E列)が空欄の行に、
+ * 論題マスタのD列・E列(その論題を担当する2つの班)が空欄の行に、
  * 班マスタにある班番号を順番に2つずつ割り当てる。
+ *
+ * ※これはあくまで機械的な仮置き(1論題目=1班と2班、2論題目=3班と4班…)。
+ *   実際の担当が別の組み合わせなら、必ず手で直すこと。
+ *   どちらが肯定側になるかはくじで決まるので、D列・E列の順番に意味はない。
+ *
  * 既に入っている値は一切書き換えず、空欄だけを埋める。
  * 実行前に「何をどう埋めるか」を必ず確認ダイアログで見せる。
  */
@@ -823,17 +828,20 @@ function assignDebateGroups() {
 
   if (plan.length === 0) {
     ui.alert('割り当てるものがありません',
-      (problems.length ? problems.join('\n') : '空欄の肯定班・否定班はありませんでした。'), ui.ButtonSet.OK);
+      (problems.length ? problems.join('\n') : 'D列・E列に空欄はありませんでした。'), ui.ButtonSet.OK);
     return;
   }
 
   const preview = plan.map(function(p) {
-    return '[' + p.id + '] ' + p.kumi + ' : 肯定 ' + p.aff + '班  vs  否定 ' + p.neg + '班';
+    return '[' + p.id + '] ' + p.kumi + ' : ' + p.aff + '班 と ' + p.neg + '班';
   }).join('\n');
 
   const confirmed = ui.alert(
-    '肯定班・否定班の自動割り当て',
-    '次のとおり、空欄の行だけを埋めます。既に入っている値は変更しません。\n\n' + preview +
+    '担当班の自動割り当て',
+    '★これは機械的な仮置きです。実際の担当の組み合わせと違う場合は、\n' +
+    ' 実行後に論題マスタのD列・E列を手で直してください。\n' +
+    '(どちらが肯定側になるかはくじで決まるので、D列とE列の順番は問いません)\n\n' +
+    '空欄の行だけを埋めます。既に入っている値は変更しません。\n\n' + preview +
     (problems.length ? '\n\n【注意】\n' + problems.join('\n') : '') +
     '\n\n実行してよろしいですか?',
     ui.ButtonSet.OK_CANCEL
@@ -850,13 +858,12 @@ function assignDebateGroups() {
   sheet.getRange(2, 4, dCol.length, 1).setValues(dCol);
   sheet.getRange(2, 5, eCol.length, 1).setValues(eCol);
 
-  // 見出しが「A」「B」のままだと分かりにくいので直す
-  if (String(sheet.getRange(1, 4).getValue()).trim() !== '肯定班') sheet.getRange(1, 4).setValue('肯定班');
-  if (String(sheet.getRange(1, 5).getValue()).trim() !== '否定班') sheet.getRange(1, 5).setValue('否定班');
+  // 見出しは書き換えない。どちらが肯定かはくじで決まるので「A」「B」のままで正しい。
 
   flushAllCaches_();
-  ui.alert('完了', plan.length + '件の論題に肯定班・否定班を割り当てました。\n' +
-    'Web画面で「ルーレットを回す」を押してください。', ui.ButtonSet.OK);
+  ui.alert('完了', plan.length + '件の論題に担当班を割り当てました。\n' +
+    '実際の担当と違う場合は、論題マスタのD列・E列を手で直してください。\n\n' +
+    'Web画面の「くじ準備中」に、この対応表が表示されます。', ui.ButtonSet.OK);
 }
 
 // ======================================================
@@ -1258,6 +1265,30 @@ function buildGroupToTopicMap_(kumi) {
 }
 
 /**
+ * このクラスの「論題 ↔ 担当する2つの班」の対応表。
+ * くじを引く前に、準備してある担当と合っているか教員が目で確認するために使う。
+ * どちらが肯定側になるかはくじで決まるので、班は順不同で返す。
+ */
+function buildLotteryPlan_(kumi, state) {
+  const target = normKey_(kumi);
+  const used = (state.usedGroups || []).map(parseGroupNo_).filter(function(n) { return n !== null; });
+  const plan = [];
+  for (const t of getTopics_()) {
+    if (normKey_(t.targetClass) !== target) continue;
+    const a = parseGroupNo_(t.affirmative);
+    const b = parseGroupNo_(t.negative);
+    plan.push({
+      topicId: t.id,
+      title: t.title,
+      groupA: a === null ? '' : String(a),
+      groupB: b === null ? '' : String(b),
+      done: (a !== null && used.indexOf(a) >= 0) || (b !== null && used.indexOf(b) >= 0),
+    });
+  }
+  return plan;
+}
+
+/**
  * くじで利用可能な班番号(論題マスタにあって、まだ使用されていない)を返す。
  * 候補が0件のときは「なぜ0件なのか」を message に入れて返す。
  * (以前は原因によらず「すべて終了しました」と出てしまい、設定ミスに気づけなかった)
@@ -1314,18 +1345,18 @@ function getAvailableLotteryNumbers(kumi) {
     if (allNumbers.length === 0) {
       const show = function(v) { return String(v || '').trim() || '(空欄)'; };
       const badIds = matched.map(function(t) {
-        return '[' + t.id + '] 肯定班: ' + show(t.affirmative) + ' / 否定班: ' + show(t.negative);
+        return '[' + t.id + '] D列: ' + show(t.affirmative) + ' / E列: ' + show(t.negative);
       }).join('\n');
       const allBlank = matched.every(function(t) {
         return !String(t.affirmative || '').trim() && !String(t.negative || '').trim();
       });
       const hint = allBlank
-        ? 'スプレッドシートのメニュー「ディベートアプリ → 論題マスタの肯定班・否定班を自動で割り当て」で一括入力できます。\n'
+        ? 'スプレッドシートのメニュー「ディベートアプリ → 論題マスタの担当班(D・E列)を自動で割り当て」で仮置きできます。\n'
         : '';
       res.reason = 'no_group_numbers';
       res.message =
         '「' + kumi + '」の論題は ' + matched.length + ' 件ありますが、' +
-        '肯定班(D列)・否定班(E列)から班番号を読み取れませんでした。\n' +
+        '担当班(D列・E列)から班番号を読み取れませんでした。\n' +
         '半角数字で班番号を入力してください(例: 1)。\n' + hint + badIds;
       return res;
     }
@@ -1417,7 +1448,7 @@ function tallyVotes_(topicId) {
     affirmativeCount: 0, negativeCount: 0, totalVoters: 0,
     studentAffirmative: 0, studentNegative: 0,
     teacherAffirmative: 0, teacherNegative: 0,
-    teacherVoterCount: 0, teacherWeight: TEACHER_VOTE_WEIGHT,
+    teacherVoterCount: 0, studentVoterCount: 0, teacherWeight: TEACHER_VOTE_WEIGHT,
     topFive: [], allRanked: [],
   };
   if (!topicId) return empty;
@@ -1462,6 +1493,7 @@ function tallyVotes_(topicId) {
       teacherAffirmative: teacherAff,
       teacherNegative: teacherNeg,
       teacherVoterCount: teacherVoters,
+      studentVoterCount: total - teacherVoters,
       teacherWeight: TEACHER_VOTE_WEIGHT,
       topFive: ranked.slice(0, 5),
       allRanked: ranked,
@@ -1500,6 +1532,7 @@ function buildAppContext_(auth, targetKumi, state) {
     targetKumi: targetKumi,
     allClasses: allClasses,
     allClassSummaries: null,
+    lotteryPlan: null,
     isStudentClassMismatch: false,
     myLatestPastSummary: null,
     myFeedbacksByTopic: null,
@@ -1512,7 +1545,12 @@ function buildAppContext_(auth, targetKumi, state) {
   if (!auth.ok || !auth.user) return ctx;
 
   const isTeacher = auth.user.role === '教員';
-  if (isTeacher) ctx.allClassSummaries = buildClassSummaries_();
+  if (isTeacher) {
+    ctx.allClassSummaries = buildClassSummaries_();
+    // くじの前後は「論題 ↔ 担当班」の対応表を教員に見せる
+    const planPhases = [PHASES.IDLE, PHASES.LOTTERY_READY, PHASES.LOTTERY_DONE, PHASES.CLOSED];
+    if (planPhases.indexOf(state.phase) >= 0) ctx.lotteryPlan = buildLotteryPlan_(targetKumi, state);
+  }
 
   if (!isTeacher && (!targetKumi || allClasses.indexOf(targetKumi) < 0)) {
     ctx.isStudentClassMismatch = true;
