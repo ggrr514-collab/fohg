@@ -78,6 +78,13 @@
       padding: 12px 16px; border-radius: 8px; margin: 14px 0;
     }
     .topic-title { font-weight: bold; font-size: 1.05em; }
+    /* 論題本文(太字) と ※の注記(細字・1つずつ改行) */
+    .topic-main { font-weight: bold; font-size: 1.05em; line-height: 1.6; }
+    .topic-note {
+      font-weight: normal; font-size: 0.88em; color: #6b6b6b;
+      line-height: 1.55; margin-top: 5px;
+      padding-left: 1.15em; text-indent: -1.15em;
+    }
 
     .wait-card {
       text-align: center; padding: 40px 20px;
@@ -360,11 +367,12 @@
     .lottery-result { text-align: center; padding: 30px 20px; }
     .lottery-result-icon { font-size: 3em; margin-bottom: 8px; }
     .lottery-topic {
-      font-size: 1.4em; font-weight: bold;
       background: #fff9e6; border: 2px solid #f0c040;
       border-radius: 10px; padding: 16px 24px;
-      margin: 20px auto; max-width: 600px;
+      margin: 20px auto; max-width: 640px;
     }
+    .lottery-topic-main { font-size: 1.3em; font-weight: bold; line-height: 1.55; }
+    .lottery-topic .topic-note { text-align: left; }
     .lottery-teams {
       display: flex; justify-content: center; align-items: center;
       gap: 20px; margin-top: 24px; flex-wrap: wrap;
@@ -904,7 +912,8 @@
           'onclick="switchClassByIndex(' + idx + ')">' +
           '<div class="class-overview-name">' + escapeHtml(s.kumi) + '</div>' +
           '<div><span class="tbar-phase ' + phaseToCssClass_(s.phase) + '">' + escapeHtml(s.phase) + '</span></div>' +
-          '<div class="class-overview-topic">' + (s.topicTitle ? '📌 ' + escapeHtml(s.topicTitle) : '(論題未設定)') + '</div>' +
+          '<div class="class-overview-topic">' +
+          (s.topicTitle ? '📌 ' + escapeHtml(topicMain_(s.topicTitle)) : '(論題未設定)') + '</div>' +
           '</button>'
         );
       }).join('');
@@ -1049,7 +1058,7 @@
         topicBox =
           '<div class="topic-box">' +
           '<div>論題 [' + escapeHtml(appContext.topic.id) + ']</div>' +
-          '<div class="topic-title">' + escapeHtml(appContext.topic.title) + '</div>' +
+          topicHtml_(appContext.topic.title) +
           '</div>';
       }
 
@@ -1116,7 +1125,7 @@
       return (
         '<div style="margin-top:32px; padding-top:24px; border-top:2px solid #e0e0e0;">' +
         '<h2 style="font-size:1.1em; color:#555;">📖 あなたの前回のまとめ' + evalBadge + '</h2>' +
-        '<p style="color:#666; font-size:0.92em;">論題: <strong>' + escapeHtml(past.topicTitle) + '</strong>' +
+        '<p style="color:#666; font-size:0.92em;">論題: <strong>' + escapeHtml(topicMain_(past.topicTitle)) + '</strong>' +
         (past.lastUpdated ? ' <span style="color:#999;">(' + escapeHtml(past.lastUpdated) + ')</span>' : '') + '</p>' +
         teacherCommentBlock +
         '<div class="summary-readonly">' +
@@ -1146,7 +1155,7 @@
         }).join('');
         return (
           '<div class="fb-topic-block">' +
-          '<div class="fb-topic-title">📌 ' + escapeHtml(t.topicTitle) +
+          '<div class="fb-topic-title">📌 ' + escapeHtml(topicMain_(t.topicTitle)) +
           ' <span style="color:#888; font-weight:normal;">(' + t.feedbacks.length + '件)</span></div>' +
           cards + '</div>'
         );
@@ -1201,7 +1210,7 @@
           : '<span style="color:#c62828;">未設定</span>';
         return '<tr' + (p.done ? ' style="opacity:0.45;"' : '') + '>' +
           '<td class="lp-g">' + groups + '</td>' +
-          '<td>' + escapeHtml(p.title) + '</td>' +
+          '<td>' + escapeHtml(topicMain_(p.title)) + '</td>' +
           '<td class="lp-s">' + (p.done ? '実施済み' : '') + '</td></tr>';
       }).join('');
       return (
@@ -1293,7 +1302,7 @@
           rouletteSpinning = false;
           if (res && res.ok) {
             if (statusEl) {
-              statusEl.innerHTML = '<div class="success">✓ ' + escapeHtml(res.topicTitle) + '<br>' +
+              statusEl.innerHTML = '<div class="success">✓ ' + escapeHtml(topicMain_(res.topicTitle)) + '<br>' +
                 '肯定側: <strong>' + escapeHtml(res.affirmativeGroup) + '班</strong> / 否定側: <strong>' +
                 escapeHtml(res.negativeGroup) + '班</strong> / 発表者 ' + res.debatersRegistered + '名を登録' +
                 (res.warning ? '<br><span style="color:#c00;">⚠️ ' + escapeHtml(res.warning) + '</span>' : '') +
@@ -1328,7 +1337,7 @@
         '<div class="lottery-result">' +
         '<div class="lottery-result-icon">🎉</div>' +
         '<h2>本日の論題が決まりました!</h2>' +
-        (topic ? '<div class="lottery-topic">' + escapeHtml(topic.title) + '</div>' : '') +
+        (topic ? '<div class="lottery-topic">' + topicHtml_(topic.title, 'lottery-topic-main') + '</div>' : '') +
         '<div class="lottery-teams">' +
         '<div class="lottery-team lottery-team-affirmative">' +
         '<div class="team-label">肯定側</div>' +
@@ -1992,7 +2001,7 @@
 
       setApp(renderHeader() +
         '<h2>ディベートのまとめ</h2>' +
-        (appContext.topic ? '<p style="color:#555;">論題: <strong>' + escapeHtml(appContext.topic.title) + '</strong></p>' : '') +
+        (appContext.topic ? '<p style="color:#555;">論題: <strong>' + escapeHtml(topicMain_(appContext.topic.title)) + '</strong></p>' : '') +
         teacherNote + submittedHint + teacherCommentBlock + ruleNotice +
 
         '<div class="summary-section">' +
@@ -2033,7 +2042,7 @@
     function renderSummaryViolationLocked(my) {
       setApp(renderHeader() +
         '<h2>ディベートのまとめ</h2>' +
-        (appContext.topic ? '<p style="color:#555;">論題: <strong>' + escapeHtml(appContext.topic.title) + '</strong></p>' : '') +
+        (appContext.topic ? '<p style="color:#555;">論題: <strong>' + escapeHtml(topicMain_(appContext.topic.title)) + '</strong></p>' : '') +
         '<div class="violation-lock-card">' +
         '<div style="font-size:2.5em;">🚫</div>' +
         '<h3 style="margin:8px 0; color:#c62828;">タブ切替・ウィンドウ切替が検知されました</h3>' +
@@ -2097,7 +2106,7 @@
 
       setApp(renderHeader() +
         '<h2>' + escapeHtml(title) + evalBadge + '</h2>' +
-        (appContext.topic ? '<p style="color:#555;">論題: <strong>' + escapeHtml(appContext.topic.title) + '</strong></p>' : '') +
+        (appContext.topic ? '<p style="color:#555;">論題: <strong>' + escapeHtml(topicMain_(appContext.topic.title)) + '</strong></p>' : '') +
         statusMessage + teacherCommentBlock +
         '<div class="summary-readonly">' +
         '<h3>立場</h3><p>' + escapeHtml(my.position || '(未入力)') + '</p>' +
@@ -2175,6 +2184,37 @@
     // ==================================================================
     // ユーティリティ
     // ==================================================================
+    /**
+     * 論題文をセル内の改行で分解する。
+     * 1行目(と、※で始まらない続きの行)が論題本体、
+     * 「※」で始まる行がそれぞれ1つの注記になる。
+     */
+    function splitTopic_(title) {
+      const parts = [];
+      String(title === null || title === undefined ? '' : title).split(/\r?\n/).forEach(function(raw) {
+        const line = raw.replace(/^[\s\u3000]+/, '').replace(/[\s\u3000]+$/, '');
+        if (!line) return;
+        if (parts.length === 0 || /^[※*]/.test(line)) parts.push(line);
+        else parts[parts.length - 1] += line;   // 折り返しの続き行はつなげる
+      });
+      return { main: parts.length ? parts[0] : '', notes: parts.slice(1) };
+    }
+
+    /** 論題の1行目だけ(一覧や見出し用) */
+    function topicMain_(title) {
+      return splitTopic_(title).main;
+    }
+
+    /** 論題本体を太字、※の注記を細字で1つずつ改行して表示する */
+    function topicHtml_(title, mainClass) {
+      const t = splitTopic_(title);
+      if (!t.main && t.notes.length === 0) return '';
+      return '<div class="' + (mainClass || 'topic-main') + '">' + escapeHtml(t.main) + '</div>' +
+        t.notes.map(function(n) {
+          return '<div class="topic-note">' + escapeHtml(n) + '</div>';
+        }).join('');
+    }
+
     function escapeHtml(s) {
       if (s === null || s === undefined) return '';
       return String(s)
