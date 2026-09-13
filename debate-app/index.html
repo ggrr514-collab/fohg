@@ -1187,13 +1187,20 @@
           }
           if (res.allDone || !res.available || res.available.length === 0) {
             rouletteSpinning = false;
-            if (numEl) { numEl.textContent = '✓'; numEl.classList.remove('spinning'); }
-            if (statusEl) {
-              statusEl.innerHTML = '<div class="info">このクラスのディベートはすべて終了しました(全' +
-                (res.used ? res.used.length : 0) + '班分)。<br>' +
-                'もう一度引きたい場合は、操作バーの「その他 → くじ履歴をリセット」を実行してください。</div>';
+            // 「全部終わった」のか「設定が足りない」のかをはっきり出し分ける
+            const settingProblem = res.reason && res.reason !== 'all_used';
+            if (numEl) {
+              numEl.textContent = settingProblem ? '!' : '✓';
+              numEl.classList.remove('spinning');
             }
-            tbarMessage('全班終了', 'ok');
+            if (statusEl) {
+              const body = escapeHtml(res.message || 'くじの候補がありません。').replace(/\n/g, '<br>');
+              statusEl.innerHTML = settingProblem
+                ? '<div class="error"><strong>くじを引けません(設定を確認してください)</strong><br>' + body +
+                  '<br><br>シートを直したら、もう一度「ルーレットを回す」を押してください。</div>'
+                : '<div class="info">' + body + '</div>';
+            }
+            tbarMessage(settingProblem ? '✗ 設定を確認してください' : '全班終了', settingProblem ? 'ng' : 'ok');
             return;
           }
 

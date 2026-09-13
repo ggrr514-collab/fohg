@@ -126,6 +126,25 @@ function include(filename) {
 }
 
 // ======================================================
+// 表記ゆれの吸収
+//   クラス名や班番号は手入力なので、全角/半角・空白・「班」の有無で
+//   一致しなくなりやすい。比較のときだけ正規化して照合する。
+// ======================================================
+
+/** 全角→半角に寄せ、空白(全角スペース・NBSP含む)を除いた比較用キー */
+function normKey_(v) {
+  let s = String(v === undefined || v === null ? '' : v);
+  try { s = s.normalize('NFKC'); } catch (err) { /* 古い実行環境では素通し */ }
+  return s.replace(/[\s\u3000\u00a0]/g, '');
+}
+
+/** "1" "１" "1班" "第3班" などから班番号(数値)を取り出す。読み取れなければ null */
+function parseGroupNo_(v) {
+  const m = normKey_(v).match(/\d+/);
+  return m ? Number(m[0]) : null;
+}
+
+// ======================================================
 // シート読み取り(すべてキャッシュ経由)
 // ======================================================
 
@@ -164,10 +183,11 @@ function getAllClasses_() {
 }
 
 function getGroupMembers_(kumi, groupNo) {
-  const k = String(kumi).trim();
-  const g = String(groupNo).trim();
+  const k = normKey_(kumi);
+  const g = parseGroupNo_(groupNo);
+  if (g === null) return [];
   return readGroups_().filter(function(row) {
-    return row.kumi === k && row.groupNo === g;
+    return normKey_(row.kumi) === k && parseGroupNo_(row.groupNo) === g;
   }).map(function(row) {
     return { email: row.email, name: row.name, role: row.role };
   });
@@ -1106,38 +1126,89 @@ function getAllClassSummariesForTeacher() {
  * 対象クラスの論題マスタから「班番号 → 論題」の逆引きテーブルを作る
  */
 function buildGroupToTopicMap_(kumi) {
+  const target = normKey_(kumi);
   const map = {};
   for (const t of getTopics_()) {
-    if (String(t.targetClass).trim() !== String(kumi).trim()) continue;
-    const a = String(t.affirmative).trim();
-    const b = String(t.negative).trim();
-    if (a) map[a] = { topicId: t.id, title: t.title, pairGroup: b };
-    if (b) map[b] = { topicId: t.id, title: t.title, pairGroup: a };
+    if (normKey_(t.targetClass) !== target) continue;
+    const a = parseGroupNo_(t.affirmative);
+    const b = parseGroupNo_(t.negative);
+    if (a !== null) map[String(a)] = { topicId: t.id, title: t.title, pairGroup: b === null ? '' : String(b) };
+    if (b !== null) map[String(b)] = { topicId: t.id, title: t.title, pairGroup: a === null ? '' : String(a) };
   }
   return map;
 }
 
-/** くじで利用可能な班番号(論題マスタにあって、まだ使用されていない)を返す */
+/**
+ * くじで利用可能な班番号(論題マスタにあって、まだ使用されていない)を返す。
+ * 候補が0件のときは「なぜ0件なのか」を message に入れて返す。
+ * (以前は原因によらず「すべて終了しました」と出てしまい、設定ミスに気づけなかった)
+ */
 function getAvailableLotteryNumbers(kumi) {
   try {
     const guard = requireTeacher_(kumi);
     if (!guard.ok) return guard;
 
-    const state = getState_(kumi);
-    const map = buildGroupToTopicMap_(kumi);
-    const used = state.usedGroups || [];
-    const available = Object.keys(map)
-      .map(function(s) { return Number(s); })
-      .filter(function(n) { return !isNaN(n) && used.indexOf(String(n)) < 0; })
-      .sort(function(a, b) { return a - b; });
+    // 教員がシートを直した直後に押し直せるよう、くじを引く前だけは最新を読み直す
+    cacheDrop_('topics');
+    cacheDrop_('groups');
+    cacheDrop_('classes');
+    delete _memo.__topicMap;
 
-    return {
+    const state = getState_(kumi);
+    const topics = getTopics_();
+    const target = normKey_(kumi);
+    const matched = topics.filter(function(t) { return normKey_(t.targetClass) === target; });
+
+    const map = buildGroupToTopicMap_(kumi);
+    const allNumbers = Object.keys(map).map(Number).sort(function(a, b) { return a - b; });
+    const usedRaw = state.usedGroups || [];
+    const usedNumbers = usedRaw.map(parseGroupNo_).filter(function(n) { return n !== null; });
+    const available = allNumbers.filter(function(n) { return usedNumbers.indexOf(n) < 0; });
+
+    const res = {
       ok: true,
       available: available,
-      used: used.map(function(s) { return Number(s); }).filter(function(n) { return !isNaN(n); }),
+      used: usedNumbers,
       allDone: available.length === 0,
       todaysClass: kumi,
+      reason: 'ok',
+      message: '',
     };
+    if (available.length > 0) return res;
+
+    // ---- 候補が0件。原因を切り分けて教員に伝える ----
+    if (matched.length === 0) {
+      const counts = {};
+      for (const t of topics) {
+        const label = String(t.targetClass || '').trim() || '(空欄)';
+        counts[label] = (counts[label] || 0) + 1;
+      }
+      const listed = Object.keys(counts).map(function(k) { return k + ' ' + counts[k] + '件'; }).join(' / ');
+      res.reason = 'no_topic_for_class';
+      res.message =
+        '論題マスタに、対象クラスが「' + kumi + '」の論題が1件もありません。\n' +
+        '論題マスタのF列(対象クラス)を、班マスタのクラス名と同じ表記にしてください。\n' +
+        '現在、論題マスタのF列にある値: ' + (listed || '(論題が0件です)');
+      return res;
+    }
+
+    if (allNumbers.length === 0) {
+      const badIds = matched.map(function(t) {
+        return '[' + t.id + '] 肯定班「' + t.affirmative + '」/ 否定班「' + t.negative + '」';
+      }).join('\n');
+      res.reason = 'no_group_numbers';
+      res.message =
+        '「' + kumi + '」の論題は ' + matched.length + ' 件ありますが、' +
+        '肯定班(D列)・否定班(E列)から班番号を読み取れませんでした。\n' +
+        '半角数字で班番号を入力してください(例: 1)。\n' + badIds;
+      return res;
+    }
+
+    res.reason = 'all_used';
+    res.message =
+      'このクラスのディベートはすべて終了しました(全' + allNumbers.length + '班分)。\n' +
+      'もう一度引きたい場合は、操作バーの「その他 → くじ履歴をリセット」を実行してください。';
+    return res;
   } catch (err) {
     return { ok: false, message: 'エラー: ' + err.message };
   }
