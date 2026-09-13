@@ -741,8 +741,10 @@
       else if (p === PHASES.LOTTERY_DONE) renderLotteryDone();
       else if (p === PHASES.VOTING) renderVoting();
       else if (p === PHASES.VOTE_CLOSED_PRIVATE) renderWaitTallying();
-      else if (p === PHASES.REVEAL_WINNER) renderWinnerOnly();
-      else if (p === PHASES.REVEAL_GD) renderGdReveal();
+      // 勝敗・GDの発表は教員の画面だけに出す。
+      // 生徒の端末に先に表示されると、先生の発表より先に結果が分かってしまうため。
+      else if (p === PHASES.REVEAL_WINNER) { if (isTeacher()) renderWinnerOnly(); else renderRevealWaiting('winner'); }
+      else if (p === PHASES.REVEAL_GD) { if (isTeacher()) renderGdReveal(); else renderRevealWaiting('gd'); }
       else if (p === PHASES.SUMMARY || p === PHASES.SUMMARY_FORCE_COUNTDOWN) renderSummary();
       else if (p === PHASES.CLOSED) renderSummaryClosed();
       else renderHome();
@@ -1493,6 +1495,20 @@
         .submitVote({ winner: selectedWinner, gdEmails: selectedGdEmails, kumi: currentTargetKumi });
     }
 
+    /** 発表中に生徒の手元へ出す画面(結果は出さない) */
+    function renderRevealWaiting(kind) {
+      const title = (kind === 'gd')
+        ? 'グッドディベーターを発表しています'
+        : '勝敗を発表しています';
+      setApp(renderHeader() +
+        '<div class="wait-card">' +
+        '<div class="wait-icon">🏆</div>' +
+        '<div class="wait-message">' + title + '</div>' +
+        '<div class="wait-sub">先生の画面(スクリーン)を見てください。<br>' +
+        '結果は手元の画面には表示されません。</div>' +
+        '</div>');
+    }
+
     function renderWaitTallying() {
       setApp(renderHeader() +
         '<div class="wait-card">' +
@@ -1599,8 +1615,9 @@
         '<div class="gd-stage">' + stage + '</div></div>');
 
       if (gdAutoAdvanceTimerId) { clearTimeout(gdAutoAdvanceTimerId); gdAutoAdvanceTimerId = null; }
-      // 4・5位を見せたあと、3秒後に自動で1〜3位へ(教員端末が進行役)
-      if (showControls() && step === 1) {
+      // 4・5位を見せたあと、3秒後に自動で1〜3位へ(教員端末が進行役)。
+      // 投影用に操作バーを隠していても進行が止まらないよう、isTeacher() で判定する。
+      if (isTeacher() && step === 1) {
         gdAutoAdvanceTimerId = setTimeout(function() {
           gdAutoAdvanceTimerId = null;
           teacherRun('advanceGd');

@@ -1357,11 +1357,14 @@ function buildAppContext_(auth, targetKumi, state) {
     }
   }
 
+  // 勝敗・グッドディベーターの結果は教員アカウントにしか渡さない。
+  // 生徒の端末に先に届いてしまうと、通信のずれで発表より先に結果が見えてしまうため、
+  // 画面に出さないだけでなく、そもそもデータを送らない。
   const resultPhases = [
     PHASES.REVEAL_WINNER, PHASES.REVEAL_GD, PHASES.SUMMARY,
     PHASES.SUMMARY_FORCE_COUNTDOWN, PHASES.CLOSED,
   ];
-  if (resultPhases.indexOf(state.phase) >= 0) ctx.results = tallyVotes_(state.topicId);
+  if (isTeacher && resultPhases.indexOf(state.phase) >= 0) ctx.results = tallyVotes_(state.topicId);
 
   return ctx;
 }
