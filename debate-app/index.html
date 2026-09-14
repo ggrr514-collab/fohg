@@ -276,16 +276,16 @@
     .teacher-vote-rows { font-size: 0.9em; color: #333; line-height: 1.8; }
 
     /* ===== GD ===== */
-    .gd-reveal-container { text-align: center; padding: 30px 20px; }
-    .gd-title { font-size: 1.3em; font-weight: bold; margin-bottom: 24px; color: #bf7000; }
+    .gd-reveal-container { text-align: center; padding: 16px 20px 24px; }
+    .gd-title { font-size: 1.2em; font-weight: bold; margin-bottom: 14px; color: #bf7000; }
     .gd-stage {
-      min-height: 220px; display: flex;
+      min-height: 180px; display: flex;
       flex-direction: column; align-items: center; justify-content: center;
     }
     .gd-rank-card {
       background: linear-gradient(135deg, #fff9e6, #fff0c0);
       border: 3px solid #f0c040; border-radius: 16px;
-      padding: 28px 40px; min-width: 280px;
+      padding: 14px 28px; min-width: 210px;
       animation: popIn 0.5s ease-out;
     }
     @keyframes popIn {
@@ -293,19 +293,19 @@
       50% { transform: scale(1.05); opacity: 1; }
       100% { transform: scale(1); }
     }
-    .gd-rank-num { font-size: 2.4em; font-weight: bold; color: #bf7000; }
-    .gd-rank-name { font-size: 1.6em; font-weight: bold; margin: 8px 0; color: #333; }
-    .gd-rank-votes { color: #666; font-size: 0.95em; }
-    .gd-grid { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
-    .gd-grid .gd-rank-card { min-width: 240px; padding: 22px 32px; }
+    .gd-rank-num { font-size: 1.5em; font-weight: bold; color: #bf7000; }
+    .gd-rank-name { font-size: 1.35em; font-weight: bold; margin: 4px 0; color: #333; }
+    .gd-rank-votes { color: #666; font-size: 0.9em; }
+    .gd-grid { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .gd-grid .gd-rank-card { min-width: 200px; padding: 12px 24px; }
     .gd-champion { display: flex; justify-content: center; }
     .gd-champion .gd-rank-card {
       background: linear-gradient(135deg, #fff4cc, #ffd966);
       border-color: #d4a017; box-shadow: 0 4px 16px rgba(212,160,23,0.3);
-      padding: 34px 48px; min-width: 320px;
+      padding: 22px 44px; min-width: 300px;
     }
-    .gd-champion .gd-rank-num { font-size: 2.8em; }
-    .gd-champion .gd-rank-name { font-size: 2em; }
+    .gd-champion .gd-rank-num { font-size: 2.2em; }
+    .gd-champion .gd-rank-name { font-size: 1.9em; }
 
     /* ===== 同期インジケータ ===== */
     .sync-indicator {
@@ -506,6 +506,9 @@
     let controlsHidden = false;   // 教員が投影用に操作バーを隠しているか
     let panelOpen = false;        // 操作バーの詳細パネル
 
+    /** グッドディベーターとして選ぶ人数(サーバの GD_VOTE_COUNT と合わせること) */
+    const GD_VOTE_COUNT = 4;
+
     let selectedWinner = null;
     let selectedGdEmails = [];
     let voteLocked = false;
@@ -520,7 +523,6 @@
     let forceCountdownIntervalId = null;
     let forceAutoSubmitted = false;
 
-    let gdAutoAdvanceTimerId = null;
     let rouletteSpinning = false;
     let playLotteryAnimation = false;  // くじ準備中 → 論題決定 の瞬間だけtrue
     let skipLotteryAnimation = false;  // 教員端末で演出済みのときは再生しない
@@ -752,10 +754,6 @@
       console.log('[debate app] route phase=' + p + ' kumi=' + appContext.targetKumi);
 
       if (p !== PHASES.SUMMARY_FORCE_COUNTDOWN) stopForceCountdown();
-      if (p !== PHASES.REVEAL_GD && gdAutoAdvanceTimerId) {
-        clearTimeout(gdAutoAdvanceTimerId);
-        gdAutoAdvanceTimerId = null;
-      }
 
       // 違反監視は「生徒がまとめを書いている画面」でだけ有効。教員は対象外。
       summaryMonitorActive = !isTeacher() && (p === PHASES.SUMMARY || p === PHASES.SUMMARY_FORCE_COUNTDOWN);
@@ -796,8 +794,7 @@
         case PHASES.REVEAL_WINNER:
           return { action: 'revealGd', label: '④ グッドディベーター発表へ' };
         case PHASES.REVEAL_GD:
-          if (step === 0) return { action: 'advanceGd', label: '⑤ 第5位・第4位を発表' };
-          if (step === 1) return { action: null, label: '⏰ 自動で1〜3位を発表中...' };
+          if (step === 0) return { action: 'advanceGd', label: '⑤ グッドディベーターを発表(1〜5位)' };
           return { action: 'openSummary', label: '⑥ まとめ受付を開始' };
         case PHASES.SUMMARY:
           return {
@@ -1011,7 +1008,6 @@
       currentTargetKumi = newKumi;
       currentRev = null;
       stopForceCountdown();
-      if (gdAutoAdvanceTimerId) { clearTimeout(gdAutoAdvanceTimerId); gdAutoAdvanceTimerId = null; }
       tbarMessage('切替中...');
       google.script.run
         .withSuccessHandler(function(ctx) {
@@ -1036,7 +1032,11 @@
     // ==================================================================
     // 共通ヘッダ(教員も生徒も同じ)
     // ==================================================================
-    function renderHeader() {
+    /**
+     * @param {Object} [opts] compactTopic: true なら論題の※注記を省いて1行にする。
+     *   発表画面(勝敗・GD)は投影するので、順位が画面外へ押し出されないようにするため。
+     */
+    function renderHeader(opts) {
       const user = appContext.auth.user;
       const p = appContext.state.phase;
 
@@ -1055,11 +1055,13 @@
 
       let topicBox = '';
       if (appContext.topic) {
+        const body = (opts && opts.compactTopic)
+          ? '<div class="topic-main">' + escapeHtml(topicMain_(appContext.topic.title)) + '</div>'
+          : topicHtml_(appContext.topic.title);
         topicBox =
           '<div class="topic-box">' +
           '<div>論題 [' + escapeHtml(appContext.topic.id) + ']</div>' +
-          topicHtml_(appContext.topic.title) +
-          '</div>';
+          body + '</div>';
       }
 
       return (
@@ -1420,8 +1422,8 @@
 
       const gdBlock =
         '<div class="vote-section">' +
-        '<h2>② グッドディベーター5名を選んでください</h2>' +
-        '<div class="selection-count" id="selectionCount">0 / 5 人選択中</div>' +
+        '<h2>② グッドディベーター' + GD_VOTE_COUNT + '名を選んでください</h2>' +
+        '<div class="selection-count" id="selectionCount">0 / ' + GD_VOTE_COUNT + ' 人選択中</div>' +
         '<div class="debater-grid" id="debaterGrid">' + debaterCards + '</div></div>';
 
       const submitBlock =
@@ -1461,7 +1463,7 @@
       setApp(renderHeader() +
         '<div class="submitted-lock">✓ 投票を受け付けました。内容は変更できません。結果発表をお待ちください。</div>' +
         winnerBlock +
-        '<div class="vote-section"><h2>② グッドディベーター5名</h2>' +
+        '<div class="vote-section"><h2>② グッドディベーター' + GD_VOTE_COUNT + '名</h2>' +
         '<div class="debater-grid locked">' + debaterCards + '</div></div>');
     }
 
@@ -1480,8 +1482,8 @@
       if (idx >= 0) {
         selectedGdEmails.splice(idx, 1);
       } else {
-        if (selectedGdEmails.length >= 5) {
-          alert('5名選択済みです。別の人を外してから選んでください。');
+        if (selectedGdEmails.length >= GD_VOTE_COUNT) {
+          alert(GD_VOTE_COUNT + '名選択済みです。別の人を外してから選んでください。');
           return;
         }
         selectedGdEmails.push(email);
@@ -1504,16 +1506,16 @@
         }
       });
       const countEl = document.getElementById('selectionCount');
-      if (countEl) countEl.textContent = selectedGdEmails.length + ' / 5 人選択中';
+      if (countEl) countEl.textContent = selectedGdEmails.length + ' / ' + GD_VOTE_COUNT + ' 人選択中';
     }
 
     function updateSubmitState() {
       const btn = document.getElementById('submitBtn');
-      if (btn) btn.disabled = !(selectedWinner && selectedGdEmails.length === 5);
+      if (btn) btn.disabled = !(selectedWinner && selectedGdEmails.length === GD_VOTE_COUNT);
     }
 
     function submitVote() {
-      if (!selectedWinner || selectedGdEmails.length !== 5) return;
+      if (!selectedWinner || selectedGdEmails.length !== GD_VOTE_COUNT) return;
       if (voteLocked) return;
       voteLocked = true;
 
@@ -1611,7 +1613,7 @@
           '</div></div>';
       }
 
-      setApp(renderHeader() +
+      setApp(renderHeader({ compactTopic: true }) +
         '<h2>勝敗投票結果</h2>' +
         '<div class="winner-announcement">' +
         '<div class="label">投票の結果</div>' +
@@ -1647,7 +1649,7 @@
             '生徒が投票すれば表示されます。';
         } else {
           why = '生徒 ' + students + '名が投票していますが、グッドディベーターの選択が記録されていません。<br>' +
-            '投票シートのGD1〜GD5列を確認してください。';
+            '投票シートのGD列を確認してください。';
         }
         setApp(renderHeader() +
           '<div class="info"><strong>グッドディベーターの該当者がいません</strong><br>' + why + '</div>');
@@ -1669,19 +1671,16 @@
 
       let stage = '';
       if (step === 0) {
+        // 発表前のタメ。教員がボタンを押した瞬間に全員の画面へ1〜5位が出る
         stage =
           '<div class="wait-card" style="background:transparent;">' +
           '<div class="wait-icon">🏆</div>' +
           '<div class="wait-message">これよりグッドディベーターを発表します</div>' +
           '<div class="wait-sub">' +
-          (showControls() ? '下の操作バーのボタンで順に発表します' : '順に発表されます。お待ちください') +
+          (showControls() ? '下の操作バーのボタンで1〜5位を発表します' : 'まもなく発表されます。お待ちください') +
           '</div></div>';
-      } else if (step === 1) {
-        const cards = [];
-        if (available >= 5) cards.push(rankCard(5));
-        if (available >= 4) cards.push(rankCard(4));
-        stage = '<div class="gd-grid">' + cards.join('') + '</div>';
       } else {
+        // 1〜5位を一度に表示(1位を大きく、2・3位、4・5位の順に並べる)
         const mid = [];
         if (available >= 2) mid.push(rankCard(2));
         if (available >= 3) mid.push(rankCard(3));
@@ -1694,20 +1693,11 @@
           (bottom.length ? '<div class="gd-grid" style="margin-top:14px;">' + bottom.join('') + '</div>' : '');
       }
 
-      setApp(renderHeader() +
+      setApp(renderHeader({ compactTopic: true }) +
         '<div class="gd-reveal-container">' +
         '<div class="gd-title">🏆 グッドディベーター発表</div>' +
         '<div class="gd-stage">' + stage + '</div></div>');
 
-      if (gdAutoAdvanceTimerId) { clearTimeout(gdAutoAdvanceTimerId); gdAutoAdvanceTimerId = null; }
-      // 4・5位を見せたあと、3秒後に自動で1〜3位へ(教員端末が進行役)。
-      // 投影用に操作バーを隠していても進行が止まらないよう、isTeacher() で判定する。
-      if (isTeacher() && step === 1) {
-        gdAutoAdvanceTimerId = setTimeout(function() {
-          gdAutoAdvanceTimerId = null;
-          teacherRun('advanceGd');
-        }, 3000);
-      }
     }
 
     // ==================================================================

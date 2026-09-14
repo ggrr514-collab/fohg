@@ -47,6 +47,11 @@ const STATE_KEYS = {
 // 全クラス共通の状態(旧形式からの移行用スコープ名)
 const COMMON_SCOPE = '_共通_';
 
+/** グッドディベーターとして選ぶ人数 */
+const GD_VOTE_COUNT = 4;
+/** 投票シートのGD列の最大数(過去に5人選択で記録された票も集計できるようにする) */
+const GD_COLUMN_MAX = 5;
+
 const PHASES = {
   IDLE: '待機中',
   LOTTERY_READY: 'くじ準備中',
@@ -501,10 +506,9 @@ function setupSheets() {
     '論題ID', '生徒メール', '氏名', '組', '番', '班', '役割', '表示順'
   ]));
 
-  logs.push(createSheetIfNotExists_(ss, SHEET_NAMES.VOTES, [
-    'タイムスタンプ', '論題ID', '投票者メール', '投票者氏名', '組', '番',
-    '勝敗選択', 'GD1', 'GD2', 'GD3', 'GD4', 'GD5'
-  ]));
+  const voteHeaders = ['タイムスタンプ', '論題ID', '投票者メール', '投票者氏名', '組', '番', '勝敗選択'];
+  for (let i = 1; i <= GD_COLUMN_MAX; i++) voteHeaders.push('GD' + i);
+  logs.push(createSheetIfNotExists_(ss, SHEET_NAMES.VOTES, voteHeaders));
 
   logs.push(createSheetIfNotExists_(ss, SHEET_NAMES.SUMMARIES, [
     'タイムスタンプ', '論題ID', '生徒メール', '氏名', '組', '番',
@@ -1119,7 +1123,7 @@ function opRevealGd_(kumi) {
   return { ok: true, message: 'GD発表モードに切り替えました' };
 }
 
-const GD_MAX_STEP = 2;
+const GD_MAX_STEP = 1;
 
 function opAdvanceGd_(kumi) {
   const state = getState_(kumi);
@@ -1132,7 +1136,7 @@ function opAdvanceGd_(kumi) {
   }
   const nextStep = currentStep + 1;
   setState_(kumi, STATE_KEYS.GD_REVEAL_STEP, String(nextStep));
-  return { ok: true, step: nextStep, total: GD_MAX_STEP, message: '第' + nextStep + '段階を発表しました' };
+  return { ok: true, step: nextStep, total: GD_MAX_STEP, message: 'グッドディベーターを発表しました' };
 }
 
 function opOpenSummary_(kumi) {
@@ -1469,7 +1473,9 @@ function tallyVotes_(topicId) {
       else if (winner === '否定側') { if (isTeacher) teacherNeg++; else studentNeg++; }
       if (isTeacher) { teacherVoters++; continue; } // GDは生徒票のみ集計
 
-      for (let i = 7; i <= 11; i++) {
+      // 6 + GD_COLUMN_MAX 列まで見る。選ぶ人数を減らしても、
+      // それ以前に5人選択で記録された票をそのまま集計できる。
+      for (let i = 7; i <= 6 + GD_COLUMN_MAX; i++) {
         const email = String(row[i]).trim().toLowerCase();
         if (email) gdVotes[email] = (gdVotes[email] || 0) + 1;
       }
@@ -1661,7 +1667,7 @@ function hasUserVoted_(topicId, email) {
 
 /**
  * 投票を受け付ける
- * payload: { winner, gdEmails[5], kumi(教員が担当クラスを指定する場合) }
+ * payload: { winner, gdEmails[GD_VOTE_COUNT], kumi(教員が担当クラスを指定する場合) }
  * 教員も投票できる(勝敗は3票換算、GDは集計対象外)
  */
 function submitVote(payload) {
@@ -1690,8 +1696,8 @@ function submitVote(payload) {
     if (payload.winner !== '肯定側' && payload.winner !== '否定側') {
       return { ok: false, message: '勝敗選択が不正です' };
     }
-    if (payload.gdEmails.length !== 5) {
-      return { ok: false, message: 'GDは5名選択してください(現在 ' + payload.gdEmails.length + ' 名)' };
+    if (payload.gdEmails.length !== GD_VOTE_COUNT) {
+      return { ok: false, message: 'GDは' + GD_VOTE_COUNT + '名選択してください(現在 ' + payload.gdEmails.length + ' 名)' };
     }
 
     const uniq = {};
@@ -1710,13 +1716,13 @@ function submitVote(payload) {
     }
 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.VOTES);
-    sheet.appendRow([
+    const voteRow = [
       new Date(), state.topicId,
       auth.user.email, auth.user.name, auth.user.kumi, auth.user.ban,
       payload.winner,
-      payload.gdEmails[0], payload.gdEmails[1], payload.gdEmails[2],
-      payload.gdEmails[3], payload.gdEmails[4],
-    ]);
+    ];
+    for (let i = 0; i < GD_COLUMN_MAX; i++) voteRow.push(payload.gdEmails[i] || '');
+    sheet.appendRow(voteRow);
     dropVoteMemo_();
     cacheDrop_('tally:' + state.topicId);
 
