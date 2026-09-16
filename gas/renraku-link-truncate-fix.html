@@ -1,0 +1,67 @@
+<!--
+  連絡本文のURLが折りたたみで途中切れになり、壊れたリンクになる不具合の修正
+  対象: index.html のみ（Code.gs の変更なし）
+
+  現象:
+    連絡本文が120文字を超えると「もっと見る」で折りたたまれますが、
+    120文字目がURLの途中だと「https://scri」のような切れたURLがリンクになり、
+    押すと「このサイトにアクセスできません」になります。
+    （「もっと見る」で全文を開いてからのリンクは正常に動きます）
+
+  直し方:
+    折りたたむ位置がURLの途中なら、そのURLの終わりまで含めて短くするようにします。
+    連絡事項（120文字）と提出物・締切（60文字）の両方を直します。
+
+  作業のあと APP_VERSION を1つ上げて「新バージョン」としてデプロイしてください。
+-->
+
+<!-- ===================== ① index.html: 連絡事項カードの折りたたみ ===================== -->
+<!-- 【探す】renderRenrakuCard の中（1か所だけあります） -->
+  var content = String(r.content || '');
+  var TRUNCATE_THRESHOLD = 120;  // 120文字を超えると折りたたみ
+  var bodyHtml;
+  if (content.length > TRUNCATE_THRESHOLD) {
+    var shortContent = content.substring(0, TRUNCATE_THRESHOLD);
+
+<!-- 【置き換える】 -->
+  var content = String(r.content || '');
+  var TRUNCATE_THRESHOLD = 120;  // 120文字を超えると折りたたみ
+  var bodyHtml;
+  var shortContent = truncateKeepingUrl(content, TRUNCATE_THRESHOLD);
+  if (shortContent.length < content.length) {
+
+<!-- ===================== ② index.html: 提出物・締切の折りたたみ ===================== -->
+<!-- 【探す】renderDeadlines の中（1か所だけあります） -->
+    if (content.length > DEADLINE_TRUNCATE) {
+      var shortContent = content.substring(0, DEADLINE_TRUNCATE);
+
+<!-- 【置き換える】 -->
+    var shortContent = truncateKeepingUrl(content, DEADLINE_TRUNCATE);
+    if (shortContent.length < content.length) {
+
+<!-- ===================== ③ index.html: 新しい補助関数を追加 ===================== -->
+<!-- 【探す】ファイル終わり近くの、この1行（1か所だけあります） -->
+// escapeHtml + linkify をまとめて行うヘルパー
+
+<!-- 【置き換える】（探した1行の前に関数を足す形です。探した1行は残ります） -->
+// 折りたたみ表示用に本文を短くする
+// 切る位置がURLの途中なら、そのURLの終わりまで含める（URLが途中で切れると壊れたリンクになるため）
+function truncateKeepingUrl(text, limit) {
+  text = String(text || '');
+  if (text.length <= limit) return text;
+  var urlRegex = /(https?:\/\/[^\s<>"「」（）\[\]【】]+|www\.[^\s<>"「」（）\[\]【】]+)/g;
+  var cut = limit;
+  var m;
+  while ((m = urlRegex.exec(text)) !== null) {
+    var start = m.index;
+    var end = start + m[0].length;
+    if (start >= cut) break;
+    if (end > cut) {
+      cut = end;
+      break;
+    }
+  }
+  return text.substring(0, cut);
+}
+
+// escapeHtml + linkify をまとめて行うヘルパー
