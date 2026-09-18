@@ -1,0 +1,197 @@
+<!--
+  授業変更・自習の「クラス」欄（1-1、3-2 など）が日付に変わってしまい、
+  ダッシュボードにクラスが表示されない不具合の修正
+  対象: Code.gs のみ（index.html の変更なし）
+
+  原因:
+    Googleスプレッドシートは「1-1」「3-2」のような文字を「1月1日」「3月2日」の日付として
+    解釈します。授業変更シートのD列（クラス）が「書式なしテキスト」になっていない行では、
+    クラスが日付として保存され、読み込み時にクラスなしとして扱われていました。
+    （「1-1, 1-2」のように複数クラスのときは文字のままなので表示されていました）
+
+  直し方:
+    ・書き込み（追加・更新）のとき、D列のセルを「書式なしテキスト」にしてから書く
+    ・読み込みのとき、既に日付になっている行は「1-1」の形に戻して表示する
+    ・既存データをまとめて直す関数 fixClassChangeClassesColumn を追加（1回だけ手動実行）
+
+  作業のあと APP_VERSION を1つ上げて「新バージョン」としてデプロイしてください。
+  デプロイ後、エディタで fixClassChangeClassesColumn を選んで1回実行してください。
+-->
+
+<!-- ===================== ① Code.gs: addClassChange を丸ごと置き換え ===================== -->
+<!-- 【探す】function addClassChange(payload) { から、その関数の終わりの } まで（1か所だけあります） -->
+function addClassChange(payload) {
+  const check = requireEditUser_();
+  if (check.error) return check.error;
+  const user = check.user;
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SHEET_NAMES.CLASS_CHANGE);
+  // シートがなければ作成
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_NAMES.CLASS_CHANGE);
+    sh.getRange(1, 1, 1, 17).setValues([['ID', '対象日', '時間目', 'クラス', '区分', '元の担当者', '代理担当者', '教科', '自習課題', '備考', '投稿者メール', '投稿者氏名', '投稿日時', '削除', '最終更新者メール', '最終更新者氏名', '最終更新日時']]);
+    sh.getRange(1, 1, 1, 17).setFontWeight('bold').setBackground('#2c5f8d').setFontColor('#ffffff');
+    sh.setFrozenRows(1);
+    sh.getRange(2, 4, sh.getMaxRows() - 1, 1).setNumberFormat('@');
+  }
+  
+  const id = generateId_('C');
+  const now = new Date();
+  const date = payload.date ? parseDate_(payload.date) : new Date();
+  const classes = Array.isArray(payload.classes) ? payload.classes.join(', ') : (payload.classes || '');
+  
+  sh.appendRow([
+    id, date, parseInt(payload.period, 10) || 0,
+    classes, payload.kubun || '変更',
+    payload.origTeacher || user.name,
+    payload.subTeacher || '',
+    payload.subject || '',
+    payload.task || '',
+    payload.note || '',
+    user.email, user.name, now,
+    false
+  ]);
+  
+  return { ok: true, id: id };
+}
+
+<!-- 【置き換える】 -->
+function addClassChange(payload) {
+  const check = requireEditUser_();
+  if (check.error) return check.error;
+  const user = check.user;
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SHEET_NAMES.CLASS_CHANGE);
+  // シートがなければ作成
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_NAMES.CLASS_CHANGE);
+    sh.getRange(1, 1, 1, 17).setValues([['ID', '対象日', '時間目', 'クラス', '区分', '元の担当者', '代理担当者', '教科', '自習課題', '備考', '投稿者メール', '投稿者氏名', '投稿日時', '削除', '最終更新者メール', '最終更新者氏名', '最終更新日時']]);
+    sh.getRange(1, 1, 1, 17).setFontWeight('bold').setBackground('#2c5f8d').setFontColor('#ffffff');
+    sh.setFrozenRows(1);
+    sh.getRange(2, 4, sh.getMaxRows() - 1, 1).setNumberFormat('@');
+  }
+
+  const id = generateId_('C');
+  const now = new Date();
+  const date = payload.date ? parseDate_(payload.date) : new Date();
+  const classes = classChangeClassesToText_(payload.classes);
+
+  sh.appendRow([
+    id, date, parseInt(payload.period, 10) || 0,
+    classes, payload.kubun || '変更',
+    payload.origTeacher || user.name,
+    payload.subTeacher || '',
+    payload.subject || '',
+    payload.task || '',
+    payload.note || '',
+    user.email, user.name, now,
+    false
+  ]);
+  // クラス欄（D列）を「書式なしテキスト」にして書き直す（「1-1」が日付に変わるのを防ぐ）
+  const rowNum = findClassChangeRow_(sh, id);
+  if (rowNum) sh.getRange(rowNum, 4).setNumberFormat('@').setValue(classes);
+
+  return { ok: true, id: id };
+}
+
+// ---- 授業変更のクラス欄（D列）の読み書き ----
+// Googleスプレッドシートは「1-1」「3-2」のような文字を日付として解釈してしまうため、
+// 書き込みは「書式なしテキスト」にしてから行い、読み込みは日付になっていても元の文字に戻す
+
+// クラスの配列（または文字）を、シートに入れる文字にする
+function classChangeClassesToText_(classes) {
+  if (Array.isArray(classes)) {
+    return classes.map(c => String(c || '').trim()).filter(Boolean).join(', ');
+  }
+  return String(classes || '').trim();
+}
+
+// シートのセルの値を、クラスの配列にする（日付になっていたら「1-1」の形に戻す）
+function classChangeClassesFromCell_(raw) {
+  if (raw instanceof Date) {
+    return [Utilities.formatDate(raw, 'JST', 'M-d')];
+  }
+  return String(raw || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
+// IDから行番号を探す（見つからなければ 0）
+function findClassChangeRow_(sh, id) {
+  const last = sh.getLastRow();
+  if (last < 2) return 0;
+  const ids = sh.getRange(2, 1, last - 1, 1).getValues();
+  for (let i = ids.length - 1; i >= 0; i--) {
+    if (ids[i][0] === id) return i + 2;
+  }
+  return 0;
+}
+
+/**
+ * 【1回だけ手動実行】授業変更シートのクラス欄（D列）を書式なしテキストに直す
+ * 既に日付になってしまった「1-1」などを元の文字に戻します。
+ * 実行方法: エディタでこの関数を選んで「実行」。結果はログに出ます。
+ */
+function fixClassChangeClassesColumn() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(SHEET_NAMES.CLASS_CHANGE);
+  if (!sh) {
+    Logger.log('授業変更シートがありません');
+    return;
+  }
+  const maxRows = sh.getMaxRows();
+  if (maxRows >= 2) sh.getRange(2, 4, maxRows - 1, 1).setNumberFormat('@');
+  const last = sh.getLastRow();
+  if (last < 2) {
+    Logger.log('データがありません（列の書式だけ直しました）');
+    return;
+  }
+  const range = sh.getRange(2, 4, last - 1, 1);
+  const values = range.getValues();
+  let fixed = 0;
+  const out = values.map(r => {
+    const raw = r[0];
+    if (raw instanceof Date) {
+      fixed++;
+      return [classChangeClassesFromCell_(raw).join(', ')];
+    }
+    return [raw == null ? '' : String(raw)];
+  });
+  range.setValues(out);
+  clearSheetCache();
+  Logger.log('クラス欄を書式なしテキストにしました。日付から戻した行: ' + fixed + '件（全' + values.length + '行）');
+}
+
+<!-- ===================== ② Code.gs: getClassChangeList_ の読み込み ===================== -->
+<!-- 【探す】getClassChangeList_ の中（1か所だけあります。行頭の空白の数が少し違っても同じ4行です） -->
+    const classesRaw = row[3];
+    const classes = (classesRaw instanceof Date)
+      ? []
+      : String(classesRaw || '').split(',').map(s => s.trim()).filter(Boolean);
+
+<!-- 【置き換える】 -->
+    const classes = classChangeClassesFromCell_(row[3]);
+
+<!-- ===================== ③ Code.gs: getMyFutureClassChanges の読み込み ===================== -->
+<!-- 【探す】getMyFutureClassChanges の中（1か所だけあります） -->
+      classes: String(row[3] || '').split(',').map(s => s.trim()).filter(Boolean),
+
+<!-- 【置き換える】 -->
+      classes: classChangeClassesFromCell_(row[3]),
+
+<!-- ===================== ④ Code.gs: updateClassChange の書き込み ===================== -->
+<!-- 【探す】updateClassChange の中（1か所だけあります） -->
+    const classes = Array.isArray(payload.classes) ? payload.classes.join(', ') : (payload.classes || '');
+    const now = new Date();
+
+    // B〜J列を更新（投稿者情報・投稿日時は元のまま保持）
+    sh.getRange(i + 1, 2, 1, 9).setValues([[
+
+<!-- 【置き換える】 -->
+    const classes = classChangeClassesToText_(payload.classes);
+    const now = new Date();
+
+    // B〜J列を更新（投稿者情報・投稿日時は元のまま保持）
+    // クラス欄（D列）は先に「書式なしテキスト」にして、「1-1」が日付に変わるのを防ぐ
+    sh.getRange(i + 1, 4).setNumberFormat('@');
+    sh.getRange(i + 1, 2, 1, 9).setValues([[
