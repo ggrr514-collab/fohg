@@ -1,5 +1,7 @@
 // 模写ドリル ワークシート生成
-// 使い方: node build/build.mjs <pack-id> [--png] [--all-png]
+// 使い方: node build/build.mjs <pack-id> [--png] [--all-png] [--round=2|3]
+//   --round=2  2周目: なぞりなし・基準線2本・記憶枠あり
+//   --round=3  3周目: なぞりなし・グリッドなし・記憶枠あり・時間半分
 //   content/<pack-id>.json を読み、dist/<pack-id>/<title>.pdf を出力する
 //   --png     1 枚目（PNG_NO=n で n 枚目）を PNG 出力（確認用）
 //   --all-png 全シートを dist/<pack-id>/png/ に 1 枚ずつ PNG 出力（商品画像・SNS 用の確認画像）
@@ -12,10 +14,35 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packId = process.argv[2];
 const wantPng = process.argv.includes('--png');
+const roundArg = process.argv.find(a => a.startsWith('--round='));
+const ROUND = roundArg ? Number(roundArg.split('=')[1]) : 1;
 const wantAllPng = process.argv.includes('--all-png');
 if (!packId) { console.error('usage: node build/build.mjs <pack-id> [--png]'); process.exit(1); }
 
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'content', `${packId}.json`), 'utf8'));
+
+// 周回: 同じお手本で補助を減らす。JSON の rounds で上書きできる
+const ROUND_DEFAULTS = {
+  2: { label: '2周目', trace: false, grid: g => (g === 'none' ? 'none' : '2lines'), memory: true, timeScale: 0.8,
+       rule: '2周目：なぞりなし。基準線2本だけで測って描く。1周目の紙を横に置き、良くなった所に○、まだの所に×。' },
+  3: { label: '3周目', trace: false, grid: () => 'none', memory: true, timeScale: 0.5,
+       rule: '3周目：グリッドなし、時間は半分。見て描いたら、お手本を隠して記憶でもう1枚。3枚を並べて比較シートへ。' },
+};
+if (ROUND > 1) {
+  const R = Object.assign({}, ROUND_DEFAULTS[ROUND] || ROUND_DEFAULTS[3], (manifest.rounds || {})[ROUND] || {});
+  manifest.roundLabel = R.label;
+  manifest.title = `${manifest.title}（${R.label}）`;
+  for (const sh of manifest.sheets) {
+    sh.trace = R.trace;
+    sh.grid = typeof R.grid === 'function' ? R.grid(sh.grid) : R.grid;
+    sh.memory = R.memory;
+    const t = Object.assign({ trace: 3, draw: 10, memory: 5 }, manifest.time || {}, sh.time || {});
+    sh.time = { trace: t.trace, draw: Math.max(2, Math.round(t.draw * R.timeScale)), memory: Math.max(2, Math.round(t.memory * R.timeScale)) };
+    sh.rule = [R.rule, sh.rule].filter(Boolean).join(' ');
+    sh.checks = (sh.checks || []).map(c => /マス|グリッド|なぞ/.test(c) ? '1周目の紙と並べて、良くなった所はどこか' : c);
+    if (/マス|グリッド|なぞ/.test(sh.point || '')) sh.point = (ROUND === 2 ? '基準線2本だけで。先に縦横比を測り、十字からの距離でパーツを置く。' : 'グリッドなしで同じ形を。先に縦横比を目測し、外形から描く。');
+  }
+}
 const css = fs.readFileSync(path.join(ROOT, 'template', 'sheet.css'), 'utf8');
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -78,15 +105,16 @@ function renderSheet(sheet, pack) {
   const drawBox = `
     <div class="box draw"><div class="lab">見て描く<span class="t">${esc(gridLabel)}</span></div><div class="time">目安 ${t.draw}分</div>
       <div class="inner"><div class="${gc}"></div></div></div>`;
+  const memInR2 = hasMemory && !hasTrace;   // なぞり枠が無い時は記憶枠を「見て描く」の隣に置く（同じ大きさ）
   const memBox = hasMemory ? `
-    <div class="box mem"><div class="lab">記憶で描く<span class="t">お手本を折って隠す</span></div><div class="time">目安 ${t.memory}分</div><div class="grid frame"></div></div>` : '';
+    <div class="box mem"><div class="lab">記憶で描く<span class="t">お手本を折って隠す</span></div><div class="time">目安 ${t.memory}分</div>${memInR2 ? '<div class="inner"><div class="grid frame"></div></div>' : '<div class="grid frame"></div>'}</div>` : '';
 
   return `
 <section class="sheet">
   <div class="hd">
     <div><div class="pack">${esc(pack.title)}</div><div class="no">${String(sheet.no).padStart(2, '0')}<small>/ ${pack.sheets.length}</small></div></div>
     <div class="title">${esc(sheet.title)}</div>
-    <div class="tags"><span class="tag fill">${esc(pack.level)}</span><span class="tag">${esc(sheet.style || '共通')}</span>${sheet.phase ? `<span class="tag">${esc(sheet.phase)}</span>` : ''}</div>
+    <div class="tags"><span class="tag fill">${esc(pack.level)}</span>${pack.roundLabel ? `<span class="tag fill">${esc(pack.roundLabel)}</span>` : ''}<span class="tag">${esc(sheet.style || '共通')}</span>${sheet.phase ? `<span class="tag">${esc(sheet.phase)}</span>` : ''}</div>
     <div class="date">日付<span></span></div>
   </div>
   <div class="r1">
@@ -97,11 +125,11 @@ function renderSheet(sheet, pack) {
       ${rules.join('')}
     </div>
   </div>
-  <div class="r2 ${hasTrace ? '' : 'wide'}" style="${hasTrace ? '' : 'grid-template-columns:1fr'}">
-    ${traceBox}${drawBox}
+  <div class="r2" style="${(hasTrace || memInR2) ? '' : 'grid-template-columns:1fr'}">
+    ${traceBox}${drawBox}${memInR2 ? memBox : ''}
   </div>
-  <div class="r3 ${hasMemory ? '' : 'nomem'}">
-    ${memBox}
+  <div class="r3 ${(hasMemory && !memInR2) ? '' : 'nomem'}">
+    ${memInR2 ? '' : memBox}
     <div class="box checks"><div class="lab">描いたら比べる<span class="t">お手本と並べて</span></div>
       <ol>${checks}</ol>
       <div class="compare">比べ方：並べる → 離れて見る → 紙を裏から透かして重ねる。ずれた所に ○ を付けてから直す。</div>

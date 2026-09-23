@@ -43,7 +43,9 @@ cd mosha-kit
 node build/gen-samples.mjs            # 基礎 01〜26 の SVG お手本（初回のみ）
 node build/gen-samples-ai.mjs         # 基礎 27〜49・発展 01〜30 の SVG お手本（初回のみ）
 node build/contact-sheet.mjs basic    # お手本一覧を dist/basic/samples.png に出して確認
-node build/build.mjs basic            # dist/basic/基礎ドリル.pdf
+node build/build.mjs basic            # dist/basic/基礎ドリル.pdf（1周目）
+node build/build.mjs basic --round=2  # 2周目: なぞりなし・基準線2本・記憶枠
+node build/build.mjs basic --round=3  # 3周目: なぞりなし・グリッドなし・記憶枠・時間半分
 node build/build.mjs basic --all-png  # + dist/basic/png/001.png … （商品画像・SNS 用）
 node build/build.mjs dev-anime
 node build/build-extras.mjs           # dist/extras/同梱物.pdf
@@ -71,6 +73,7 @@ Node 22 と Playwright（Chromium）が必要。日本語フォントは IPA ゴ
 
 `kind` は `line`（引き直し禁止の注記）か `motif`（①外形②かたまり③細部の手順）。影・色の課題は扱わない（形だけ）。
 パック全体の `repeats` に反復シートの番号を入れると、進捗マスが破線になる。
+周回（`--round=2|3`）の既定値は `build/build.mjs` の `ROUND_DEFAULTS`。パックごとに変えたい時は JSON に `"rounds": {"2": {...}}` を書く。
 
 ## 新しいパックを足す
 
