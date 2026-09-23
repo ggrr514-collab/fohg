@@ -1,3 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
 <defs><filter id="hd" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="26" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.4" xChannelSelector="R" yChannelSelector="G"/></filter></defs>
-<g filter="url(#hd)" stroke-linecap="round" stroke-linejoin="round"><path d="M30 40 L 50 28 L 78 34 L 58 46 Z" fill="#e6e6e6" fill-rule="evenodd" stroke="#111" stroke-width="1.6"/><path d="M30 40 L 58 46 V 80 L 30 74 Z" fill="#9a9a9a" fill-rule="evenodd" stroke="#111" stroke-width="1.6"/><path d="M58 46 L 78 34 V 68 L 58 80 Z" fill="#333" fill-rule="evenodd" stroke="#111" stroke-width="1.6"/><g stroke="#111" stroke-width="1.4" fill="none"><line x1="14" y1="16" x2="26" y2="26"/><path d="M26 26 l-4 -1.5 M26 26 l-1.5 -4" transform="rotate(84.8055710922652 26 26)"/></g><text x="14" y="13" font-size="6" fill="#111">光</text></g></svg>
+<g filter="url(#hd)" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(30 48) scale(1 1)">
+    <path d="M-16 -2.2 C -9.6 -13.2, 9.6 -13.2, 16 -1.1" stroke="#111" stroke-width="2.6" fill="none"/>
+    <path d="M-12.8 8.8 C -4.8 12.100000000000001, 6.4 12.100000000000001, 14.4 6.6" stroke="#111" stroke-width="1.2" fill="none"/>
+    <ellipse cx="0" cy="0.44" rx="8.32" ry="9.24" stroke="#111" stroke-width="1.4" fill="none"/><ellipse cx="0" cy="1.76" rx="4.48" ry="5.279999999999999" stroke="#111" stroke-width="0" fill="#111"/>
+    <circle cx="-3.2" cy="-3.96" r="2.24" fill="#fff" stroke="none"/>
+    <path d="M16 -1.1 l 3.84 -2.6399999999999997" stroke="#111" stroke-width="1.6" fill="none"/></g><g transform="translate(72 52) scale(-1 1)">
+    <path d="M-9 -2 C -5.3999999999999995 -12, 5.3999999999999995 -12, 9 -1" stroke="#111" stroke-width="2.6" fill="none"/>
+    <path d="M-7.2 8 C -2.6999999999999997 11, 3.6 11, 8.1 6" stroke="#111" stroke-width="1.2" fill="none"/>
+    <ellipse cx="0" cy="0.4" rx="4.68" ry="8.4" stroke="#111" stroke-width="1.4" fill="none"/><ellipse cx="0" cy="1.6" rx="2.5200000000000005" ry="4.8" stroke="#111" stroke-width="0" fill="#111"/>
+    <circle cx="-1.8" cy="-3.5999999999999996" r="1.2600000000000002" fill="#fff" stroke="none"/>
+    <path d="M9 -1 l 2.16 -2.4" stroke="#111" stroke-width="1.6" fill="none"/></g><path d="M26 22 C 40 20, 60 22, 84 40" stroke="#111" stroke-width="1.4" fill="none"/></g></svg>

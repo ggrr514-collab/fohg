@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-<defs><filter id="hd" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="54" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.4" xChannelSelector="R" yChannelSelector="G"/></filter></defs>
+<defs><filter id="hd" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="52" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.4" xChannelSelector="R" yChannelSelector="G"/></filter></defs>
 <g filter="url(#hd)" stroke-linecap="round" stroke-linejoin="round"><path d="M41 86 C 30 88, 18 92, 10 100 M59 86 C 70 88, 82 92, 90 100" stroke="#111" stroke-width="2" fill="none"/><path d="M32 26 C 32 10, 68 10, 68 26 L 70 48 C 70 62, 60 74, 50 76 C 40 74, 30 62, 30 48 Z" fill="#fff" fill-rule="evenodd" stroke="#111" stroke-width="2.1"/><path d="M30 30 C 30 8, 70 8, 70 30 C 66 24, 60 22, 56 30 C 52 22, 46 22, 44 30 C 40 24, 34 26, 30 30 Z" fill="#fff" fill-rule="evenodd" stroke="#111" stroke-width="2.1"/>
   <g transform="translate(41 46) scale(1 1)">
     <path d="M-6 -0.8 C -3.5999999999999996 -4.8, 3.5999999999999996 -4.8, 6 -0.4" stroke="#111" stroke-width="2.6" fill="none"/>

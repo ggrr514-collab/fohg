@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>模写300 — おえかきお父さんの模写ドリル</title>
-<meta name="description" content="画風を選んで、300枚模写する。基礎→発展→応用の3段階、白黒からカラーへ。手描きのお手本で、1日1枚30日。">
+<meta name="description" content="画風を選んで、300枚模写する。形を正確に取ることだけに絞った線画ドリル。基礎→発展→応用の3段階、1日1枚30日。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -100,7 +100,7 @@
   <div>
     <div class="kicker">MOSHA 300</div>
     <h1>画風を選んで、<br>300枚模写する。</h1>
-    <p class="lead">基礎→発展→応用の3段階。同じ絵を白黒からカラーへ。お手本が難易度順に並んでいて、印刷して描くだけ。買った後もお手本が増えます。</p>
+    <p class="lead">「形を正確に取る」ことだけを、基礎→発展→応用の3段階で。影も色もなし、線画だけ。お手本が難易度順に並んでいて、印刷して描くだけ。買った後もお手本が増えます。</p>
     <div class="cta">
       <a class="btn primary" href="#" data-booth="start">スタートセットを見る（BOOTH）</a>
       <a class="btn" href="#" data-booth="free">無料お試し版（8枚）</a>
@@ -116,10 +116,10 @@
   <p class="lead">「何を模写すればいいか分からない」を無くすために、難易度順に並べました。1枚は20分。</p>
   <div class="steps">
     <div class="card"><div class="num">STEP 1 ／ 基礎</div><h3>線・形・比率</h3><p>直線と円から、図形の組み合わせ、シルエット、グリッド模写へ。全画風を混ぜた50枚。描くうちに好きな画風が分かる。</p></div>
-    <div class="card"><div class="num">STEP 2 ／ 発展</div><h3>立体・明暗・構造</h3><p>3段階の影から5段階へ。目・手・髪・布の部分模写。光の向きを変えて同じ顔を描く。画風別に30枚。</p></div>
-    <div class="card"><div class="num">STEP 3 ／ 応用</div><h3>構図・色・転用</h3><p>3色限定の色模写からフルカラーへ。記憶で描く。お手本を変えて描いて、自分の絵にする。画風別に30枚。</p></div>
+    <div class="card"><div class="num">STEP 2 ／ 発展</div><h3>部分・角度・比率</h3><p>目・手・髪・服の部分模写。正面・斜め・横・あおり。頭身を測る。逆さ模写、鏡像、ネガティブスペースで「思い込み」を消す。画風別に30枚。</p></div>
+    <div class="card"><div class="num">STEP 3 ／ 応用</div><h3>速さ・記憶・転用</h3><p>2分クロッキー。記憶で描く。角度を変えて、差し替えて、合成して描く。模写した形を自分の絵にする。画風別に30枚。</p></div>
   </div>
-  <div class="flow"><span>白黒・線画</span><i>→</i><span>白黒・グレースケール</span><i>→</i><span>カラー・3色限定</span><i>→</i><span>カラー・フルカラー</span><i>　同じ番号の絵で進む</i></div>
+  <div class="flow"><span>なぞる</span><i>→</i><span>グリッドで描く</span><i>→</i><span>基準線2本</span><i>→</i><span>グリッドなし</span><i>→</i><span>記憶で描く</span><i>　補助を減らしながら進む</i></div>
 </div></section>
 
 <section id="quiz"><div class="wrap">
@@ -131,7 +131,7 @@
       <button class="opt" data-v="anime">アニメ・マンガのキャラ</button><button class="opt" data-v="yuru">ゆるかわ・デフォルメ</button><button class="opt" data-v="logo">ロゴ・文字・アイコン</button><button class="opt" data-v="real">リアル・写実</button><button class="opt" data-v="unsure">まだ決めていない</button>
     </div></div>
     <div class="q" data-q="level"><div class="qt">2. いまの状態</div><div class="opts">
-      <button class="opt" data-v="zero">ほぼ描いたことがない</button><button class="opt" data-v="some">たまに描く。形がずれる</button><button class="opt" data-v="mid">形は取れる。立体・色で止まる</button>
+      <button class="opt" data-v="zero">ほぼ描いたことがない</button><button class="opt" data-v="some">たまに描く。形がずれる</button><button class="opt" data-v="mid">形は取れる。斜めや全身で崩れる</button>
     </div></div>
     <div class="q" data-q="device"><div class="qt">3. 描く道具</div><div class="opts">
       <button class="opt" data-v="paper">紙に印刷して描く</button><button class="opt" data-v="tablet">タブレットで描く</button>
@@ -221,7 +221,7 @@ const CONFIG = {
   },
   social: { youtube: 'https://www.youtube.com/@oekakiotousan', tiktok: '', instagram: '' },
   styles: [
-    { id:'anime', name:'アニメ・マンガ', desc:'顔・髪・手・全身・服のしわ', mark:'A', status:'on' },
+    { id:'anime', name:'アニメ・マンガ', desc:'目・顔の角度・手・髪・全身・服', mark:'A', status:'on' },
     { id:'yuru',  name:'ゆるかわ・デフォルメ', desc:'動物・食べ物・小物', mark:'ゆ', status:'next' },
     { id:'logo',  name:'ロゴ・レタリング', desc:'手描き文字・オリジナルロゴ・アイコン', mark:'G', status:'soon' },
     { id:'real',  name:'リアル・写実', desc:'静物・手・顔のパーツ', mark:'R', status:'soon' },
@@ -231,7 +231,7 @@ const CONFIG = {
   prices: [
     { name:'無料お試し版', sub:'基礎3枚＋発展3枚＋使い方＋カレンダー', price:'0円', key:'free' },
     { name:'基礎ドリル', sub:'50枚（白黒）＋同梱物一式。全画風共通', price:'980円', key:'basic' },
-    { name:'発展パック アニメ・マンガ', sub:'30枚（線画＋グレースケール）', price:'1,280円', key:'dev.anime' },
+    { name:'発展パック アニメ・マンガ', sub:'30枚（部分・角度・比率・逆さ・鏡像・クロッキー）', price:'1,280円', key:'dev.anime' },
     { name:'スタートセット', sub:'基礎ドリル＋発展1画風', price:'1,980円', key:'start', note:'単品合計 2,260円' },
     { name:'全部入り（先行）', sub:'今ある全パック＋今後の追加すべて', price:'3,980円', key:'all', note:'そろった後は 4,980円' }
   ]
@@ -270,11 +270,11 @@ function recommend(){
     title = '基礎ドリル（50枚）'; key = 'basic';
     body = '線と円から始めて、シルエット、グリッド模写へ。全画風が混ざっているので、描きながら好きな画風を決められます。' + (ans.level !== 'zero' && devSold ? ' 発展まで一気に進むならスタートセットが割安です。' : '');
   } else if (ans.level === 'some') {
-    if (devSold) { title = `スタートセット（基礎＋発展 ${styleName}）`; key = 'start'; body = '形のずれは「測る」練習で直ります。基礎で比率を身につけ、そのまま発展で立体と明暗へ。'; }
+    if (devSold) { title = `スタートセット（基礎＋発展 ${styleName}）`; key = 'start'; body = '形のずれは「測る」練習で直ります。基礎で比率を身につけ、そのまま発展で部分と角度へ。'; }
     else { title = '基礎ドリル（50枚）'; key = 'basic'; body = `${styleName} の発展パックは準備中です。基礎で比率と線を固めておくと、発売時にそのまま進めます。`; }
   } else {
-    if (devSold) { title = `発展パック ${styleName}`; key = 'dev.' + ans.goal; body = '形が取れるなら基礎は飛ばして、明暗3段階→5段階、部分模写、光源違いへ。応用（色）は準備中です。'; }
-    else { title = '全部入り（先行）'; key = 'all'; body = `${styleName} の発展・応用は順次追加されます。全部入りなら追加分も含まれるので、待つ間は基礎と他画風で明暗の練習ができます。`; }
+    if (devSold) { title = `発展パック ${styleName}`; key = 'dev.' + ans.goal; body = '形が取れるなら基礎は飛ばして、部分模写、顔の角度、頭身、逆さ模写・鏡像へ。応用（速さ・記憶・転用）は準備中です。'; }
+    else { title = '全部入り（先行）'; key = 'all'; body = `${styleName} の発展・応用は順次追加されます。全部入りなら追加分も含まれるので、待つ間は基礎と他画風で部分模写の練習ができます。`; }
   }
   body += ans.device === 'tablet' ? ' タブレット用に、1枚ずつの PNG が同梱されています。' : ' A4 に白黒で印刷して使ってください。';
   document.getElementById('recTitle').textContent = title;
