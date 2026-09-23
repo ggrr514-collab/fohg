@@ -16,12 +16,14 @@
 | `build/gen-samples.mjs` | 基礎の SVG お手本を生成 |
 | `extras/extras.html` + `build/build-extras.mjs` | 同梱物（使い方・30日カレンダー・比較シート・ルーブリック・診断表） |
 | `lp/index.html` | 専用ページ（診断つき）。別リポジトリに移して GitHub Pages で公開する想定 |
+| `prompts/` | **Gemini でお手本を作る指示。** 共通スタイル、マスコット設定、シートごとのプロンプト（`basic.md` / `dev-anime.md`） |
 | `booth/商品ページ文面.md` | BOOTH の商品説明文 |
 | `dist/` | 出力（PDF・PNG） |
 
 ## お手本について
 
-現状はすべて AI 作成の線画（SVG）。1点ずつ差し替えたい時は、同じ番号の PNG を置くだけでよい（PNG が優先）。
+可愛げのある線画に統一する方針。**本番のお手本は `prompts/` の指示で Gemini 生成し、`samples/<pack>/NNN.png` に置く。**
+現状は仮の線画（SVG）。1点ずつ差し替えたい時は、同じ番号の PNG を置くだけでよい（PNG が優先）。
 差し替えた分だけ「手描き」と言える。商品説明の「お手本について」は、実態に合わせて書き換えること。
 
 ## 手描きお手本の入れ方

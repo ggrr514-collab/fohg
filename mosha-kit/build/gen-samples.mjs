@@ -32,14 +32,14 @@ const gen = {
   16: () => wrap(`<rect x="30" y="30" width="40" height="40" transform="rotate(20 50 50)" ${S}/><rect x="12" y="10" width="20" height="20" transform="rotate(-30 22 20)" ${S}/><path d="M70 72 L92 78 L80 96 Z" ${S}/>`),
   17: () => wrap(`<path d="M50 24 C 38 12, 14 18, 14 46 C 14 70, 34 92, 50 84 C 66 92, 86 70, 86 46 C 86 18, 62 12, 50 24 Z" fill="#111"/><path d="M50 24 C 52 16, 56 12, 60 10" ${S}/>`),
   18: () => wrap(`<path d="M50 14 C 42 14, 40 30, 38 42 C 34 56, 16 62, 18 78 C 20 92, 80 92, 82 78 C 84 62, 66 56, 62 42 C 60 30, 58 14, 50 14 Z" fill="#111"/>`),
-  19: () => wrap(`<path d="M18 86 C 18 40, 50 14, 88 12 C 86 50, 60 84, 18 86 Z" fill="#111"/><path d="M18 86 C 40 66, 60 44, 86 14" stroke="#fff" stroke-width="2" fill="none"/>`),
+  19: () => wrap([0, 90, 180, 270].map(a => `<path d="M50 50 C 40 38, 20 34, 20 48 C 20 58, 40 62, 50 50 Z" fill="#111" transform="rotate(${a} 50 50) translate(0 -2)"/>`).join('') + `<path d="M50 52 L 58 88" stroke="#111" stroke-width="4" fill="none"/>`),
   20: () => wrap(`<path d="M20 26 H 68 V 84 H 20 Z" fill="#111"/><path d="M68 40 C 88 36, 90 66, 68 70" stroke="#111" stroke-width="8" fill="none"/>`),
-  21: () => wrap(`<path d="M42 10 H 58 V 26 C 66 30, 70 40, 70 48 V 88 H 30 V 48 C 30 40, 34 30, 42 26 Z" fill="#111"/>`),
+  21: () => wrap(`<path d="M38 8 H 62 V 14 H 58 V 24 C 68 28, 72 38, 72 48 V 90 H 28 V 48 C 28 38, 32 28, 42 24 V 14 H 38 Z" fill="#111"/>`),
   22: () => wrap(`<path d="M30 30 L 26 12 L 40 22 C 46 20, 54 20, 60 22 L 74 12 L 70 30 C 82 42, 80 60, 66 68 L 70 90 H 30 L 34 68 C 20 60, 18 42, 30 30 Z" fill="#111"/>`),
-  23: () => wrap(`<path d="M20 60 C 20 40, 40 34, 56 40 C 62 30, 74 28, 80 34 L 92 30 L 82 42 C 84 56, 74 68, 58 68 L 62 84 H 50 L 52 70 C 36 72, 22 70, 20 60 Z" fill="#111"/>`),
+  23: () => wrap(`<circle cx="50" cy="62" r="26" fill="#111"/><circle cx="60" cy="30" r="16" fill="#111"/><path d="M76 30 L 88 34 L 76 38 Z" fill="#111"/><path d="M40 86 L 36 96 M46 88 L 46 96 M56 88 L 56 96 M62 86 L 66 96" stroke="#111" stroke-width="3" fill="none"/>`),
   24: () => wrap(`<path d="M50 8 C 30 12, 14 30, 16 50 C 18 66, 30 74, 46 74 V 92 H 54 V 74 C 70 74, 82 66, 84 50 C 86 30, 70 12, 50 8 Z" fill="#111"/>`),
   25: () => wrap(`<path d="M12 62 C 12 52, 20 50, 26 50 L 34 36 H 66 L 74 50 C 84 50, 90 54, 90 62 V 72 H 12 Z" fill="#111"/><circle cx="28" cy="74" r="8" fill="#111"/><circle cx="72" cy="74" r="8" fill="#111"/><circle cx="28" cy="74" r="3" fill="#fff"/><circle cx="72" cy="74" r="3" fill="#fff"/>`),
-  26: () => wrap(`<path d="M14 48 L 50 14 L 86 48 V 88 H 14 Z" fill="#111"/><rect x="42" y="62" width="16" height="26" fill="#fff"/><rect x="64" y="20" width="8" height="16" fill="#111"/>`),
+  26: () => wrap(`<path d="M8 50 C 8 20, 92 20, 92 50 Z" fill="#111"/><rect x="30" y="50" width="40" height="40" fill="#111"/><path d="M42 90 V 72 C 42 64, 58 64, 58 72 V 90 Z" fill="#fff"/><rect x="66" y="26" width="8" height="12" fill="#111"/>`),
 };
 
 for (const [no, f] of Object.entries(gen)) {
