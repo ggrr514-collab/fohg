@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>模写300 — おえかきお父さんの模写ドリル</title>
+<meta name="description" content="画風を選んで、300枚模写する。基礎→発展→応用の3段階、白黒からカラーへ。手描きのお手本で、1日1枚30日。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#14161a; --navy:#16223d; --navy-700:#1f3057; --navy-50:#eef1f7; --paper:#fff; --line:#e7e9ee; --muted:#5b6472; --accent:#c8552a; --r:14px; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --ink:#eef0f4; --navy:#dfe6f7; --navy-700:#fff; --navy-50:#1c2438; --paper:#0f1218; --line:#2a3040; --muted:#9aa3b2; } }
+  :root[data-theme="dark"]{ --ink:#eef0f4; --navy:#dfe6f7; --navy-700:#fff; --navy-50:#1c2438; --paper:#0f1218; --line:#2a3040; --muted:#9aa3b2; }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{font-family:"Zen Kaku Gothic New",-apple-system,sans-serif;color:var(--ink);background:var(--paper);line-height:1.75;-webkit-font-smoothing:antialiased;word-break:keep-all;overflow-wrap:anywhere}
+  .mincho{font-family:"Shippori Mincho",serif}
+  a{color:inherit}
+  .wrap{max-width:960px;margin:0 auto;padding:0 16px}
+  header{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  header .wrap{display:flex;align-items:center;gap:12px;padding:12px 16px}
+  .brand{font-family:"Shippori Mincho",serif;font-weight:700;font-size:20px;color:var(--navy);text-decoration:none;letter-spacing:.08em}
+  .brand small{font-family:"Zen Kaku Gothic New",sans-serif;font-weight:400;font-size:11px;color:var(--muted);margin-left:8px;letter-spacing:0}
+  header .sp{flex:1}
+  .btn{display:inline-block;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:999px;border:1.5px solid var(--navy);color:var(--navy);background:transparent;white-space:nowrap;cursor:pointer;font-family:inherit}
+  .btn.primary{background:var(--navy);color:var(--paper)}
+  .btn.primary:hover{background:var(--navy-700)}
+  .btn.sm{font-size:12.5px;padding:8px 14px}
+  .btn.accent{background:var(--accent);border-color:var(--accent);color:#fff}
+  section{padding:56px 0}
+  section+section{border-top:1px solid var(--line)}
+  h1{font-family:"Shippori Mincho",serif;font-size:clamp(28px,6vw,46px);line-height:1.35;margin:0 0 14px;letter-spacing:.04em;color:var(--navy)}
+  h2{font-family:"Shippori Mincho",serif;font-size:clamp(22px,4vw,30px);margin:0 0 8px;color:var(--navy);letter-spacing:.04em}
+  h3{font-size:16px;margin:0 0 6px}
+  .lead{color:var(--muted);font-size:16px;max-width:38em;margin:0 0 22px}
+  .kicker{font-size:12px;letter-spacing:.18em;color:var(--accent);font-weight:700;margin-bottom:8px}
+  .hero{padding:64px 0 40px}
+  .hero .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:28px;align-items:center}
+  .hero img{width:100%;border:1px solid var(--line);border-radius:var(--r);box-shadow:0 12px 40px rgba(20,22,26,.12);background:#fff}
+  .cta{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .cta .note{font-size:12.5px;color:var(--muted);width:100%}
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .card{border:1px solid var(--line);border-radius:var(--r);padding:18px;background:var(--paper)}
+  .card .num{font-family:"Shippori Mincho",serif;font-size:13px;letter-spacing:.2em;color:var(--accent);margin-bottom:6px}
+  .card p{margin:6px 0 0;font-size:14px;color:var(--muted)}
+  .flow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px;font-size:13px}
+  .flow span{background:var(--navy-50);padding:6px 12px;border-radius:999px}
+  .flow i{font-style:normal;color:var(--muted)}
+  /* 診断 */
+  .quiz{border:1.5px solid var(--navy);border-radius:var(--r);padding:22px;background:var(--navy-50)}
+  .q{margin-bottom:16px}
+  .q .qt{font-weight:700;margin-bottom:8px}
+  .opts{display:flex;flex-wrap:wrap;gap:8px}
+  .opt{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:8px 14px;font-size:14px;cursor:pointer;font-family:inherit;color:var(--ink)}
+  .opt[aria-pressed="true"]{background:var(--navy);color:var(--paper);border-color:var(--navy)}
+  .result{margin-top:18px;border-top:1px dashed var(--line);padding-top:16px;display:none}
+  .result.show{display:block}
+  .result .rec{font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px}
+  .result p{margin:0 0 12px;font-size:14px;color:var(--muted)}
+  .styles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .style{border:1px solid var(--line);border-radius:var(--r);padding:14px;text-align:center}
+  .style .sw{height:70px;border-radius:10px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;font-family:"Shippori Mincho",serif;font-size:22px;color:var(--navy);background:var(--navy-50)}
+  .style b{display:block;font-size:14px}
+  .style small{color:var(--muted);font-size:11.5px}
+  .style .soon{display:inline-block;margin-top:6px;font-size:10.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .style .on{display:inline-block;margin-top:6px;font-size:10.5px;padding:2px 8px;border-radius:999px;background:var(--accent);color:#fff}
+  .anat{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+  .anat img{width:100%;border:1px solid var(--line);border-radius:var(--r);background:#fff}
+  .anat ol{margin:0;padding-left:20px;font-size:14.5px}
+  .anat li{margin-bottom:8px}
+  .anat li b{color:var(--navy)}
+  .price{width:100%;border-collapse:collapse;font-size:14.5px}
+  .price th,.price td{text-align:left;padding:12px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  .price th{font-size:12px;color:var(--muted);letter-spacing:.08em;font-weight:500}
+  .price td.p{font-weight:700;white-space:nowrap;color:var(--navy)}
+  .price td .s{display:block;font-size:12px;color:var(--muted);font-weight:400}
+  .grow{background:var(--navy-50);border-radius:var(--r);padding:18px;font-size:14px}
+  .grow ul{margin:8px 0 0;padding-left:18px}
+  .faq details{border-bottom:1px solid var(--line);padding:12px 0}
+  .faq summary{cursor:pointer;font-weight:700;font-size:15px}
+  .faq p{margin:8px 0 0;font-size:14px;color:var(--muted)}
+  footer{padding:32px 0 48px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line)}
+  footer .links{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px}
+  .sticky{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:none;z-index:9}
+  .sticky .btn{width:100%;text-align:center}
+  @media(max-width:720px){
+    .hero{padding:40px 0 28px}.hero .grid{grid-template-columns:1fr}.steps{grid-template-columns:1fr}.anat{grid-template-columns:1fr}
+    header .btn{display:none}.sticky{display:block}body{padding-bottom:64px}section{padding:40px 0}
+  }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="brand" href="#top">模写300<small>おえかきお父さんの模写ドリル</small></a>
+  <span class="sp"></span>
+  <a class="btn sm" href="#quiz">選び方</a>
+  <a class="btn sm primary" href="#" data-booth="free">無料お試し</a>
+</div></header>
+
+<section class="hero" id="top"><div class="wrap grid">
+  <div>
+    <div class="kicker">MOSHA 300</div>
+    <h1>画風を選んで、<br>300枚模写する。</h1>
+    <p class="lead">基礎→発展→応用の3段階。同じ絵を白黒からカラーへ。手描きのお手本が難易度順に並んでいて、印刷して描くだけ。買った後もお手本が増えます。</p>
+    <div class="cta">
+      <a class="btn primary" href="#" data-booth="start">スタートセットを見る（BOOTH）</a>
+      <a class="btn" href="#" data-booth="free">無料お試し版（8枚）</a>
+      <span class="note">PDF（印刷用・タブレット用）＋PNG。コンビニ決済可。</span>
+    </div>
+  </div>
+  <img src="img/sheet-basic-27.png" alt="ワークシートの例。お手本、なぞる枠、見て描く枠、チェックリスト" width="794" height="1123" loading="eager">
+</div></section>
+
+<section><div class="wrap">
+  <div class="kicker">3 STEPS</div>
+  <h2>1日1枚、30日で1段階。</h2>
+  <p class="lead">「何を模写すればいいか分からない」を無くすために、難易度順に並べました。1枚は20分。</p>
+  <div class="steps">
+    <div class="card"><div class="num">STEP 1 ／ 基礎</div><h3>線・形・比率</h3><p>直線と円から、図形の組み合わせ、シルエット、グリッド模写へ。全画風を混ぜた50枚。描くうちに好きな画風が分かる。</p></div>
+    <div class="card"><div class="num">STEP 2 ／ 発展</div><h3>立体・明暗・構造</h3><p>3段階の影から5段階へ。目・手・髪・布の部分模写。光の向きを変えて同じ顔を描く。画風別に30枚。</p></div>
+    <div class="card"><div class="num">STEP 3 ／ 応用</div><h3>構図・色・転用</h3><p>3色限定の色模写からフルカラーへ。記憶で描く。お手本を変えて描いて、自分の絵にする。画風別に30枚。</p></div>
+  </div>
+  <div class="flow"><span>白黒・線画</span><i>→</i><span>白黒・グレースケール</span><i>→</i><span>カラー・3色限定</span><i>→</i><span>カラー・フルカラー</span><i>　同じ番号の絵で進む</i></div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <div class="kicker">PICK</div>
+  <h2>どれを買えばいい？</h2>
+  <p class="lead">3つ答えると、買うべきパックが出ます。</p>
+  <div class="quiz">
+    <div class="q" data-q="goal"><div class="qt">1. 描きたいもの</div><div class="opts">
+      <button class="opt" data-v="anime">アニメ・マンガのキャラ</button><button class="opt" data-v="yuru">ゆるかわ・デフォルメ</button><button class="opt" data-v="logo">ロゴ・文字・アイコン</button><button class="opt" data-v="real">リアル・写実</button><button class="opt" data-v="unsure">まだ決めていない</button>
+    </div></div>
+    <div class="q" data-q="level"><div class="qt">2. いまの状態</div><div class="opts">
+      <button class="opt" data-v="zero">ほぼ描いたことがない</button><button class="opt" data-v="some">たまに描く。形がずれる</button><button class="opt" data-v="mid">形は取れる。立体・色で止まる</button>
+    </div></div>
+    <div class="q" data-q="device"><div class="qt">3. 描く道具</div><div class="opts">
+      <button class="opt" data-v="paper">紙に印刷して描く</button><button class="opt" data-v="tablet">タブレットで描く</button>
+    </div></div>
+    <div class="result" id="result">
+      <div class="rec" id="recTitle"></div>
+      <p id="recBody"></p>
+      <a class="btn primary" href="#" id="recLink">BOOTH で見る</a>
+      <a class="btn" href="#" data-booth="free" style="margin-left:6px">まず無料お試し</a>
+    </div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="kicker">STYLES</div>
+  <h2>選べる画風</h2>
+  <p class="lead">基礎は全画風共通。発展からは画風ごとのパック。毎月1画風ずつ増えます。</p>
+  <div class="styles" id="styles"></div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="kicker">ONE SHEET</div>
+  <h2>1枚の中身</h2>
+  <div class="anat">
+    <img src="img/sheet-dev-01.png" alt="発展パックのワークシート。記憶で描く枠つき" width="794" height="1123" loading="lazy">
+    <ol>
+      <li><b>今日のポイント。</b>1枚で盗むのは1つだけ。チェック項目もその1点に絞ってある。</li>
+      <li><b>お手本（手描き）。</b>折って隠せるように端に配置。</li>
+      <li><b>なぞる枠。</b>薄いグレーの下絵を1回だけなぞる。引き直し禁止。</li>
+      <li><b>見て描く枠。</b>最初はグリッド、途中から基準線2本、最後はなし。</li>
+      <li><b>記憶で描く枠</b>（発展以降）。見ながら描けるだけでは身につかない。</li>
+      <li><b>描いたら比べる。</b>お手本と並べて、ずれた所に○を付けてから直す。</li>
+      <li><b>今日の気づき1行。</b>空欄だと進捗マスを塗れない。</li>
+    </ol>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="kicker">PRICE</div>
+  <h2>価格</h2>
+  <table class="price" id="priceTable"></table>
+  <div class="grow" style="margin-top:18px"><b>買った後も増えます。</b>
+    <ul><li>同じ商品にお手本を毎月追加。BOOTH のライブラリから何度でも再ダウンロードできます。</li><li>「全部入り」は追加分もすべて含みます。早く買うほど得。</li></ul>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="kicker">HOW TO</div>
+  <h2>使い方</h2>
+  <div class="steps">
+    <div class="card"><h3>印刷する人</h3><p>A4・白黒・実際のサイズで印刷。家庭用プリンタで十分。なぞり線が薄い時は濃度を上げる。</p></div>
+    <div class="card"><h3>タブレットで描く人</h3><p>PNG を1枚ずつ開いて、上にレイヤーを作って描く。なぞり枠も画像に入っている。</p></div>
+    <div class="card"><h3>同梱物</h3><p>使い方、30日カレンダー、1日目・15日目・30日目の比較シート、自己評価ルーブリック、「うまくいかない」診断表。</p></div>
+  </div>
+</div></section>
+
+<section class="faq"><div class="wrap">
+  <div class="kicker">FAQ</div>
+  <h2>よくある質問</h2>
+  <details><summary>お手本は誰が描いていますか？</summary><p>すべて「おえかきお父さん」の手描きです。ワークシートの枠や薄いグレーのなぞり線の作成にはツールを使っています。</p></details>
+  <details><summary>絵をまったく描いたことがなくても大丈夫？</summary><p>基礎ドリルの最初の8枚は直線と円だけです。そこから始めてください。</p></details>
+  <details><summary>支払い方法は？</summary><p>BOOTH の決済（クレジットカード、コンビニ払い、PayPal など）が使えます。</p></details>
+  <details><summary>買った後に追加されたお手本はどうやって受け取る？</summary><p>BOOTH の「ライブラリ」から再ダウンロードできます。追加した時は SNS でお知らせします。</p></details>
+  <details><summary>練習した絵を SNS に投稿していい？</summary><p>歓迎です。#模写300 を付けてもらえると見に行きます。お手本そのものの投稿・再配布はご遠慮ください。</p></details>
+  <details><summary>印刷環境がありません。</summary><p>タブレット用の PNG を同梱しています。紙の本（ペーパーバック）は準備中です。</p></details>
+</div></section>
+
+<footer><div class="wrap">
+  <div><b>模写300</b> — おえかきお父さんの模写ドリル</div>
+  <div class="links" id="social"></div>
+  <div style="margin-top:10px">© おえかきお父さん</div>
+</div></footer>
+
+<div class="sticky"><a class="btn primary" href="#" data-booth="start">スタートセットを見る（BOOTH）</a></div>
+
+<script>
+/* ===== 設定：発売したらここだけ書き換える ===== */
+const CONFIG = {
+  booth: {
+    free:  'https://booth.pm/ja/items/0000000',  // 無料お試し版（0円商品）
+    basic: 'https://booth.pm/ja/items/0000001',  // 基礎ドリル
+    start: 'https://booth.pm/ja/items/0000002',  // スタートセット（基礎＋発展1画風）
+    all:   'https://booth.pm/ja/items/0000003',  // 全部入り
+    dev:   { anime: 'https://booth.pm/ja/items/0000004' },  // 発展パック（画風別）
+    app:   { },                                   // 応用パック（画風別）
+    color: { }                                    // カラー追加パック（画風別）
+  },
+  social: { youtube: 'https://www.youtube.com/@oekakiotousan', tiktok: '', instagram: '' },
+  styles: [
+    { id:'anime', name:'アニメ・マンガ', desc:'顔・髪・手・全身・服のしわ', mark:'A', status:'on' },
+    { id:'yuru',  name:'ゆるかわ・デフォルメ', desc:'動物・食べ物・小物', mark:'ゆ', status:'next' },
+    { id:'logo',  name:'ロゴ・レタリング', desc:'手描き文字・オリジナルロゴ・アイコン', mark:'G', status:'soon' },
+    { id:'real',  name:'リアル・写実', desc:'静物・手・顔のパーツ', mark:'R', status:'soon' },
+    { id:'retro', name:'レトロ・ポップ', desc:'太線・昭和レトロ', mark:'P', status:'soon' },
+    { id:'bg',    name:'背景・小物', desc:'建物・植物・パース', mark:'B', status:'soon' }
+  ],
+  prices: [
+    { name:'無料お試し版', sub:'基礎3枚＋発展3枚＋使い方＋カレンダー', price:'0円', key:'free' },
+    { name:'基礎ドリル', sub:'50枚（白黒）＋同梱物一式。全画風共通', price:'980円', key:'basic' },
+    { name:'発展パック アニメ・マンガ', sub:'30枚（線画＋グレースケール）', price:'1,280円', key:'dev.anime' },
+    { name:'スタートセット', sub:'基礎ドリル＋発展1画風', price:'1,980円', key:'start', note:'単品合計 2,260円' },
+    { name:'全部入り（先行）', sub:'今ある全パック＋今後の追加すべて', price:'3,980円', key:'all', note:'そろった後は 4,980円' }
+  ]
+};
+/* ===== 以下は触らなくてよい ===== */
+const get = (o, k) => k.split('.').reduce((a, b) => (a && a[b]) ? a[b] : null, o);
+function link(key){ return get(CONFIG.booth, key) || '#'; }
+document.querySelectorAll('[data-booth]').forEach(a => { a.href = link(a.dataset.booth); a.target = '_blank'; a.rel = 'noopener'; });
+
+// 画風一覧
+const st = document.getElementById('styles');
+CONFIG.styles.forEach(s => {
+  const badge = s.status === 'on' ? '<span class="on">発売中</span>' : s.status === 'next' ? '<span class="soon">来月</span>' : '<span class="soon">準備中</span>';
+  st.insertAdjacentHTML('beforeend', `<div class="style"><div class="sw">${s.mark}</div><b>${s.name}</b><small>${s.desc}</small><br>${badge}</div>`);
+});
+// 価格表
+const pt = document.getElementById('priceTable');
+pt.innerHTML = '<tr><th>商品</th><th>内容</th><th>価格</th><th></th></tr>' + CONFIG.prices.map(p =>
+  `<tr><td><b>${p.name}</b></td><td>${p.sub}${p.note ? `<span class="s">${p.note}</span>` : ''}</td><td class="p">${p.price}</td><td><a class="btn sm" href="${link(p.key)}" target="_blank" rel="noopener">BOOTH</a></td></tr>`).join('');
+// SNS
+const so = document.getElementById('social');
+Object.entries(CONFIG.social).forEach(([k, v]) => { if (v) so.insertAdjacentHTML('beforeend', `<a href="${v}" target="_blank" rel="noopener">${k}</a>`); });
+
+// 診断
+const ans = {};
+document.querySelectorAll('.q').forEach(q => q.querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => {
+  q.querySelectorAll('.opt').forEach(o => o.setAttribute('aria-pressed', 'false'));
+  b.setAttribute('aria-pressed', 'true'); ans[q.dataset.q] = b.dataset.v; recommend();
+})));
+function recommend(){
+  if (!(ans.goal && ans.level && ans.device)) return;
+  const styleName = { anime:'アニメ・マンガ', yuru:'ゆるかわ・デフォルメ', logo:'ロゴ・レタリング', real:'リアル・写実', unsure:'' }[ans.goal];
+  const devSold = !!get(CONFIG.booth, 'dev.' + ans.goal);
+  let title, body, key;
+  if (ans.level === 'zero' || ans.goal === 'unsure') {
+    title = '基礎ドリル（50枚）'; key = 'basic';
+    body = '線と円から始めて、シルエット、グリッド模写へ。全画風が混ざっているので、描きながら好きな画風を決められます。' + (ans.level !== 'zero' && devSold ? ' 発展まで一気に進むならスタートセットが割安です。' : '');
+  } else if (ans.level === 'some') {
+    if (devSold) { title = `スタートセット（基礎＋発展 ${styleName}）`; key = 'start'; body = '形のずれは「測る」練習で直ります。基礎で比率を身につけ、そのまま発展で立体と明暗へ。'; }
+    else { title = '基礎ドリル（50枚）'; key = 'basic'; body = `${styleName} の発展パックは準備中です。基礎で比率と線を固めておくと、発売時にそのまま進めます。`; }
+  } else {
+    if (devSold) { title = `発展パック ${styleName}`; key = 'dev.' + ans.goal; body = '形が取れるなら基礎は飛ばして、明暗3段階→5段階、部分模写、光源違いへ。応用（色）は準備中です。'; }
+    else { title = '全部入り（先行）'; key = 'all'; body = `${styleName} の発展・応用は順次追加されます。全部入りなら追加分も含まれるので、待つ間は基礎と他画風で明暗の練習ができます。`; }
+  }
+  body += ans.device === 'tablet' ? ' タブレット用に、1枚ずつの PNG が同梱されています。' : ' A4 に白黒で印刷して使ってください。';
+  document.getElementById('recTitle').textContent = title;
+  document.getElementById('recBody').textContent = body;
+  const a = document.getElementById('recLink'); a.href = link(key); a.target = '_blank'; a.rel = 'noopener';
+  document.getElementById('result').classList.add('show');
+}
+</script>
+</body>
+</html>
