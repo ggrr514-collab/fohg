@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+<defs><filter id="hd" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="36" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.4" xChannelSelector="R" yChannelSelector="G"/></filter></defs>
+<g filter="url(#hd)" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(28 50) scale(1 1)">
+    <path d="M-15 -2.2 C -9 -13.2, 9 -13.2, 15 -1.1" stroke="#111" stroke-width="2.6" fill="none"/>
+    <path d="M-12 8.8 C -4.5 12.100000000000001, 6 12.100000000000001, 13.5 6.6" stroke="#111" stroke-width="1.2" fill="none"/>
+    <ellipse cx="0" cy="0.44" rx="7.800000000000001" ry="9.24" stroke="#111" stroke-width="1.4" fill="none"/><ellipse cx="0" cy="1.76" rx="4.2" ry="5.279999999999999" stroke="#111" stroke-width="0" fill="#111"/>
+    <circle cx="-3" cy="-3.96" r="2.1" fill="#fff" stroke="none"/>
+    <path d="M15 -1.1 l 3.5999999999999996 -2.6399999999999997" stroke="#111" stroke-width="1.6" fill="none"/></g><g transform="translate(72 50) scale(-1 1)">
+    <path d="M-15 -2.2 C -9 -13.2, 9 -13.2, 15 -1.1" stroke="#111" stroke-width="2.6" fill="none"/>
+    <path d="M-12 8.8 C -4.5 12.100000000000001, 6 12.100000000000001, 13.5 6.6" stroke="#111" stroke-width="1.2" fill="none"/>
+    <ellipse cx="0" cy="0.44" rx="7.800000000000001" ry="9.24" stroke="#111" stroke-width="1.4" fill="none"/><ellipse cx="0" cy="1.76" rx="4.2" ry="5.279999999999999" stroke="#111" stroke-width="0" fill="#111"/>
+    <circle cx="-3" cy="-3.96" r="2.1" fill="#fff" stroke="none"/>
+    <path d="M15 -1.1 l 3.5999999999999996 -2.6399999999999997" stroke="#111" stroke-width="1.6" fill="none"/></g><path d="M50 40 V 62" stroke="#999" stroke-width="0.8" fill="none"/></g></svg>

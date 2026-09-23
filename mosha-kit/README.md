@@ -8,8 +8,8 @@
 | パス | 中身 |
 |---|---|
 | `content/*.json` | 各パックの内容（1枚ごとのタイトル・今日のポイント・チェック項目・グリッド・目安時間） |
-| `samples/<pack>/NNN.png` | **手描きのお手本を置く場所。** 番号はシート番号（3桁） |
-| `samples/basic/NNN.svg` | 基礎 01〜26 の線・図形・シルエット課題（生成済み） |
+| `samples/<pack>/NNN.svg` | **お手本（AI 作成の手描き風線画）。** `gen-samples.mjs`（基礎 01〜26）と `gen-samples-ai.mjs`（基礎 27〜49・発展 01〜30）で生成 |
+| `samples/<pack>/NNN.png` | 手描きのお手本を置く場所。同じ番号の SVG より **PNG が優先**される |
 | `template/sheet.css` | ワークシートの見た目（A4） |
 | `build/build.mjs` | JSON → HTML → PDF/PNG |
 | `build/gen-samples.mjs` | 基礎の SVG お手本を生成 |
@@ -18,7 +18,12 @@
 | `booth/商品ページ文面.md` | BOOTH の商品説明文 |
 | `dist/` | 出力（PDF・PNG） |
 
-## お手本の入れ方
+## お手本について
+
+現状はすべて AI 作成の線画（SVG）。1点ずつ差し替えたい時は、同じ番号の PNG を置くだけでよい（PNG が優先）。
+差し替えた分だけ「手描き」と言える。商品説明の「お手本について」は、実態に合わせて書き換えること。
+
+## 手描きお手本の入れ方
 
 1. A4 の紙に描く（枠いっぱいでなく、周囲に余白を残す）。ペン入れ済みの線画が望ましい
 2. スキャン or スマホで撮影 → 傾き補正 → 白背景で書き出し（PNG、長辺 1600px 以上）
@@ -31,7 +36,9 @@
 
 ```bash
 cd mosha-kit
-node build/gen-samples.mjs            # 基礎の SVG お手本（初回のみ）
+node build/gen-samples.mjs            # 基礎 01〜26 の SVG お手本（初回のみ）
+node build/gen-samples-ai.mjs         # 基礎 27〜49・発展 01〜30 の SVG お手本（初回のみ）
+node build/contact-sheet.mjs basic    # お手本一覧を dist/basic/samples.png に出して確認
 node build/build.mjs basic            # dist/basic/基礎ドリル.pdf
 node build/build.mjs basic --all-png  # + dist/basic/png/001.png … （タブレット用）
 node build/build.mjs dev-anime
@@ -71,8 +78,8 @@ Node 22 と Playwright（Chromium）が必要。日本語フォントは IPA ゴ
 
 ## 発売前チェック
 
-- [ ] 全番号に手描きお手本が入っている（点線枠が残っていない）
+- [ ] 全番号にお手本が入っている（点線枠が残っていない）。差し替えた手描きがあれば PNG で上書き済み
 - [ ] 家庭用プリンタで白黒印刷して、なぞり線が見える
 - [ ] `lp/index.html` の `CONFIG.booth` を実際の URL に差し替えた
-- [ ] BOOTH の説明文に「お手本は手描き」「再DL可」「再配布禁止」が入っている
+- [ ] BOOTH の説明文の「お手本について」が実態（AI 作成／手描き）と一致している。「再DL可」「再配布禁止」が入っている
 - [ ] 無料お試し版（8枚）を 0 円商品として出した

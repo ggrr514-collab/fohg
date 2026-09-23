@@ -21,7 +21,12 @@ const css = fs.readFileSync(path.join(ROOT, 'template', 'sheet.css'), 'utf8');
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function sampleMarkup(sheet, forTrace) {
-  const rel = sheet.sample || `samples/${packId}/${String(sheet.no).padStart(3, '0')}.png`;
+  // sample 未指定なら samples/<pack>/NNN.(png|jpg|jpeg|svg) を順に探す。手描きスキャン(png)が SVG より優先される
+  let rel = sheet.sample;
+  if (!rel) {
+    const base = `samples/${packId}/${String(sheet.no).padStart(3, '0')}`;
+    rel = ['png', 'jpg', 'jpeg', 'svg'].map(e => `${base}.${e}`).find(r => fs.existsSync(path.join(ROOT, r))) || `${base}.png`;
+  }
   const abs = path.join(ROOT, rel);
   if (fs.existsSync(abs)) {
     if (abs.endsWith('.svg')) return fs.readFileSync(abs, 'utf8');

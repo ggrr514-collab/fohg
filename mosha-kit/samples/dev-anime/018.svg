@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+<defs><filter id="hd" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="43" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.4" xChannelSelector="R" yChannelSelector="G"/></filter></defs>
+<g filter="url(#hd)" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(-4 4) scale(.56)">
+
+<path d="M36 92 C 30 84, 30 60, 32 52 L 20 30 C 18 26, 24 22, 28 26 L 40 44 L 40 14 C 40 8, 48 8, 48 14 V 42 L 52 8 C 52 2, 60 2, 60 8 L 58 42 L 64 14 C 66 8, 74 10, 72 16 L 66 44 L 76 24 C 80 18, 86 22, 84 28 L 72 56 C 72 70, 70 84, 64 92 Z" stroke="#111" stroke-width="2.1" fill="none"/><path d="M40 44 C 44 48, 56 48, 66 46" stroke="#111" stroke-width="1.2" fill="none"/></g></g><g transform="translate(46 22) scale(.56)">
+
+<path d="M24 30 C 24 22, 32 20, 40 20 H 60 C 78 20, 78 36, 60 36 C 78 34, 80 50, 60 50 C 80 48, 80 64, 60 64 C 78 62, 76 78, 56 78 H 36 C 26 78, 22 72, 24 64 Z" stroke="#111" stroke-width="2.1" fill="none"/><path d="M60 36 H 54 M60 50 H 54 M60 64 H 54" stroke="#111" stroke-width="1.4" fill="none"/><path d="M26 40 C 26 30, 40 30, 50 36 L 58 42 C 64 46, 60 56, 52 54 L 36 50 C 28 48, 26 46, 26 40 Z" stroke="#111" stroke-width="1.9" fill="none"/></g></g></g></svg>
