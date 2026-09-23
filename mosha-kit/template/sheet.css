@@ -25,8 +25,9 @@ body { font-family: "IPAPGothic", "IPAGothic", "Noto Sans CJK JP", "Hiragino San
 .box { border: 1px solid var(--line); border-radius: 2mm; position: relative; overflow: hidden; }
 .box .lab { position: absolute; left: 0; top: 0; font-size: 7.5pt; background: var(--accent); color: #fff; padding: .6mm 2mm; border-radius: 2mm 0 2mm 0; z-index: 3; }
 .box .lab .t { opacity: .85; margin-left: 1.5mm; font-size: 7pt; }
-.sample { height: 54mm; display: flex; align-items: center; justify-content: center; padding: 6mm 3mm 3mm; background: #fff; }
-.sample svg, .sample img { width: 100%; height: 100%; object-fit: contain; }
+.sample { height: 70mm; background: #fff; }
+.sample .inner { position: absolute; top: 7mm; left: 50%; width: 48mm; height: 60mm; transform: translateX(-50%); }
+.sample .inner svg, .sample .inner img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .placeholder { width: 100%; height: 100%; border: 1px dashed #aab; border-radius: 1.5mm; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #889; font-size: 7.5pt; text-align: center; line-height: 1.5; padding: 2mm; }
 .placeholder b { font-size: 9pt; color: #667; }
 .point { display: flex; flex-direction: column; gap: 2.5mm; }
@@ -41,13 +42,15 @@ body { font-family: "IPAPGothic", "IPAGothic", "Noto Sans CJK JP", "Hiragino San
 .ratio span { display: inline-block; width: 12mm; border-bottom: 1px solid #333; margin: 0 1mm; }
 
 /* row 2: trace + draw */
-.r2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; flex: 1; min-height: 100mm; }
-.r2 .box { height: 100%; }
+.r2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; flex: none; }
+.r2 .box { height: 110mm; }
 .time { position: absolute; right: 0; top: 0; font-size: 7.5pt; color: #666; background: #fff; padding: .6mm 2mm; border-radius: 0 2mm 0 2mm; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.inner { position: absolute; inset: 7mm 3mm 3mm; }
-.trace .inner svg, .trace .inner img { width: 100%; height: 100%; object-fit: contain; opacity: .3; filter: grayscale(1); }
+.r2 .inner { position: absolute; top: 7mm; left: 50%; width: 80mm; height: 100mm; transform: translateX(-50%); }
+.inner svg, .inner img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.trace .inner svg, .trace .inner img { opacity: .3; filter: grayscale(1); }
 .trace .inner .placeholder { opacity: .6; }
-.grid { position: absolute; inset: 7mm 3mm 3mm; pointer-events: none; }
+.grid { position: absolute; inset: 0; pointer-events: none; }
+.inner .grid.g4, .inner .grid.g3, .inner .grid.g6 { background-position: 0 0; }
 .grid.g2 { background-image: linear-gradient(to right, transparent calc(50% - .4px), #b0b0b0 calc(50% - .4px), #b0b0b0 calc(50% + .4px), transparent calc(50% + .4px)), linear-gradient(to bottom, transparent calc(50% - .4px), #b0b0b0 calc(50% - .4px), #b0b0b0 calc(50% + .4px), transparent calc(50% + .4px)); }
 .grid.g3 { background-size: 33.333% 33.333%; background-image: linear-gradient(to right, #c4c4c4 1px, transparent 1px), linear-gradient(to bottom, #c4c4c4 1px, transparent 1px); }
 .grid.g4 { background-size: 25% 25%; background-image: linear-gradient(to right, #c4c4c4 1px, transparent 1px), linear-gradient(to bottom, #c4c4c4 1px, transparent 1px); }
@@ -55,9 +58,10 @@ body { font-family: "IPAPGothic", "IPAGothic", "Noto Sans CJK JP", "Hiragino San
 .grid.frame { border: 1px solid #c4c4c4; }
 
 /* row 3: memory + checks */
-.r3 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; height: 56mm; flex: none; }
-.r3.nomem { grid-template-columns: 1fr; height: 34mm; }
+.r3 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; flex: 1; min-height: 34mm; }
+.r3.nomem { grid-template-columns: 1fr; }
 .r3 .box { height: 100%; }
+.r3 .mem .grid { position: absolute; inset: 7mm 3mm 3mm; }
 .checks { padding: 7mm 3mm 3mm; }
 .checks ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 1.6mm; }
 .checks li { font-size: 9pt; line-height: 1.4; display: flex; gap: 2mm; align-items: flex-start; }

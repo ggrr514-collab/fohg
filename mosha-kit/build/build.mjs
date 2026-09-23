@@ -39,7 +39,7 @@ function sampleMarkup(sheet, forTrace) {
 }
 
 function gridClass(g) {
-  if (!g || g === 'none') return '';
+  if (!g || g === 'none') return 'grid frame';
   if (g === '2lines') return 'grid g2 frame';
   const n = String(g).split('x')[0];
   return `grid g${n} frame`;
@@ -70,14 +70,16 @@ function renderSheet(sheet, pack) {
   if (sheet.palette) rules.push(`<div class="rule">使う色は3つだけ： ${sheet.palette.map(esc).join(' ／ ')}<br>主 ＝ ______　従 ＝ ______　差し色 ＝ ______</div>`);
   if (sheet.rule) rules.push(`<div class="rule">${esc(sheet.rule)}</div>`);
 
+  const gc = gridClass(sheet.grid);
+  const gridLabel = sheet.grid && sheet.grid !== 'none' ? (sheet.grid === '2lines' ? '基準線2本' : 'グリッド ' + sheet.grid) : 'グリッドなし';
   const traceBox = hasTrace ? `
-    <div class="box trace"><div class="lab">なぞる<span class="t">1回だけ</span></div><div class="time">目安 ${t.trace}分</div>
-      <div class="inner">${sampleMarkup(sheet, true)}</div></div>` : '';
+    <div class="box trace"><div class="lab">なぞる<span class="t">1回だけ・同じマスを見ながら</span></div><div class="time">目安 ${t.trace}分</div>
+      <div class="inner">${sampleMarkup(sheet, true)}<div class="${gc}"></div></div></div>` : '';
   const drawBox = `
-    <div class="box draw"><div class="lab">見て描く<span class="t">${esc(sheet.grid && sheet.grid !== 'none' ? (sheet.grid === '2lines' ? '基準線2本' : 'グリッド ' + sheet.grid) : 'グリッドなし')}</span></div><div class="time">目安 ${t.draw}分</div>
-      <div class="${gridClass(sheet.grid)}"></div></div>`;
+    <div class="box draw"><div class="lab">見て描く<span class="t">${esc(gridLabel)}</span></div><div class="time">目安 ${t.draw}分</div>
+      <div class="inner"><div class="${gc}"></div></div></div>`;
   const memBox = hasMemory ? `
-    <div class="box"><div class="lab">記憶で描く<span class="t">お手本を折って隠す</span></div><div class="time">目安 ${t.memory}分</div><div class="grid frame"></div></div>` : '';
+    <div class="box mem"><div class="lab">記憶で描く<span class="t">お手本を折って隠す</span></div><div class="time">目安 ${t.memory}分</div><div class="grid frame"></div></div>` : '';
 
   return `
 <section class="sheet">
@@ -88,7 +90,7 @@ function renderSheet(sheet, pack) {
     <div class="date">日付<span></span></div>
   </div>
   <div class="r1">
-    <div class="box sample"><div class="lab">お手本</div>${sampleMarkup(sheet, false)}</div>
+    <div class="box sample"><div class="lab">お手本<span class="t">${esc(gridLabel)}</span></div><div class="inner">${sampleMarkup(sheet, false)}<div class="${gc}"></div></div></div>
     <div class="point">
       <div class="p"><b>今日のポイント（これだけ盗む）</b>${esc(sheet.point)}</div>
       ${steps}
