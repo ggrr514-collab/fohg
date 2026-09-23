@@ -2,6 +2,7 @@
 
 「画風を選んで、300枚模写する。」有料ワークブックの制作一式。
 **形を正確に取ることだけ**を扱う。影・明暗・色の課題は入れない。
+**紙に印刷して鉛筆で描く前提**（A4・白黒・片面・左に綴じ代）。タブレット向けの配布物は作らない。
 企画・競合分析・練習設計は `../docs/mosha-kit/企画提案書.md`。
 
 ## 構成
@@ -43,7 +44,7 @@ node build/gen-samples.mjs            # 基礎 01〜26 の SVG お手本（初�
 node build/gen-samples-ai.mjs         # 基礎 27〜49・発展 01〜30 の SVG お手本（初回のみ）
 node build/contact-sheet.mjs basic    # お手本一覧を dist/basic/samples.png に出して確認
 node build/build.mjs basic            # dist/basic/基礎ドリル.pdf
-node build/build.mjs basic --all-png  # + dist/basic/png/001.png … （タブレット用）
+node build/build.mjs basic --all-png  # + dist/basic/png/001.png … （商品画像・SNS 用）
 node build/build.mjs dev-anime
 node build/build-extras.mjs           # dist/extras/同梱物.pdf
 PNG_NO=27 node build/build.mjs basic --png   # 27枚目だけ PNG で確認
@@ -81,7 +82,8 @@ Node 22 と Playwright（Chromium）が必要。日本語フォントは IPA ゴ
 ## 発売前チェック
 
 - [ ] 全番号にお手本が入っている（点線枠が残っていない）。差し替えた手描きがあれば PNG で上書き済み
-- [ ] 家庭用プリンタで白黒印刷して、なぞり線が見える
+- [ ] 家庭用プリンタで白黒印刷して、なぞり線が見える（薄すぎ・濃すぎなら `template/sheet.css` の `.trace` の opacity を調整）
+- [ ] 印刷した紙で実際に1枚描き、枠の大きさが鉛筆で描くのに足りる
 - [ ] `lp/index.html` の `CONFIG.booth` を実際の URL に差し替えた
 - [ ] BOOTH の説明文の「お手本について」が実態（AI 作成／手描き）と一致している。「再DL可」「再配布禁止」が入っている
 - [ ] 無料お試し版（8枚）を 0 円商品として出した

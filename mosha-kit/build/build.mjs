@@ -2,7 +2,7 @@
 // 使い方: node build/build.mjs <pack-id> [--png] [--all-png]
 //   content/<pack-id>.json を読み、dist/<pack-id>/<title>.pdf を出力する
 //   --png     1 枚目（PNG_NO=n で n 枚目）を PNG 出力（確認用）
-//   --all-png 全シートを dist/<pack-id>/png/ に 1 枚ずつ PNG 出力（タブレット用）
+//   --all-png 全シートを dist/<pack-id>/png/ に 1 枚ずつ PNG 出力（商品画像・SNS 用の確認画像）
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -108,7 +108,7 @@ function renderSheet(sheet, pack) {
   <div class="ft">
     <div class="note"><span class="l">今日の気づき（1行・空欄なら進捗を塗れない）</span><span class="u"></span></div>
     <div class="prog"><span class="l">進捗</span><div class="cells">${progress(sheet, pack.sheets.length, pack.repeats || [])}</div></div>
-    <div class="foot"><span>${esc(pack.brand || '')}　${esc(pack.title)}</span><span>${esc(pack.copyright || '')}　※購入者本人の練習用。再配布禁止。</span></div>
+    <div class="foot"><span>${esc(pack.brand || '')}　${esc(pack.title)}　｜　A4・白黒・「実際のサイズ」で印刷</span><span>${esc(pack.copyright || '')}　※購入者本人の練習用。再配布禁止。</span></div>
   </div>
 </section>`;
 }
@@ -132,7 +132,7 @@ if (wantPng) {
   await page.screenshot({ path: path.join(outDir, `preview-${String(n).padStart(3, '0')}.png`), fullPage: false });
 }
 if (wantAllPng) {
-  // タブレット用: 1枚ずつ PNG（A4 @ 200dpi 相当）
+  // 確認・商品画像用: 1枚ずつ PNG
   const pngDir = path.join(outDir, 'png');
   fs.mkdirSync(pngDir, { recursive: true });
   await page.setViewportSize({ width: 794, height: 1123 });
