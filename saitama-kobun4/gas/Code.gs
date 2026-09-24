@@ -20,7 +20,7 @@ const SPREADSHEET_ID = "1Yuf_jzWZYfQKaYuZV6LN6-RDAODoOLeX-uyn9nYecwU";
 const MASTER_ID      = "1OaMsGfk_-s-BMa_osO3d8hwK04ikP0G34J7TWbs2lJo";
 
 /** index.html 側の CLIENT_VERSION と必ず同じ値にすること */
-const CLIENT_VERSION = 4;
+const CLIENT_VERSION = 5;
 
 const APP_NAME = "古典クエスト";
 
@@ -51,7 +51,7 @@ const CACHE_KEY   = "kobun_pool_v1";
 const CACHE_SEC   = 21600;              // 問題プールのキャッシュ 6時間
 const TARGET_SEC  = 300;                // 1ステージの目安時間（5分・画面表示用）
 const QUIZ_SEC    = 300;                // 小テストの制限時間（5分）
-const QUIZ_MAX    = 2;                  // 小テストで一度に出せる大問の数
+const QUIZ_COUNT  = 2;                  // 小テストで出す大問の数（5分でこの数に挑戦する）
 const PLACEHOLDER = "ここに";
 
 /** 称号（累計得点が満点の何％かで決まる・上が上位） */
@@ -143,10 +143,12 @@ const H_ANSWER = ["UUID","結果UUID","保存日時","email","氏名","組","番
 
 const H_TOTAL  = ["順位","email","氏名","組","番号","累計得点","満点","挑戦回数","クリアステージ数","満点ステージ数",
                   "平均正答率(%)","最高得点","最速タイム(秒)","称号",
-                  "小テスト回数","小テスト最高正答率・大問1(%)","小テスト最高正答率・大問2(%)","最終挑戦日時"];
+                  "小テスト回数","小テスト最高成績(%)","小テスト平均成績(%)","最終挑戦日時"];
 
-const H_QUIZ   = ["UUID","保存日時","email","氏名","組","番号","大問数","問題数","正答数","正答率(%)",
-                  "所要時間(秒)","時間切れ","出題ステージID","誤答問題ID","正答問題ID",
+const H_QUIZ   = ["UUID","保存日時","email","氏名","組","番号",
+                  "成績(%)","採用した大問","大問ごとの正答率","出題ステージID",
+                  "大問数","問題数","正答数","全体正答率(%)",
+                  "所要時間(秒)","時間切れ","誤答問題ID","正答問題ID",
                   "フォーカス離脱回数","クライアント版"];
 
 const H_ISSUE  = ["UUID","報告日時","email","氏名","結果UUID","問題ID","設問文",
@@ -682,7 +684,7 @@ function quizStatus_(email) {
   let remain = 0;
   pool.forEach(function (s) { if (!done[s.id]) remain++; });
 
-  const best = { 1: null, 2: null }, st = { tries: 0 };
+  let best = null, sum = 0, tries = 0, last = null;
   const sh = book_().getSheetByName(SH_QUIZ);
   if (sh && sh.getLastRow() >= 2) {
     const m = headerMap_(sh);
@@ -690,14 +692,15 @@ function quizStatus_(email) {
     const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
     rows.forEach(function (r) {
       if (String(r[m["email"] - 1]).trim().toLowerCase() !== key) return;
-      st.tries++;
-      const n = Number(r[m["大問数"] - 1]) || 1;
-      const rate = Number(r[m["正答率(%)"] - 1]) || 0;
-      if (best[n] == null || rate > best[n]) best[n] = rate;
+      tries++;
+      const sc = Number(r[m["成績(%)"] - 1]) || 0;
+      if (best == null || sc > best) best = sc;
+      sum += sc; last = sc;
     });
   }
-  return { remain: remain, total: pool.length, tries: st.tries,
-           best1: best[1], best2: best[2], limitSec: QUIZ_SEC, maxCount: QUIZ_MAX };
+  return { remain: remain, total: pool.length, tries: tries,
+           best: best, avg: tries ? Math.round(sum / tries) : null, last: last,
+           limitSec: QUIZ_SEC, count: Math.min(QUIZ_COUNT, remain) };
 }
 
 /** 小テストを始める。未出題のステージからランダムに count 本返す（正解は含めない） */
@@ -716,19 +719,14 @@ function startQuiz(count) {
       return { ok: false, message: "いまは小テストの時間ではありません。" };
     }
 
-    let n = Math.round(Number(count) || 1);
-    if (n < 1) n = 1;
-    if (n > QUIZ_MAX) n = QUIZ_MAX;
-
     const done = quizServedIds_(me.email);
     const pool = quizStages_().filter(function (s) { return !done[s.id]; });
-    if (pool.length < n) {
-      return { ok: false,
-        message: pool.length === 0
-          ? "小テストで出せる問題が、もうありません。先生にお知らせください。"
-          : "まだ解いていない問題が" + pool.length + "本しか残っていません。大問" + pool.length + "つで挑戦してください。",
-        remain: pool.length };
+    if (pool.length < 1) {
+      return { ok: false, remain: 0,
+        message: "小テストで出せる問題が、もうありません。先生にお知らせください。" };
     }
+    // 5分で大問2つに挑戦する。残りが1本しかないときは1本だけ出す。
+    const n = Math.min(QUIZ_COUNT, pool.length);
 
     // ランダムに n 本選ぶ
     for (let i = pool.length - 1; i > 0; i--) {
@@ -773,21 +771,29 @@ function submitQuiz(payload) {
     const timeUp = !!p.timeUp;
 
     let total = 0, correct = 0;
-    const detail = [], wrongIds = [], rightIds = [];
+    const detail = [], wrongIds = [], rightIds = [], parts = [];
     ids.forEach(function (sid) {
       const st = byId[sid];
       if (!st) return;
+      let n = 0, c = 0;
       st.qs.forEach(function (q) {
-        total++;
+        total++; n++;
         const raw = picks[q.id];
         const mine = (raw == null || raw === "") ? -1 : Number(raw);   // 未回答は不正解
         const ok = (mine === q.a);
-        if (ok) { correct++; rightIds.push(q.id); } else { wrongIds.push(q.id); }
+        if (ok) { correct++; c++; rightIds.push(q.id); } else { wrongIds.push(q.id); }
         detail.push({ stageId: sid, id: q.id, n: q.n, type: q.type,
                       mine: mine, a: q.a, ok: ok, exp: q.exp, opts: q.opts });
       });
+      parts.push({ id: sid, title: st.title, src: st.src,
+                   n: n, correct: c, rate: n ? Math.round(c / n * 100) : 0 });
     });
     if (!total) return { ok: false, message: "問題が見つかりませんでした。" };
+
+    // 2つのうち正答率の高いほうを、その回の成績とする
+    let bestPart = parts[0];
+    parts.forEach(function (x) { if (x.rate > bestPart.rate) bestPart = x; });
+    const score = bestPart.rate;
 
     const rate = Math.round(correct / total * 100);
     const uuid = uuid_();
@@ -795,12 +801,17 @@ function submitQuiz(payload) {
     const sh = sheet_(SH_QUIZ, H_QUIZ);
     if (alreadyQuizSaved_(sh, dedupe)) {
       return { ok: true, duplicated: true, total: total, correct: correct, rate: rate,
+               score: score, parts: parts, bestId: bestPart.id,
                detail: detail, status: quizStatus_(me.email) };
     }
 
     sh.appendRow([
-      uuid, now_(), me.email, me.name, me.klass, me.no, ids.length, total, correct, rate,
-      secs, timeUp ? "○" : "", ids.join(","), wrongIds.join(","), rightIds.join(","),
+      uuid, now_(), me.email, me.name, me.klass, me.no,
+      score, bestPart.id,
+      parts.map(function (x) { return x.id + ":" + x.rate + "%"; }).join(" / "),
+      ids.join(","),
+      ids.length, total, correct, rate,
+      secs, timeUp ? "○" : "", wrongIds.join(","), rightIds.join(","),
       blur, CLIENT_VERSION
     ]);
     // 重複排除キーは最終列に持たせる（見出しが無くても追記できるよう別管理）
@@ -810,8 +821,9 @@ function submitQuiz(payload) {
     const status = quizStatus_(me.email);
     return {
       ok: true, uuid: uuid, total: total, correct: correct, rate: rate,
+      score: score, parts: parts, bestId: bestPart.id,
       timeUp: timeUp, seconds: secs, detail: detail, status: status,
-      isBest: (ids.length === 1 ? status.best1 : status.best2) === rate
+      isBest: (status.best === score)
     };
   } catch (e) {
     return { ok: false, message: String(e.message || e) };
@@ -1064,13 +1076,12 @@ function collectQuiz_() {
   rows.forEach(function (r) {
     const email = String(r[m["email"] - 1]).trim().toLowerCase();
     if (!email) return;
-    if (!agg[email]) agg[email] = { tries: 0, best1: null, best2: null, last: "" };
+    if (!agg[email]) agg[email] = { tries: 0, best: null, sum: 0, last: "" };
     const a = agg[email];
     a.tries++;
-    const n = Number(r[m["大問数"] - 1]) || 1;
-    const rate = Number(r[m["正答率(%)"] - 1]) || 0;
-    if (n >= 2) { if (a.best2 == null || rate > a.best2) a.best2 = rate; }
-    else        { if (a.best1 == null || rate > a.best1) a.best1 = rate; }
+    const sc = Number(r[m["成績(%)"] - 1]) || 0;
+    if (a.best == null || sc > a.best) a.best = sc;
+    a.sum += sc;
     a.last = String(r[m["保存日時"] - 1]);
   });
   return agg;
@@ -1092,12 +1103,13 @@ function totalRows_() {
                 points: 0, tries: 0, best: {}, rateSum: 0, maxScore: 0, fastest: null, last: quiz[email].last });
   });
   return list.map(function (a, i) {
-    const q = quiz[a.email] || { tries: 0, best1: null, best2: null, last: "" };
+    const q = quiz[a.email] || { tries: 0, best: null, sum: 0, last: "" };
     return [i + 1, a.email, a.name, a.klass, a.no, a.points, max, a.tries,
             Object.keys(a.best).length, fullStagesOf_(a, per),
             a.tries ? Math.round(a.rateSum / a.tries) : 0,
             a.maxScore, a.fastest == null ? "" : a.fastest, rankName_(a.points, max),
-            q.tries, q.best1 == null ? "" : q.best1, q.best2 == null ? "" : q.best2,
+            q.tries, q.best == null ? "" : q.best,
+            q.tries ? Math.round(q.sum / q.tries) : "",
             a.last || q.last];
   });
 }

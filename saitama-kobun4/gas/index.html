@@ -252,6 +252,19 @@
   .switch button{font-size:12.5px; padding:6px 16px; border:0; background:#fff; color:var(--navy)}
   .switch button.on{background:var(--navy); color:#fff}
 
+  .rule{display:flex; flex-direction:column; gap:3px; padding:14px 16px; border-radius:10px;
+    background:var(--navy-50); border:1px solid #d8dfec; color:var(--navy); font-size:14px; line-height:1.8}
+  .rule span{color:#3a4555; font-size:13.5px}
+  .ribbon{display:inline-block; font-size:11.5px; letter-spacing:.12em; color:var(--muted);
+    border:1px solid var(--line); background:#fff; border-radius:999px; padding:3px 12px; margin-bottom:10px}
+  .parts{display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin-top:14px}
+  .part{border:1px solid var(--line); background:#fff; border-radius:10px; padding:10px 16px; min-width:150px}
+  .part .t{font-size:12px; color:var(--muted)}
+  .part .r{font-family:"Shippori Mincho",serif; font-size:22px; font-weight:700; color:#3a4555; line-height:1.3}
+  .part .r small{font-size:12px; color:var(--muted); font-weight:500; margin-left:3px}
+  .part.best{border-color:var(--navy); background:var(--navy-50)}
+  .part.best .r{color:var(--navy)}
+  .part .badge{display:block; font-size:11px; color:var(--navy); margin-top:3px}
   .picker{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-top:6px}
   .pick{border:1px solid var(--line); border-radius:12px; background:#fff; padding:16px; text-align:left;
     transition:transform .16s, box-shadow .16s, border-color .16s}
@@ -360,7 +373,10 @@
     <h2>小テスト</h2>
     <div class="pad">
       <p class="hint" id="quizLead" style="margin:0 0 14px"></p>
-      <div class="picker" id="quizPicker"></div>
+      <div class="rule">
+        <b>5分間で、大問2つに挑戦します。</b>
+        <span>2つのうち、<b>正答率の高いほうが今日の成績</b>になります。</span>
+      </div>
       <div class="msg" id="quizMsg"></div>
       <div class="toolrow" style="margin-top:16px">
         <button class="btn primary" id="quizStart" onclick="startQuiz()">小テストを始める</button>
@@ -468,8 +484,10 @@
 <main id="qresult" class="wrap hidden">
   <div class="playhead"><h2 class="mincho">小テスト　結果</h2></div>
   <div class="scorecard">
+    <div class="ribbon">今日の成績</div>
     <div class="bigrate" id="qRate">0<small>％</small></div>
-    <p class="msg2 mincho" id="qMsg" style="margin:8px 0 0; font-size:14px; color:#3a4555"></p>
+    <div class="parts" id="qParts"></div>
+    <p class="msg2 mincho" id="qMsg" style="margin:10px 0 0; font-size:14px; color:#3a4555"></p>
     <p class="meta" id="qMeta"></p>
   </div>
   <div class="msg" id="qSaveMsg"></div>
@@ -509,7 +527,7 @@
    古典クエスト ― クライアント側
    ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
    ============================================================ */
-var CLIENT_VERSION = 4;
+var CLIENT_VERSION = 5;
 
 var MARK  = ['ア','イ','ウ','エ'];
 var TYPES = ['仮名遣い','主語・指示語','内容理解','要旨・話し合い'];
@@ -518,7 +536,6 @@ var KINDS = ['正解が複数ある','正解が選択肢にない','読みや表
 var ME=null, STAGES=[], PROG=null, SETTINGS={}, BLOCKED='', SESSION=null;
 var QUIZ=null;                 // 小テストの状況（残数・最高正答率）
 var QZ=null;                   // 実施中の小テスト
-var QCOUNT=1;                  // 挑戦する大問の数
 var CUR=null, PICKS=[], GRADED=false, T0=0, TICK=null, TATE=true, TR=true, BLUR=0, STARTED='';
 var LAST=null;                 // 直近の採点結果（疑義報告に使う）
 var REP={qid:null, mine:-1, kind:KINDS[0]};
@@ -1050,31 +1067,21 @@ function renderQuizPanel(){
   }
 
   if(!quizOn()) return;
-  if(!QUIZ){ QUIZ={remain:0,total:0,tries:0,best1:null,best2:null,maxCount:2}; }
+  if(!QUIZ){ QUIZ={remain:0,total:0,tries:0,best:null,avg:null,count:2}; }
 
-  var lead='制限時間<b>5分</b>。大問をいくつ受けるか選んでください。'+
-           '　残り<b>'+QUIZ.remain+'</b>／'+QUIZ.total+'本'+
+  var lead='残り<b>'+QUIZ.remain+'</b>／'+QUIZ.total+'本'+
            (QUIZ.tries?'　これまで'+QUIZ.tries+'回':'')+
-           (QUIZ.best1!=null?'　最高正答率（大問1つ）<b>'+QUIZ.best1+'％</b>':'')+
-           (QUIZ.best2!=null?'　最高正答率（大問2つ）<b>'+QUIZ.best2+'％</b>':'');
+           (QUIZ.best!=null?'　最高成績 <b>'+QUIZ.best+'％</b>':'')+
+           (QUIZ.avg!=null?'　平均 '+QUIZ.avg+'％':'');
   document.getElementById('quizLead').innerHTML=lead;
 
-  var max=QUIZ.maxCount||2;
-  var html='';
-  for(var n=1;n<=max;n++){
-    var ok=(QUIZ.remain>=n);
-    html+='<button class="pick'+(QCOUNT===n?' sel':'')+'" '+(ok?'':'disabled')+' onclick="pickCount('+n+')">'+
-      '<h4>大問'+n+'つ　<small style="font-size:13px;color:var(--muted);font-weight:400">'+(n*4)+'問</small></h4>'+
-      '<p>'+(n===1?'本番と同じ分量です。まずはこちらから。':'5分で8問。かなり急ぐ分量です。チャレンジ向き。')+
-      (ok?'':'<br>残りの問題が足りません。')+'</p></button>';
-  }
-  document.getElementById('quizPicker').innerHTML=html;
-  if(QCOUNT>QUIZ.remain) QCOUNT=Math.max(1,QUIZ.remain);
+  var one=(QUIZ.remain===1);
   document.getElementById('quizStart').disabled=(QUIZ.remain<1);
-  setMsg('quizMsg', QUIZ.remain<1 ? '小テストで出せる問題が、もうありません。先生にお知らせください。' : '', 'warn');
+  setMsg('quizMsg',
+    QUIZ.remain<1 ? '小テストで出せる問題が、もうありません。先生にお知らせください。'
+    : one ? '残りが1本なので、今回は大問1つだけの出題になります。'
+    : '', 'warn');
 }
-
-function pickCount(n){ QCOUNT=n; renderQuizPanel(); }
 
 function setQuiz(on){
   call('setQuizMode',[!!on], function(r){
@@ -1089,9 +1096,10 @@ var QTICK=null, QEND=0;
 
 function startQuiz(){
   setMsg('quizMsg','');
-  call('startQuiz',[QCOUNT], function(r){
+  call('startQuiz',[], function(r){
     if(!r||!r.ok){ setMsg('quizMsg',(r&&r.message)||'始められませんでした。'); if(r&&r.remain!=null){ QUIZ.remain=r.remain; renderQuizPanel(); } return; }
     QZ={stages:r.stages, count:r.count, startedAt:r.startedAt, picks:{}, blur:0, limit:r.limitSec||300};
+    QUIZ=r.status||QUIZ;
     paintQuiz();
     startQClock(QZ.limit);
     show('quiz');
@@ -1099,7 +1107,9 @@ function startQuiz(){
 }
 
 function paintQuiz(){
-  document.getElementById('qSub').textContent='大問'+QZ.count+'つ・'+totalQs()+'問／5分';
+  document.getElementById('qSub').textContent=
+    (QZ.count>1 ? '大問'+QZ.count+'つ・'+totalQs()+'問／5分　※よいほうが成績になります'
+                : '大問1つ・'+totalQs()+'問／5分');
   document.getElementById('qSubmit').disabled=false;
   document.getElementById('qSubmit').textContent='提出する';
   document.getElementById('qBody').innerHTML=QZ.stages.map(function(st,si){
@@ -1210,17 +1220,30 @@ function submitQuiz(auto){
 }
 
 function paintQuizResult(r, auto){
-  document.getElementById('qRate').innerHTML=r.rate+'<small>％</small>';
-  var msg = r.rate===100 ? '全問正解。みごとです。'
-          : r.rate>=75  ? '合格ライン。取りこぼした問題の根拠を本文で確かめましょう。'
-          : r.rate>=50  ? 'あと一歩。解説を読んで、傍線部の根拠をたどり直しましょう。'
-                        : '本文の前書きと注をよりどころに、もう一度読み方を確かめましょう。';
+  var score=(r.score!=null)?r.score:r.rate;
+  document.getElementById('qRate').innerHTML=score+'<small>％</small>';
+
+  // 大問ごとの正答率。採用されたほうに印を付ける
+  var parts=r.parts||[];
+  document.getElementById('qParts').innerHTML=parts.map(function(x,i){
+    var best=(x.id===r.bestId);
+    return '<div class="part'+(best?' best':'')+'">'+
+      '<div class="t">第'+(i+1)+'問　'+esc(x.title)+'</div>'+
+      '<div class="r">'+x.rate+'<small>％</small>　<small>'+x.correct+'/'+x.n+'問</small></div>'+
+      (best&&parts.length>1?'<span class="badge">こちらを成績にしました</span>':'')+
+      '</div>';
+  }).join('');
+
+  var msg = score===100 ? '全問正解。みごとです。'
+          : score>=75  ? '合格ライン。取りこぼした問題の根拠を本文で確かめましょう。'
+          : score>=50  ? 'あと一歩。解説を読んで、傍線部の根拠をたどり直しましょう。'
+                       : '本文の前書きと注をよりどころに、もう一度読み方を確かめましょう。';
   document.getElementById('qMsg').textContent=msg;
   document.getElementById('qMeta').textContent=
-    r.correct+'／'+r.total+'問正解　／　解答時間 '+Math.floor(r.seconds/60)+'分'+(r.seconds%60)+'秒'+
-    (r.timeUp?'（時間切れ）':'')+
-    (QUIZ&&QUIZ.best1!=null?'　／　最高正答率（大問1つ）'+QUIZ.best1+'％':'')+
-    (QUIZ&&QUIZ.best2!=null?'　／　（大問2つ）'+QUIZ.best2+'％':'');
+    '全体では '+r.correct+'／'+r.total+'問正解（'+r.rate+'％）　／　解答時間 '+
+    Math.floor(r.seconds/60)+'分'+(r.seconds%60)+'秒'+(r.timeUp?'（時間切れ）':'')+
+    (QUIZ&&QUIZ.best!=null?'　／　これまでの最高成績 '+QUIZ.best+'％':'')+
+    (r.isBest&&QUIZ&&QUIZ.tries>1?'（更新）':'');
   setMsg('qSaveMsg', r.duplicated?'この回はすでに記録されています。':'', 'warn');
 
   var byStage={};
