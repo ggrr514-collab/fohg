@@ -241,6 +241,43 @@
   .hist .s{font-weight:700; color:var(--navy); font-variant-numeric:tabular-nums}
   .hist .g{color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums}
 
+  /* ===== 小テストモード ===== */
+  .quizbar{display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:11px 16px; margin-top:16px;
+    border-radius:10px; background:var(--gold-bg); border:1px solid #ecdfbd; color:var(--gold); font-size:13px}
+  .quizbar b{font-weight:700}
+  .quizbar .sp{flex:1}
+  .teachbar{display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 16px; margin-top:16px;
+    border-radius:10px; background:var(--navy-50); border:1px solid #d8dfec; font-size:13px; color:var(--navy)}
+  .switch{display:inline-flex; border:1px solid var(--navy); border-radius:999px; overflow:hidden}
+  .switch button{font-size:12.5px; padding:6px 16px; border:0; background:#fff; color:var(--navy)}
+  .switch button.on{background:var(--navy); color:#fff}
+
+  .picker{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-top:6px}
+  .pick{border:1px solid var(--line); border-radius:12px; background:#fff; padding:16px; text-align:left;
+    transition:transform .16s, box-shadow .16s, border-color .16s}
+  .pick:hover{transform:translateY(-2px); box-shadow:var(--shadow); border-color:var(--navy)}
+  .pick.sel{border-color:var(--navy); background:var(--navy-50); box-shadow:0 0 0 2px var(--navy-50)}
+  .pick h4{margin:0 0 5px; font-family:"Shippori Mincho",serif; font-size:17px; font-weight:600; color:var(--navy)}
+  .pick p{margin:0; font-size:12.5px; color:var(--muted); line-height:1.7}
+  .pick[disabled]{opacity:.4; pointer-events:none}
+
+  .countdown{font-family:"Shippori Mincho",serif; font-size:19px; font-weight:700; color:var(--navy);
+    font-variant-numeric:tabular-nums; border:1px solid var(--line); border-radius:999px;
+    padding:5px 16px; background:#fff}
+  .countdown.warn{color:#8a5a12; border-color:#ecdfbd; background:var(--gold-bg)}
+  .countdown.danger{color:var(--ng); border-color:#f2cfcb; background:var(--ng-bg); animation:pulse 1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+
+  .qsec{margin-top:26px}
+  .qsec > h3{margin:0 0 4px; font-family:"Shippori Mincho",serif; font-size:17px; font-weight:600; color:var(--navy);
+    padding-bottom:8px; border-bottom:2px solid var(--navy-50)}
+  .qsec > h3 small{font-size:12px; color:var(--muted); font-weight:400; margin-left:8px}
+  .qprog{font-size:12.5px; color:var(--muted); margin-left:auto}
+  .qprog b{color:var(--navy); font-weight:700}
+
+  .bigrate{font-family:"Shippori Mincho",serif; font-size:52px; font-weight:700; color:var(--navy); line-height:1.1}
+  .bigrate small{font-size:20px; color:var(--muted); font-weight:500}
+
   .modal{position:fixed; inset:0; background:rgba(20,22,26,.45); backdrop-filter:blur(2px);
     display:none; place-items:center; z-index:90; padding:20px}
   .modal.show{display:grid}
@@ -308,11 +345,31 @@
 <main id="home" class="wrap hidden">
   <section class="hero">
     <h1 class="mincho">埼玉県公立高校入試<br>大問4「古文」対策クエスト</h1>
-    <p>1ステージ＝本文1つ＋小問4問。<b>1問3点・合計12点満点</b>で、すべて<b>ア〜エの4択記号問題</b>です。入試と同じく、難しい箇所には本文中に口語訳が添えてあります。解いた記録は自動で保存され、弱点分析にも反映されます。</p>
+    <p id="heroLead">1ステージ＝本文1つ＋小問4問。<b>1問3点・合計12点満点</b>で、すべて<b>ア〜エの4択記号問題</b>です。入試と同じく、難しい箇所には本文中に口語訳が添えてあります。解いた記録は自動で保存され、弱点分析にも反映されます。</p>
     <div class="msg warn" id="blockedMsg"></div>
   </section>
 
-  <section class="panel">
+  <div class="teachbar hidden" id="teachBar">
+    <span>先生用</span>
+    <span class="sp"></span>
+    <span>小テストモード</span>
+    <span class="switch"><button id="qmOn" onclick="setQuiz(true)">開始</button><button id="qmOff" class="on" onclick="setQuiz(false)">終了</button></span>
+  </div>
+
+  <section class="panel hidden" id="quizPanel">
+    <h2>小テスト</h2>
+    <div class="pad">
+      <p class="hint" id="quizLead" style="margin:0 0 14px"></p>
+      <div class="picker" id="quizPicker"></div>
+      <div class="msg" id="quizMsg"></div>
+      <div class="toolrow" style="margin-top:16px">
+        <button class="btn primary" id="quizStart" onclick="startQuiz()">小テストを始める</button>
+      </div>
+      <p class="hint" style="margin-top:14px">・制限時間は<b>5分</b>。0になると自動で提出されます。<br>・答えていない問題は<b>不正解</b>になります。<br>・一度出た問題は、二度と小テストには出ません。</p>
+    </div>
+  </section>
+
+  <section class="panel" id="recPanel">
     <h2>冒険の記録</h2>
     <div class="pad">
       <div class="kpis">
@@ -323,7 +380,7 @@
     </div>
   </section>
 
-  <section class="panel">
+  <section class="panel" id="weakPanel">
     <h2>弱点分析（設問タイプ別の正答率）</h2>
     <div class="pad">
       <div class="bars" id="typeBars"></div>
@@ -391,6 +448,37 @@
   </div>
 </main>
 
+<!-- ============ QUIZ ============ -->
+<main id="quiz" class="wrap hidden">
+  <div class="playhead">
+    <h2 class="mincho">小テスト</h2>
+    <span class="src2" id="qSub"></span>
+    <span class="spacer"></span>
+    <span class="qprog" id="qProg"></span>
+    <span class="countdown" id="qClock">5:00</span>
+  </div>
+  <div class="quizbar">この画面を閉じたり、ほかのページに移ったりしないでください。答えていない問題は不正解になります。</div>
+  <div id="qBody"></div>
+  <div class="actions">
+    <button class="btn primary" id="qSubmit" onclick="submitQuiz(false)">提出する</button>
+  </div>
+</main>
+
+<!-- ============ QUIZ RESULT ============ -->
+<main id="qresult" class="wrap hidden">
+  <div class="playhead"><h2 class="mincho">小テスト　結果</h2></div>
+  <div class="scorecard">
+    <div class="bigrate" id="qRate">0<small>％</small></div>
+    <p class="msg2 mincho" id="qMsg" style="margin:8px 0 0; font-size:14px; color:#3a4555"></p>
+    <p class="meta" id="qMeta"></p>
+  </div>
+  <div class="msg" id="qSaveMsg"></div>
+  <div id="qReview"></div>
+  <div class="actions">
+    <button class="btn primary" onclick="goHome()">もどる</button>
+  </div>
+</main>
+
 <!-- ============ REVIEW ============ -->
 <main id="review" class="wrap hidden">
   <div class="playhead"><h2 class="mincho">まちがえた問題の復習</h2><span class="spacer"></span></div>
@@ -421,13 +509,16 @@
    古典クエスト ― クライアント側
    ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
    ============================================================ */
-var CLIENT_VERSION = 3;
+var CLIENT_VERSION = 4;
 
 var MARK  = ['ア','イ','ウ','エ'];
 var TYPES = ['仮名遣い','主語・指示語','内容理解','要旨・話し合い'];
 var KINDS = ['正解が複数ある','正解が選択肢にない','読みや表記の誤り','その他'];
 
 var ME=null, STAGES=[], PROG=null, SETTINGS={}, BLOCKED='', SESSION=null;
+var QUIZ=null;                 // 小テストの状況（残数・最高正答率）
+var QZ=null;                   // 実施中の小テスト
+var QCOUNT=1;                  // 挑戦する大問の数
 var CUR=null, PICKS=[], GRADED=false, T0=0, TICK=null, TATE=true, TR=true, BLUR=0, STARTED='';
 var LAST=null;                 // 直近の採点結果（疑義報告に使う）
 var REP={qid:null, mine:-1, kind:KINDS[0]};
@@ -457,10 +548,11 @@ function setMsg(id, text, cls, asHtml){
 
 /* ---------- 画面切り替え ---------- */
 function show(id){
-  ['gate','home','play','result','review'].forEach(function(s){
+  ['gate','home','play','result','review','quiz','qresult'].forEach(function(s){
     document.getElementById(s).classList.toggle('hidden', s!==id);
   });
   document.getElementById('siteHeader').classList.toggle('hidden', id==='gate');
+  if(id!=='quiz') stopQClock();
   window.scrollTo(0,0);
 }
 function goHome(){ stopTimer(); renderHome(); show('home'); }
@@ -475,7 +567,10 @@ window.addEventListener('load', function(){
       if(ev.key==='Enter') doRegister();
     });
   });
-  window.addEventListener('blur', function(){ if(CUR!=null && !GRADED) BLUR++; });
+  window.addEventListener('blur', function(){
+    if(CUR!=null && !GRADED) BLUR++;
+    if(QZ && !QZ.sent) QZ.blur++;
+  });
   buildRepKinds();
   bootSession();
 });
@@ -520,6 +615,7 @@ function gateError(msg){
 
 function applySession(r){
   ME=r.student; STAGES=r.stages||[]; PROG=r.progress; SETTINGS=r.settings||{}; BLOCKED=r.blocked||'';
+  QUIZ=r.quiz||null;
   var label=(ME.klass?esc(ME.klass)+' ':'')+(ME.no?esc(ME.no)+'番 ':'')+'<b>'+esc(ME.name||ME.email)+'</b> さん'
             +(ME.teacher?'（教員）':'');
   document.getElementById('whoChip').innerHTML=label;
@@ -584,6 +680,7 @@ function renderHome(){
   rb.disabled=(wrongN===0);
 
   setMsg('blockedMsg', BLOCKED, 'warn');
+  renderQuizPanel();
 
   document.getElementById('stageGrid').innerHTML=STAGES.map(function(st,i){
     var b=PROG.best[st.id], fu=fullOf(st);
@@ -657,6 +754,7 @@ function openHistory(){
    ============================================================ */
 function openStage(i){
   if(BLOCKED){ alert(BLOCKED); return; }
+  if(quizOn() && !(ME && ME.teacher)){ alert('いまは小テストの時間です。'); return; }
   CUR=i; GRADED=false; BLUR=0;
   var st=STAGES[i];
   PICKS=st.qs.map(function(){ return null; });
@@ -914,6 +1012,235 @@ function sendReport(){
     setMsg('repMsg','送信できませんでした。'+m);
     document.getElementById('repSend').disabled=false;
   });
+}
+
+
+/* ============================================================
+   小テストモード
+   ============================================================ */
+function quizOn(){ return !!(SETTINGS && SETTINGS.quizMode); }
+
+function renderQuizPanel(){
+  // 先生用トグル
+  var tb=document.getElementById('teachBar');
+  tb.classList.toggle('hidden', !(ME && ME.teacher));
+  document.getElementById('qmOn').classList.toggle('on', quizOn());
+  document.getElementById('qmOff').classList.toggle('on', !quizOn());
+
+  var panel=document.getElementById('quizPanel');
+  panel.classList.toggle('hidden', !quizOn());
+
+  // 小テスト中は練習をさせない（先生は両方できる）
+  var lock = quizOn() && !(ME && ME.teacher);
+  document.getElementById('stageGrid').classList.toggle('hidden', lock);
+  ['recPanel','weakPanel'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.classList.toggle('hidden', lock);
+  });
+  if(lock){
+    ['rankPanel','histPanel'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.classList.add('hidden');
+    });
+  }
+  var hero=document.getElementById('heroLead');
+  if(hero){
+    if(!hero.dataset.normal) hero.dataset.normal=hero.innerHTML;
+    hero.innerHTML = lock
+      ? 'いまは<b>小テストの時間</b>です。制限時間は<b>5分</b>。答えていない問題は不正解になります。終わったら先生の指示を待ちましょう。'
+      : hero.dataset.normal;
+  }
+
+  if(!quizOn()) return;
+  if(!QUIZ){ QUIZ={remain:0,total:0,tries:0,best1:null,best2:null,maxCount:2}; }
+
+  var lead='制限時間<b>5分</b>。大問をいくつ受けるか選んでください。'+
+           '　残り<b>'+QUIZ.remain+'</b>／'+QUIZ.total+'本'+
+           (QUIZ.tries?'　これまで'+QUIZ.tries+'回':'')+
+           (QUIZ.best1!=null?'　最高正答率（大問1つ）<b>'+QUIZ.best1+'％</b>':'')+
+           (QUIZ.best2!=null?'　最高正答率（大問2つ）<b>'+QUIZ.best2+'％</b>':'');
+  document.getElementById('quizLead').innerHTML=lead;
+
+  var max=QUIZ.maxCount||2;
+  var html='';
+  for(var n=1;n<=max;n++){
+    var ok=(QUIZ.remain>=n);
+    html+='<button class="pick'+(QCOUNT===n?' sel':'')+'" '+(ok?'':'disabled')+' onclick="pickCount('+n+')">'+
+      '<h4>大問'+n+'つ　<small style="font-size:13px;color:var(--muted);font-weight:400">'+(n*4)+'問</small></h4>'+
+      '<p>'+(n===1?'本番と同じ分量です。まずはこちらから。':'5分で8問。かなり急ぐ分量です。チャレンジ向き。')+
+      (ok?'':'<br>残りの問題が足りません。')+'</p></button>';
+  }
+  document.getElementById('quizPicker').innerHTML=html;
+  if(QCOUNT>QUIZ.remain) QCOUNT=Math.max(1,QUIZ.remain);
+  document.getElementById('quizStart').disabled=(QUIZ.remain<1);
+  setMsg('quizMsg', QUIZ.remain<1 ? '小テストで出せる問題が、もうありません。先生にお知らせください。' : '', 'warn');
+}
+
+function pickCount(n){ QCOUNT=n; renderQuizPanel(); }
+
+function setQuiz(on){
+  call('setQuizMode',[!!on], function(r){
+    if(!r||!r.ok){ alert((r&&r.message)||'切り替えられませんでした。'); return; }
+    SETTINGS.quizMode=r.quizMode;
+    renderQuizPanel();
+  });
+}
+
+/* ---------- 実施 ---------- */
+var QTICK=null, QEND=0;
+
+function startQuiz(){
+  setMsg('quizMsg','');
+  call('startQuiz',[QCOUNT], function(r){
+    if(!r||!r.ok){ setMsg('quizMsg',(r&&r.message)||'始められませんでした。'); if(r&&r.remain!=null){ QUIZ.remain=r.remain; renderQuizPanel(); } return; }
+    QZ={stages:r.stages, count:r.count, startedAt:r.startedAt, picks:{}, blur:0, limit:r.limitSec||300};
+    paintQuiz();
+    startQClock(QZ.limit);
+    show('quiz');
+  });
+}
+
+function paintQuiz(){
+  document.getElementById('qSub').textContent='大問'+QZ.count+'つ・'+totalQs()+'問／5分';
+  document.getElementById('qSubmit').disabled=false;
+  document.getElementById('qSubmit').textContent='提出する';
+  document.getElementById('qBody').innerHTML=QZ.stages.map(function(st,si){
+    return '<div class="qsec"><h3>第'+(si+1)+'問　'+esc(st.title)+'<small>（'+esc(st.src)+'より）</small></h3>'+
+      '<div class="maegaki"><span class="lab">（前書き）</span>'+st.intro+'</div>'+
+      '<div class="honbun tate" id="qh'+si+'">'+st.honbun+'</div>'+
+      '<div class="toolrow">'+
+        '<button class="btn sm on" onclick="qTate('+si+',true,this)">縦書き</button>'+
+        '<button class="btn sm" onclick="qTate('+si+',false,this)">横書き</button>'+
+      '</div>'+
+      '<div class="chu"><span class="lab">（注）</span>'+st.chu+'</div>'+
+      st.qs.map(function(q){
+        return '<div class="q">'+
+          '<div class="qhead"><span class="qno">'+esc(q.n)+'</span><span class="tag">'+esc(q.type)+'</span>'+
+          '<span class="pt">'+(q.pt||3)+'点</span></div>'+
+          '<p class="qtext">'+q.q+'</p>'+
+          (q.talk?'<div class="talk">'+q.talk+'</div>':'')+
+          (q.blank?'<div class="blankline">'+q.blank+'</div>':'')+
+          '<div class="opts">'+q.opts.map(function(o,oi){
+            return '<button class="opt" id="qo_'+q.id+'_'+oi+'" onclick="qPick(\''+q.id+'\','+oi+')">'+
+                   '<span class="mk">'+MARK[oi]+'</span><span>'+esc(o)+'</span></button>';
+          }).join('')+'</div></div>';
+      }).join('')+'</div>';
+  }).join('');
+  QZ.stages.forEach(function(_,si){ var h=document.getElementById('qh'+si); h.scrollLeft=h.scrollWidth; });
+  updQProg();
+}
+
+function qTate(si,v,btn){
+  var h=document.getElementById('qh'+si);
+  h.classList.toggle('tate',v); h.classList.toggle('yoko',!v);
+  Array.prototype.forEach.call(btn.parentNode.querySelectorAll('button'),function(b){ b.classList.remove('on'); });
+  btn.classList.add('on');
+  if(v) h.scrollLeft=h.scrollWidth;
+}
+
+function totalQs(){ var n=0; QZ.stages.forEach(function(s){ n+=s.qs.length; }); return n; }
+
+function qPick(qid,oi){
+  if(!QZ) return;
+  QZ.picks[qid]=oi;
+  var st=null,q=null;
+  QZ.stages.forEach(function(s){ s.qs.forEach(function(x){ if(x.id===qid){ st=s; q=x; } }); });
+  if(!q) return;
+  q.opts.forEach(function(_,k){
+    var b=document.getElementById('qo_'+qid+'_'+k);
+    if(b) b.classList.toggle('sel',k===oi);
+  });
+  updQProg();
+}
+
+function updQProg(){
+  var done=Object.keys(QZ.picks).length, all=totalQs();
+  document.getElementById('qProg').innerHTML='解答 <b>'+done+'</b>／'+all;
+}
+
+function startQClock(sec){
+  stopQClock();
+  QEND=Date.now()+sec*1000;
+  var el=document.getElementById('qClock');
+  function tick(){
+    var left=Math.max(0,Math.round((QEND-Date.now())/1000));
+    el.textContent=Math.floor(left/60)+':'+('0'+(left%60)).slice(-2);
+    el.classList.toggle('warn', left<=60 && left>20);
+    el.classList.toggle('danger', left<=20);
+    if(left<=0){ stopQClock(); submitQuiz(true); }
+  }
+  tick();
+  QTICK=setInterval(tick,250);
+}
+function stopQClock(){ if(QTICK){ clearInterval(QTICK); QTICK=null; } }
+
+function submitQuiz(auto){
+  if(!QZ || QZ.sent) return;
+  if(!auto){
+    var left=totalQs()-Object.keys(QZ.picks).length;
+    var msg = left>0
+      ? 'まだ'+left+'問が未解答です。未解答は不正解になります。提出しますか。'
+      : '提出します。よろしいですか。';
+    if(!confirm(msg)) return;
+  }
+  QZ.sent=true; stopQClock();
+  document.getElementById('qSubmit').disabled=true;
+  document.getElementById('qSubmit').textContent='提出しています…';
+  var secs=Math.round((QZ.limit*1000-(QEND-Date.now()))/1000);
+  if(secs<0) secs=0; if(secs>QZ.limit) secs=QZ.limit;
+  call('submitQuiz',[{
+    email: ME.email,
+    stageIds: QZ.stages.map(function(s){ return s.id; }),
+    picks: QZ.picks, seconds: secs, blur: QZ.blur, timeUp: !!auto, startedAt: QZ.startedAt
+  }], function(r){
+    if(!r||!r.ok){
+      QZ.sent=false;
+      document.getElementById('qSubmit').disabled=false;
+      document.getElementById('qSubmit').textContent='提出する';
+      alert((r&&r.message)||'提出できませんでした。もう一度お試しください。');
+      return;
+    }
+    QUIZ=r.status||QUIZ;
+    paintQuizResult(r, auto);
+    show('qresult');
+  }, function(m){
+    QZ.sent=false;
+    document.getElementById('qSubmit').disabled=false;
+    document.getElementById('qSubmit').textContent='提出する';
+    alert('提出できませんでした。電波のよい場所でもう一度お試しください。'+m);
+  });
+}
+
+function paintQuizResult(r, auto){
+  document.getElementById('qRate').innerHTML=r.rate+'<small>％</small>';
+  var msg = r.rate===100 ? '全問正解。みごとです。'
+          : r.rate>=75  ? '合格ライン。取りこぼした問題の根拠を本文で確かめましょう。'
+          : r.rate>=50  ? 'あと一歩。解説を読んで、傍線部の根拠をたどり直しましょう。'
+                        : '本文の前書きと注をよりどころに、もう一度読み方を確かめましょう。';
+  document.getElementById('qMsg').textContent=msg;
+  document.getElementById('qMeta').textContent=
+    r.correct+'／'+r.total+'問正解　／　解答時間 '+Math.floor(r.seconds/60)+'分'+(r.seconds%60)+'秒'+
+    (r.timeUp?'（時間切れ）':'')+
+    (QUIZ&&QUIZ.best1!=null?'　／　最高正答率（大問1つ）'+QUIZ.best1+'％':'')+
+    (QUIZ&&QUIZ.best2!=null?'　／　（大問2つ）'+QUIZ.best2+'％':'');
+  setMsg('qSaveMsg', r.duplicated?'この回はすでに記録されています。':'', 'warn');
+
+  var byStage={};
+  (r.detail||[]).forEach(function(d){ (byStage[d.stageId]=byStage[d.stageId]||[]).push(d); });
+  document.getElementById('qReview').innerHTML=QZ.stages.map(function(st,si){
+    var ds=byStage[st.id]||[];
+    return '<div class="qsec"><h3>第'+(si+1)+'問　'+esc(st.title)+'<small>（'+esc(st.src)+'より）</small></h3>'+
+      ds.map(function(d){
+        var q=null; st.qs.forEach(function(x){ if(x.id===d.id) q=x; });
+        if(!q) return '';
+        return '<div class="q"><div class="qhead"><span class="qno">'+esc(d.n)+'</span><span class="tag">'+esc(d.type)+'</span>'+
+          '<span class="pt" style="color:'+(d.ok?'var(--ok)':'var(--ng)')+';font-weight:700">'+
+          (d.ok?'正解':(d.mine<0?'未解答':'不正解'))+'</span></div>'+
+          '<p class="qtext" style="font-size:13.5px;color:var(--muted)">'+q.q.replace(/<span class="kb">/g,'<span>')+'</p>'+
+          '<p style="margin:0 0 8px;font-size:14px">正解　<b class="mincho" style="color:var(--navy)">'+MARK[d.a]+'</b>　'+esc(d.opts[d.a])+
+          (d.ok?'':'<br><span style="font-size:13px;color:var(--ng)">あなたの解答　'+
+            (d.mine<0?'（未解答）':MARK[d.mine]+'　'+esc(d.opts[d.mine]||''))+'</span>')+'</p>'+
+          '<div class="exp">'+d.exp+'</div></div>';
+      }).join('')+'</div>';
+  }).join('');
 }
 </script>
 </body>
