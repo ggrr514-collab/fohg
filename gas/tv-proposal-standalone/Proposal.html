@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>職員室テレビ表示案</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+:root {
+  --paper: #f6f5f0;
+  --card: #ffffff;
+  --ink: #1b2430;
+  --ink-soft: #4c5866;
+  --ink-faint: #7c8794;
+  --line: #d9dbd4;
+  --line-soft: #e9eae4;
+  --accent: #2c5f8d;
+  --accent-deep: #1e4a70;
+  --accent-soft: #e3edf6;
+  --warn: #b45309;
+  --warn-soft: #fbeedc;
+  --danger: #b91c1c;
+  --danger-soft: #fbe3e3;
+  --ok: #2f6f48;
+  --ok-soft: #e1efe5;
+  --tv-bezel: #14181d;
+  --tv-bg: #fbfaf6;
+  --tv-ink: #171d25;
+  --tv-line: #d7dad3;
+  --tv-head: #1f2a36;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #151a20;
+    --card: #1d242c;
+    --ink: #eceef0;
+    --ink-soft: #b8c0c9;
+    --ink-faint: #8792a0;
+    --line: #333c47;
+    --line-soft: #28303a;
+    --accent: #7fb0dc;
+    --accent-deep: #a9cbea;
+    --accent-soft: #223749;
+    --warn: #e6a35a;
+    --warn-soft: #3a2c19;
+    --danger: #ef8d8d;
+    --danger-soft: #3e2323;
+    --ok: #8fcaa4;
+    --ok-soft: #1f3327;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #151a20;
+  --card: #1d242c;
+  --ink: #eceef0;
+  --ink-soft: #b8c0c9;
+  --ink-faint: #8792a0;
+  --line: #333c47;
+  --line-soft: #28303a;
+  --accent: #7fb0dc;
+  --accent-deep: #a9cbea;
+  --accent-soft: #223749;
+  --warn: #e6a35a;
+  --warn-soft: #3a2c19;
+  --danger: #ef8d8d;
+  --danger-soft: #3e2323;
+  --ok: #8fcaa4;
+  --ok-soft: #1f3327;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+  font-size: 15px;
+  line-height: 1.75;
+  font-variant-numeric: tabular-nums;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 36px 64px; padding-inline: 20px; }
+h1, h2, h3 { font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 900; line-height: 1.25; letter-spacing: 0.01em; }
+h2 { font-size: 21px; font-weight: 700; padding-bottom: 8px; border-bottom: 2px solid var(--ink); margin-bottom: 16px; }
+h3 { font-size: 16px; font-weight: 700; }
+p { margin: 0 0 12px; }
+.eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 10px; }
+.lede { font-size: 16px; color: var(--ink-soft); max-width: 42em; }
+.meta { font-size: 13px; color: var(--ink-faint); margin-top: 10px; }
+section { margin-top: 48px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.box { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px; }
+.box h3 { margin-bottom: 6px; }
+.box p { color: var(--ink-soft); font-size: 14px; margin: 0; }
+.num { display: inline-block; font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900; color: var(--accent); font-size: 22px; line-height: 1; margin-bottom: 8px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th { font-size: 12px; letter-spacing: 0.06em; color: var(--ink-faint); font-weight: 700; border-bottom: 1px solid var(--line); }
+td:first-child { font-weight: 700; white-space: nowrap; }
+.tblwrap { overflow-x: auto; }
+.pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 9px; border-radius: 999px; white-space: nowrap; }
+.pill-on { background: var(--ok-soft); color: var(--ok); }
+.pill-cond { background: var(--warn-soft); color: var(--warn); }
+.pill-off { background: var(--danger-soft); color: var(--danger); }
+
+.timeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.tslot { border-top: 3px solid var(--accent); padding-top: 10px; }
+.tslot .when { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 700; font-size: 17px; }
+.tslot p { font-size: 14px; color: var(--ink-soft); margin: 4px 0 0; }
+
+ul.plain { padding-left: 1.2em; margin: 0; }
+ul.plain li { margin-bottom: 6px; }
+.decide { counter-reset: q; list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.decide li { counter-increment: q; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px 12px 52px; position: relative; }
+.decide li::before { content: counter(q); position: absolute; left: 14px; top: 10px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 14px; }
+.decide li strong { display: block; }
+.decide li span { color: var(--ink-soft); font-size: 14px; }
+
+/* ---------- TV mockup ---------- */
+.tv { background: var(--tv-bezel); border-radius: 10px; padding: 1.4%; box-shadow: 0 18px 40px rgba(0,0,0,0.25); }
+.screen {
+  container-type: inline-size;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  max-width: 100%;
+  background: var(--tv-bg);
+  color: var(--tv-ink);
+  overflow: hidden;
+  border-radius: 3px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr);
+  font-family: "Noto Sans JP", sans-serif;
+}
+.screen * { color: inherit; }
+.s-head { background: var(--tv-head); color: #fff; display: flex; align-items: center; gap: 2.2cqw; padding: 0.9cqw 1.6cqw; font-size: 1.35cqw; min-width: 0; }
+.s-head .date { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900; font-size: 2.4cqw; line-height: 1; }
+.s-head .clock { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 700; font-size: 2.2cqw; line-height: 1; margin-left: auto; }
+.s-head .m { display: flex; gap: 0.5cqw; align-items: baseline; }
+.s-head .m b { font-size: 1.7cqw; }
+.s-head .m span { opacity: 0.7; }
+.s-body { display: grid; grid-template-columns: minmax(0, 26fr) minmax(0, 44fr) minmax(0, 30fr); gap: 1cqw; padding: 1cqw 1.4cqw; min-height: 0; min-width: 0; }
+.col { display: grid; grid-auto-rows: min-content; gap: 1cqw; min-height: 0; min-width: 0; }
+.panel { background: #fff; border: 0.12cqw solid var(--tv-line); border-radius: 0.5cqw; padding: 0.8cqw 1cqw; min-height: 0; min-width: 0; }
+.panel h4 { margin: 0 0 0.5cqw; font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 700; font-size: 1.45cqw; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; border-bottom: 0.18cqw solid var(--tv-ink); padding-bottom: 0.35cqw; }
+.panel h4 small { font-weight: 500; font-size: 1cqw; color: #6c7684; }
+.li { font-size: 1.35cqw; line-height: 1.5; padding: 0.22cqw 0 0.22cqw 1.3cqw; position: relative; border-bottom: 0.08cqw dashed var(--tv-line); }
+.li::before { content: "・"; position: absolute; left: 0; color: #2c5f8d; }
+.li:last-child { border-bottom: none; }
+.li.dim { color: #7a838f; }
+.rk { border-left: 0.35cqw solid #2c5f8d; padding: 0.45cqw 0.8cqw; margin-bottom: 0.55cqw; background: #f4f6f8; border-radius: 0.3cqw; }
+.rk.imp { border-left-color: #b91c1c; background: linear-gradient(to right, #fbe3e3 0, #f6f6f6 35%); }
+.rk .who { font-size: 1.15cqw; font-weight: 700; display: flex; gap: 0.6cqw; align-items: center; }
+.rk .who .tag { font-size: 0.95cqw; font-weight: 700; padding: 0 0.6cqw; border-radius: 999px; background: #dbeafe; color: #1e40af; }
+.rk .who .tag.irai { background: #fef3c7; color: #92400e; }
+.rk .who .tag.imp { background: #b91c1c; color: #fff; }
+.rk .txt { font-size: 1.35cqw; line-height: 1.45; }
+.cc { display: flex; gap: 0.7cqw; align-items: flex-start; padding: 0.35cqw 0; border-bottom: 0.08cqw dashed var(--tv-line); }
+.cc:last-child { border-bottom: none; }
+.cc .p { background: #1b2430; color: #fff; font-weight: 900; font-size: 1.6cqw; width: 2.6cqw; height: 2.6cqw; border-radius: 0.35cqw; display: grid; place-items: center; flex-shrink: 0; }
+.cc .p.j { background: #d97706; }
+.cc .d { font-size: 1.25cqw; line-height: 1.4; }
+.cc .d b { font-size: 1.4cqw; }
+.cc .d .cls { background: #e3edf6; color: #1e4a70; font-weight: 700; padding: 0 0.5cqw; border-radius: 0.25cqw; margin-right: 0.3cqw; }
+.rooms { width: 100%; border-collapse: collapse; font-size: 1.05cqw; table-layout: fixed; }
+.rooms th, .rooms td { border: 0.08cqw solid var(--tv-line); padding: 0.15cqw 0.2cqw; text-align: center; height: 1.9cqw; }
+.rooms th { font-weight: 700; color: #4c5866; font-size: 0.95cqw; }
+.rooms th.r { text-align: left; width: 8cqw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--tv-ink); }
+.rooms td.b { background: #dcefe1; font-weight: 700; font-size: 0.95cqw; white-space: nowrap; overflow: hidden; }
+.sh { display: flex; gap: 0.6cqw; font-size: 1.25cqw; align-items: baseline; padding: 0.2cqw 0; border-bottom: 0.08cqw dashed var(--tv-line); }
+.sh:last-child { border-bottom: none; }
+.sh b { min-width: 6cqw; }
+.sh .t { color: #2c5f8d; font-size: 1.05cqw; font-weight: 700; }
+.sh .pl { color: #6c7684; font-size: 1.05cqw; margin-left: auto; white-space: nowrap; }
+.s-foot { background: #fbeedc; color: #7c3a0b; font-size: 1.3cqw; padding: 0.55cqw 1.6cqw; display: flex; align-items: center; gap: 1.4cqw; font-weight: 500; min-width: 0; }
+.s-foot b { font-weight: 700; }
+.s-foot .lbl { background: #b45309; color: #fff; padding: 0 0.8cqw; border-radius: 999px; font-size: 1.1cqw; font-weight: 700; flex-shrink: 0; }
+.s-foot-viewport { flex: 1; min-width: 0; overflow: hidden; position: relative; -webkit-mask-image: linear-gradient(to right, transparent 0, #000 4%, #000 96%, transparent 100%); mask-image: linear-gradient(to right, transparent 0, #000 4%, #000 96%, transparent 100%); }
+.s-foot-track { display: flex; gap: 2.4cqw; white-space: nowrap; width: max-content; animation: sf-scroll 16s linear infinite; }
+@keyframes sf-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .s-foot-track { animation: none; } }
+.caption { font-size: 13px; color: var(--ink-faint); margin-top: 10px; }
+.callouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 14px; }
+.callouts div { font-size: 13px; border-left: 3px solid var(--accent); padding-left: 10px; color: var(--ink-soft); }
+.callouts div b { color: var(--ink); display: block; }
+
+/* 連絡事項の自動スクロール（ライブデモ：見本のため実際より速い） */
+.rk-panel { display: flex; flex-direction: column; min-height: 0; }
+.rk-panel h4 { flex-shrink: 0; }
+.rk-viewport { flex: 1; min-height: 0; overflow: hidden; position: relative; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 6%, #000 94%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 6%, #000 94%, transparent 100%); }
+.rk-track { animation: rk-scroll 13s linear infinite; }
+@keyframes rk-scroll {
+  0%, 12% { transform: translateY(0); }
+  88%, 100% { transform: translateY(-50%); }
+}
+@media (prefers-reduced-motion: reduce) { .rk-track { animation: none; } }
+
+@media (max-width: 640px) {
+  .wrap { padding-block: 24px 48px; }
+  h2 { font-size: 19px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="eyebrow">西原中ダッシュボード</div>
+  <h1>職員室テレビ表示案</h1>
+  <p class="lede">職員室後方のテレビに、ダッシュボードの「今日の動き」だけを常時表示する案です。座席のPCを開かなくても、通りがかりに必要なことが目に入る状態をつくります。</p>
+  <div class="meta">研究部会 提案資料　2026年9月24日</div>
+
+  <section>
+    <h2>ねらい</h2>
+    <div class="grid2">
+      <div class="box"><span class="num">1</span><h3>座っていなくてもわかる</h3><p>朝の打合せ前、授業の合間、放課後。PCを開かずに、今日の予定・授業変更・出張が確認できます。</p></div>
+      <div class="box"><span class="num">2</span><h3>重要な連絡を取りこぼさない</h3><p>管理職からの連絡や「重要」の連絡が常に見える位置にあることで、確認忘れが減ります。</p></div>
+      <div class="box"><span class="num">3</span><h3>「今どうなっているか」を共有する</h3><p>特別教室の空き、自習の監督、誰が不在か。突発の変更がその場で全員に伝わります。</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>画面イメージ</h2>
+    <p class="lede">横型テレビ（16:9）を3列に分け、左に「今日と明日」、中央に「連絡」、右に「教室と授業の動き」を置きます。本文は3〜4m離れて読める大きさにします。表示内容は例です。</p>
+    <div class="tv"><div class="screen">
+      <div class="s-head">
+        <div class="date">9/24（木）</div>
+        <div class="m"><span>週</span><b>B</b></div>
+        <div class="m"><span>日直</span><b>青木</b></div>
+        <div class="m"><span>日課</span><b>短縮</b></div>
+        <div class="m"><span>清掃</span><b>あり</b></div>
+        <div class="m"><span>部活</span><b>あり</b></div>
+        <div class="clock">12:43</div>
+      </div>
+      <div class="s-body">
+        <div class="col">
+          <div class="panel">
+            <h4>本日の予定</h4>
+            <div class="li">職員打合せ</div>
+            <div class="li">歯科健診9:00～(2-1・2、1年)</div>
+            <div class="li">専門委員会⑤</div>
+            <div class="li">研究部会</div>
+          </div>
+          <div class="panel">
+            <h4>明日の予定 <small>9/25（金）</small></h4>
+            <div class="li dim">市総体（陸上）</div>
+            <div class="li dim">避難訓練</div>
+          </div>
+          <div class="panel">
+            <h4>出張・不在 <small>2名</small></h4>
+            <div class="sh"><b>渡辺光祐</b><span class="t">15:00〜</span><span class="pl">青少年宇宙科学館</span></div>
+            <div class="sh"><b>早坂千尋</b><span class="t">9:30〜</span><span class="pl">西原小学校</span></div>
+          </div>
+        </div>
+        <div class="col" style="grid-template-rows:1fr;">
+          <div class="panel rk-panel">
+            <h4>連絡事項 <small>重要・管理職の連絡を先頭に6件</small></h4>
+            <div class="rk-viewport"><div class="rk-track">
+              <div class="rk imp">
+                <div class="who">校長 <span class="tag imp">重要</span><span class="tag irai">依頼</span></div>
+                <div class="txt">明日の市総体、引率の先生は8:00までに体育館前集合。名簿と救急セットは職員室で受け取ってください。</div>
+              </div>
+              <div class="rk">
+                <div class="who">教務主任 <span class="tag">連絡</span></div>
+                <div class="txt">来週の時間割変更を配付しました。各学級の掲示をお願いします。</div>
+              </div>
+              <div class="rk">
+                <div class="who">【研究部】田中 <span class="tag irai">依頼</span></div>
+                <div class="txt">公開授業・授業参観について。「授業つながりシート」の授業参観予定が未入力の方は、今週中に入力をお願いします。</div>
+              </div>
+              <div class="rk">
+                <div class="who">保健室 <span class="tag">連絡</span></div>
+                <div class="txt">尿検査の未提出者は本日中に保健室へ。容器は保健室前に置いてあります。</div>
+              </div>
+              <div class="rk">
+                <div class="who">教頭 <span class="tag">連絡</span></div>
+                <div class="txt">来客用スリッパを補充しました。玄関の在庫が減ったら声をかけてください。</div>
+              </div>
+              <div class="rk">
+                <div class="who">3学年 <span class="tag irai">依頼</span></div>
+                <div class="txt">修学旅行の参加確認票、未回収のクラスは9/26までに学年会に提出をお願いします。</div>
+              </div>
+              <!-- 継ぎ目のない繰り返しのため同じ内容をもう一度並べる -->
+              <div class="rk imp" aria-hidden="true">
+                <div class="who">校長 <span class="tag imp">重要</span><span class="tag irai">依頼</span></div>
+                <div class="txt">明日の市総体、引率の先生は8:00までに体育館前集合。名簿と救急セットは職員室で受け取ってください。</div>
+              </div>
+              <div class="rk" aria-hidden="true">
+                <div class="who">教務主任 <span class="tag">連絡</span></div>
+                <div class="txt">来週の時間割変更を配付しました。各学級の掲示をお願いします。</div>
+              </div>
+              <div class="rk" aria-hidden="true">
+                <div class="who">【研究部】田中 <span class="tag irai">依頼</span></div>
+                <div class="txt">公開授業・授業参観について。「授業つながりシート」の授業参観予定が未入力の方は、今週中に入力をお願いします。</div>
+              </div>
+              <div class="rk" aria-hidden="true">
+                <div class="who">保健室 <span class="tag">連絡</span></div>
+                <div class="txt">尿検査の未提出者は本日中に保健室へ。容器は保健室前に置いてあります。</div>
+              </div>
+              <div class="rk" aria-hidden="true">
+                <div class="who">教頭 <span class="tag">連絡</span></div>
+                <div class="txt">来客用スリッパを補充しました。玄関の在庫が減ったら声をかけてください。</div>
+              </div>
+              <div class="rk" aria-hidden="true">
+                <div class="who">3学年 <span class="tag irai">依頼</span></div>
+                <div class="txt">修学旅行の参加確認票、未回収のクラスは9/26までに学年会に提出をお願いします。</div>
+              </div>
+            </div></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="panel">
+            <h4>授業変更・自習 <small>本日</small></h4>
+            <div class="cc"><div class="p j">3</div><div class="d"><b><span class="cls">2-1</span>数学 自習</b><br>早坂 不在 → 監督 北條</div></div>
+            <div class="cc"><div class="p">5</div><div class="d"><b><span class="cls">1-3</span>理科 → 英語</b><br>渡辺 → 佐藤 に交代</div></div>
+          </div>
+          <div class="panel">
+            <h4>特別教室 <small>本日</small></h4>
+            <table class="rooms">
+              <tr><th class="r"></th><th>朝</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>昼</th><th>放</th></tr>
+              <tr><th class="r">体育館</th><td></td><td class="b">2-1</td><td></td><td class="b">3年</td><td></td><td></td><td></td><td></td><td class="b">部活</td></tr>
+              <tr><th class="r">武道場</th><td></td><td></td><td class="b">1-1</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+              <tr><th class="r">多目的室</th><td></td><td></td><td></td><td></td><td class="b">3-2</td><td></td><td></td><td></td><td></td></tr>
+              <tr><th class="r">小会議室</th><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="b">進路</td></tr>
+              <tr><th class="r">図書館</th><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="b">1-3</td><td></td></tr>
+              <tr><th class="r">Solaるーむ</th><td></td><td></td><td class="b">2-3</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+              <tr><th class="r">会議室</th><td></td><td></td><td></td><td></td><td></td><td class="b">面談</td><td></td><td></td><td></td></tr>
+              <tr><th class="r">学習室</th><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="s-foot">
+        <span class="lbl">締切</span>
+        <div class="s-foot-viewport"><div class="s-foot-track">
+          <span><b>9/25</b> 成績処理の入力（教務）</span>
+          <span><b>9/26</b> 修学旅行 参加確認票の回収（3学年）</span>
+          <span><b>9/30</b> 研修報告書（研究部）</span>
+          <span aria-hidden="true"><b>9/25</b> 成績処理の入力（教務）</span>
+          <span aria-hidden="true"><b>9/26</b> 修学旅行 参加確認票の回収（3学年）</span>
+          <span aria-hidden="true"><b>9/30</b> 研修報告書（研究部）</span>
+        </div></div>
+      </div>
+    </div></div>
+    <div class="caption">例の内容は架空です。実際の画面は、いま使っているダッシュボードと同じデータを表示します。中央の連絡事項は実際に自動スクロールしています（見本のため速さを上げています。実際は1周30〜40秒の予定）。</div>
+    <div class="callouts">
+      <div><b>左列</b>今日と明日の予定、出張。一日の流れをつかむ列です。</div>
+      <div><b>中央列</b>連絡事項。重要と管理職の連絡が先頭。入りきらない分は自動でゆっくりスクロールして繰り返します。</div>
+      <div><b>右列</b>授業変更・自習と特別教室の予約表。突発の変更と教室の空きが見える列です。</div>
+      <div><b>下段</b>7日以内の提出物・締切をゆっくり流します。</div>
+    </div>
+    <p class="lede" style="margin-top:14px;">連絡事項が6件を超えて画面に収まらない日は、中央列を自動でゆっくり下にスクロールします。1周30〜40秒を目安に、上に戻ったところで2〜3秒静止してから再び流れる形にし、通りがかりでも読み進められるようにします。</p>
+  </section>
+
+  <section>
+    <h2>表示する要素と理由</h2>
+    <div class="tblwrap">
+    <table>
+      <thead><tr><th>要素</th><th>テレビ表示</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr><td>日直・週・日課・清掃・部活</td><td><span class="pill pill-on">表示</span></td><td>一日中変わらず、全員が何度も確認する情報。上部に固定します。</td></tr>
+        <tr><td>本日・明日の予定</td><td><span class="pill pill-on">表示</span></td><td>行事取込の予定を今のダッシュボードと同じ箇条書きで並べます。時刻の欄は設けません。午後は明日の予定を目立たせます。</td></tr>
+        <tr><td>連絡事項</td><td><span class="pill pill-cond">条件付き</span></td><td>優先順（校長・教頭・教務主任・重要）で先頭6件。「生徒指導」タグの連絡は生徒個人に関わるため表示しません。本文は80字で切り、続きは各自のPCで読みます。6件で画面に収まらない場合は自動でゆっくりスクロールして繰り返します。</td></tr>
+        <tr><td>授業変更・自習</td><td><span class="pill pill-on">表示</span></td><td>突発で変わり、空き時間の先生が気づいて動ける情報。テレビ表示で最も価値が高い項目です。</td></tr>
+        <tr><td>出張</td><td><span class="pill pill-on">表示</span></td><td>「誰がいないか」がわかると、来客や電話の取り次ぎがすぐ判断できます。</td></tr>
+        <tr><td>特別教室の利用予定</td><td><span class="pill pill-on">表示</span></td><td>予約表を見ながら空きを判断でき、ダブルブッキングを防げます。</td></tr>
+        <tr><td>提出物・締切</td><td><span class="pill pill-cond">条件付き</span></td><td>7日以内のものだけを下段に流します。全部出すと目が慣れて見なくなります。</td></tr>
+        <tr><td>学年・分掌の連絡</td><td><span class="pill pill-off">表示しない</span></td><td>所属メンバー限定の連絡。全員が見るテレビには出しません。</td></tr>
+        <tr><td>アレルギー対応</td><td><span class="pill pill-off">表示しない</span></td><td>生徒の個人情報。職員室には生徒・保護者・業者も入るため、テレビには出しません。</td></tr>
+        <tr><td>研究部・授業づくり</td><td><span class="pill pill-off">表示しない</span></td><td>リンク集は押せてこそ意味があります。テレビでは役に立ちません。</td></tr>
+        <tr><td>共有カレンダー</td><td><span class="pill pill-off">表示しない</span></td><td>文字が小さく遠くから読めません。予定欄で代わりになります。</td></tr>
+        <tr><td>投稿フォーム・編集ボタン</td><td><span class="pill pill-off">表示しない</span></td><td>テレビは見るだけ。操作はこれまでどおり各自のPCで行います。</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>時間帯による切り替え</h2>
+    <div class="timeline">
+      <div class="tslot"><div class="when">朝〜12:00</div><p>本日中心。本日の予定を大きく、授業変更・自習は本日分。</p></div>
+      <div class="tslot"><div class="when">12:00〜16:00</div><p>右列に明日の授業変更・自習も並べます。午後のうちに明日の穴が見えます。</p></div>
+      <div class="tslot"><div class="when">16:00〜</div><p>明日の予定を上に。放課後は「明日の準備モード」に切り替えます。</p></div>
+      <div class="tslot"><div class="when">常時</div><p>3分ごとに自動更新。連絡が多いときは自動でゆっくりスクロールして繰り返します。</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>配慮すること</h2>
+    <div class="grid2">
+      <div class="box"><h3>個人情報</h3><p>生徒名が出る項目（アレルギー対応、生徒指導タグ）は表示しない設計にします。来客時はリモコンの入力切替で即座に消せます。</p></div>
+      <div class="box"><h3>閲覧専用アカウント</h3><p>テレビ用のGoogleアカウントを教員名簿に「ゲスト」として登録し、投稿や編集ができない状態で表示します。</p></div>
+      <div class="box"><h3>文字の大きさ</h3><p>3〜4m離れて読めるよう、本文は28px相当以上。件数を絞って1画面に収めます。</p></div>
+      <div class="box"><h3>見慣れて見なくなる問題</h3><p>常時表示は数週間で「壁紙」になります。重要な連絡だけ色を変え、締切は動かして目に入るようにします。</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>準備するものと進め方</h2>
+    <div class="grid2">
+      <div class="box">
+        <h3>機器</h3>
+        <ul class="plain">
+          <li>テレビ（43〜50型、HDMI入力）</li>
+          <li>表示用端末：余っているノートPC、または Chromecast with Google TV など</li>
+          <li>Chromeの全画面（キオスク）表示で、ダッシュボードのテレビ表示用URLを開く</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>ダッシュボード側の改修</h3>
+        <ul class="plain">
+          <li>「テレビ表示モード」を追加（URLの末尾に <code>?mode=tv</code>）</li>
+          <li>表示項目の絞り込み、文字の拡大、自動更新、連絡欄の自動スクロール、時間帯切替</li>
+          <li>既存の画面は変更なし。開発の目安は1〜2週間</li>
+        </ul>
+      </div>
+    </div>
+    <div class="timeline" style="margin-top:14px;">
+      <div class="tslot"><div class="when">部会で合意</div><p>表示項目の線引きと置き場所を決めます。</p></div>
+      <div class="tslot"><div class="when">開発 1〜2週</div><p>テレビ表示モードを作り、手元のPCで確認します。</p></div>
+      <div class="tslot"><div class="when">試験表示 2週</div><p>実際に映して、見え方と件数を調整します。</p></div>
+      <div class="tslot"><div class="when">見直し</div><p>次の部会で継続・変更を判断します。</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>部会で決めたいこと</h2>
+    <ol class="decide">
+      <li><strong>置く場所と向き</strong><span>職員室後方のどこに置くか。来客カウンターから見えない向きにできるか。</span></li>
+      <li><strong>表示しない項目の線引き</strong><span>上の表の案でよいか。「テスト・成績」タグの連絡も外すか。</span></li>
+      <li><strong>連絡の表示件数とスクロール速さ</strong><span>先頭6件を自動でゆっくりスクロールして繰り返す形でよいか。1周30〜40秒を目安にするが、実際に見て調整してよいか。</span></li>
+      <li><strong>端末と管理担当</strong><span>何で映すか。電源の入切と不具合時の連絡先を誰にするか。</span></li>
+      <li><strong>試験期間</strong><span>2週間の試験表示のあと、どの部会で判断するか。</span></li>
+    </ol>
+  </section>
+</div>
+</body>
+</html>
