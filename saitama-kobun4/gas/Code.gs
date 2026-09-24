@@ -20,7 +20,7 @@ const SPREADSHEET_ID = "1Yuf_jzWZYfQKaYuZV6LN6-RDAODoOLeX-uyn9nYecwU";
 const MASTER_ID      = "1OaMsGfk_-s-BMa_osO3d8hwK04ikP0G34J7TWbs2lJo";
 
 /** index.html 側の CLIENT_VERSION と必ず同じ値にすること */
-const CLIENT_VERSION = 5;
+const CLIENT_VERSION = 6;
 
 const APP_NAME = "古典クエスト";
 
@@ -52,6 +52,14 @@ const CACHE_SEC   = 21600;              // 問題プールのキャッシュ 6�
 const TARGET_SEC  = 300;                // 1ステージの目安時間（5分・画面表示用）
 const QUIZ_SEC    = 300;                // 小テストの制限時間（5分）
 const QUIZ_COUNT  = 2;                  // 小テストで出す大問の数（5分でこの数に挑戦する）
+
+/* --- 連打・速すぎる解答を成績から外すための目安 ---
+ * 「速すぎる」かつ「正答率が高い」回だけを成績に入れません。
+ * 速くて正答率が低い回はそのまま成績になるので、
+ * わざと連打して悪い点を無効にする、ということはできません。 */
+const FAIR_MIN_SEC_PER_Q = 5;    // 1問あたりの平均がこれ未満なら「速すぎる」（秒）
+const FAIR_MIN_GAP_SEC   = 1.5;  // 解答と解答の間隔の中央値がこれ未満なら「連打」（秒）
+const FAIR_SUSPECT_RATE  = 75;   // 上にあてはまり、かつ成績がこの％以上なら成績に入れない
 const PLACEHOLDER = "ここに";
 
 /** 称号（累計得点が満点の何％かで決まる・上が上位） */
@@ -143,13 +151,13 @@ const H_ANSWER = ["UUID","結果UUID","保存日時","email","氏名","組","番
 
 const H_TOTAL  = ["順位","email","氏名","組","番号","累計得点","満点","挑戦回数","クリアステージ数","満点ステージ数",
                   "平均正答率(%)","最高得点","最速タイム(秒)","称号",
-                  "小テスト回数","小テスト最高成績(%)","小テスト平均成績(%)","最終挑戦日時"];
+                  "小テスト回数","小テスト最高成績(%)","小テスト平均成績(%)","成績に入れなかった回","最終挑戦日時"];
 
 const H_QUIZ   = ["UUID","保存日時","email","氏名","組","番号",
-                  "成績(%)","採用した大問","大問ごとの正答率","出題ステージID",
+                  "成績(%)","成績に反映","除外理由","採用した大問","大問ごとの正答率","出題ステージID",
                   "大問数","問題数","正答数","全体正答率(%)",
-                  "所要時間(秒)","時間切れ","誤答問題ID","正答問題ID",
-                  "フォーカス離脱回数","クライアント版"];
+                  "所要時間(秒)","1問あたり(秒)","解答間隔の中央値(秒)","時間切れ",
+                  "誤答問題ID","正答問題ID","フォーカス離脱回数","クライアント版"];
 
 const H_ISSUE  = ["UUID","報告日時","email","氏名","結果UUID","問題ID","設問文",
                   "選択肢ア","選択肢イ","選択肢ウ","選択肢エ","正解","生徒の回答",
@@ -391,6 +399,8 @@ function onOpen() {
     .addItem("小テストモードを終了", "quizModeOff")
     .addSeparator()
     .addItem("疑義報告サマリを表示", "showIssueSummary")
+    .addSeparator()
+    .addItem("成績に入れなかった小テストを表示", "showExcludedQuiz")
     .addToUi();
 }
 
@@ -677,6 +687,59 @@ function quizServedIds_(email) {
   return done;
 }
 
+/** 解答の速さを測る。stamps は { 問題ID: 開始からのミリ秒 } */
+function paceOf_(stamps, secs, total) {
+  const ms = [];
+  if (stamps) {
+    Object.keys(stamps).forEach(function (k) {
+      const v = Number(stamps[k]);
+      if (isFinite(v) && v >= 0) ms.push(v);
+    });
+  }
+  // 最後に押した時刻と、画面が数えた所要時間の、長いほうを使う
+  let spanSec = 0;
+  ms.forEach(function (v) { if (v / 1000 > spanSec) spanSec = v / 1000; });
+  const effSec = Math.max(Number(secs) || 0, spanSec);
+  const perQ = total ? (effSec / total) : 0;
+
+  let medGap = null;
+  if (ms.length >= 2) {
+    ms.sort(function (a, b) { return a - b; });
+    const gaps = [];
+    let prev = 0;
+    ms.forEach(function (v) { gaps.push((v - prev) / 1000); prev = v; });
+    gaps.sort(function (a, b) { return a - b; });
+    const mid = Math.floor(gaps.length / 2);
+    medGap = (gaps.length % 2) ? gaps[mid] : (gaps[mid - 1] + gaps[mid]) / 2;
+    medGap = Math.round(medGap * 10) / 10;
+  }
+  return { perQ: Math.round(perQ * 10) / 10, medGap: medGap, answered: ms.length,
+           effSec: Math.round(effSec * 10) / 10 };
+}
+
+/** 成績に入れてよい回かどうかを判定する */
+function fairnessOf_(pace, score, answered, total) {
+  const reasons = [];
+  // 未解答が多い回は、そもそも速くて当然なので対象にしない
+  const fastPerQ = (answered >= 2) && (pace.perQ < FAIR_MIN_SEC_PER_Q);
+  const burst    = (pace.medGap != null) && (pace.medGap < FAIR_MIN_GAP_SEC);
+  if (fastPerQ) reasons.push("1問あたり" + pace.perQ + "秒");
+  if (burst)    reasons.push("解答間隔の中央値" + pace.medGap + "秒");
+
+  if ((fastPerQ || burst) && score >= FAIR_SUSPECT_RATE) {
+    return { include: false, reason: "速すぎます（" + reasons.join("・") + "）" };
+  }
+  return { include: true, reason: "" };
+}
+
+/** 記録の1行を成績に入れてよいか。先生が「×」に書き換えた行は外れる */
+function quizCounts_(row, m) {
+  const c = m["成績に反映"];
+  if (!c) return true;                       // 旧い記録は従来どおり数える
+  const v = String(row[c - 1]).trim();
+  return v !== "×" && v !== "x" && v.toUpperCase() !== "FALSE";
+}
+
 /** 小テストの状況（残りの問題数・最高正答率） */
 function quizStatus_(email) {
   const done = quizServedIds_(email);
@@ -684,7 +747,7 @@ function quizStatus_(email) {
   let remain = 0;
   pool.forEach(function (s) { if (!done[s.id]) remain++; });
 
-  let best = null, sum = 0, tries = 0, last = null;
+  let best = null, sum = 0, tries = 0, last = null, skipped = 0;
   const sh = book_().getSheetByName(SH_QUIZ);
   if (sh && sh.getLastRow() >= 2) {
     const m = headerMap_(sh);
@@ -692,13 +755,14 @@ function quizStatus_(email) {
     const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
     rows.forEach(function (r) {
       if (String(r[m["email"] - 1]).trim().toLowerCase() !== key) return;
+      if (!quizCounts_(r, m)) { skipped++; return; }
       tries++;
       const sc = Number(r[m["成績(%)"] - 1]) || 0;
       if (best == null || sc > best) best = sc;
       sum += sc; last = sc;
     });
   }
-  return { remain: remain, total: pool.length, tries: tries,
+  return { remain: remain, total: pool.length, tries: tries, skipped: skipped,
            best: best, avg: tries ? Math.round(sum / tries) : null, last: last,
            limitSec: QUIZ_SEC, count: Math.min(QUIZ_COUNT, remain) };
 }
@@ -796,22 +860,31 @@ function submitQuiz(payload) {
     const score = bestPart.rate;
 
     const rate = Math.round(correct / total * 100);
+
+    // 連打・速すぎる解答は成績に入れない
+    const answered = Object.keys(picks).filter(function (k) {
+      return picks[k] != null && picks[k] !== "";
+    }).length;
+    const pace = paceOf_(p.stamps, secs, total);
+    const fair = fairnessOf_(pace, score, answered, total);
     const uuid = uuid_();
     const dedupe = [me.email, ids.join(","), String(p.startedAt || "")].join("|");
     const sh = sheet_(SH_QUIZ, H_QUIZ);
     if (alreadyQuizSaved_(sh, dedupe)) {
       return { ok: true, duplicated: true, total: total, correct: correct, rate: rate,
                score: score, parts: parts, bestId: bestPart.id,
+               counted: fair.include, reason: fair.reason, pace: pace,
                detail: detail, status: quizStatus_(me.email) };
     }
 
     sh.appendRow([
       uuid, now_(), me.email, me.name, me.klass, me.no,
-      score, bestPart.id,
+      score, fair.include ? "○" : "×", fair.reason, bestPart.id,
       parts.map(function (x) { return x.id + ":" + x.rate + "%"; }).join(" / "),
       ids.join(","),
       ids.length, total, correct, rate,
-      secs, timeUp ? "○" : "", wrongIds.join(","), rightIds.join(","),
+      secs, pace.perQ, pace.medGap == null ? "" : pace.medGap, timeUp ? "○" : "",
+      wrongIds.join(","), rightIds.join(","),
       blur, CLIENT_VERSION
     ]);
     // 重複排除キーは最終列に持たせる（見出しが無くても追記できるよう別管理）
@@ -822,8 +895,9 @@ function submitQuiz(payload) {
     return {
       ok: true, uuid: uuid, total: total, correct: correct, rate: rate,
       score: score, parts: parts, bestId: bestPart.id,
+      counted: fair.include, reason: fair.reason, pace: pace,
       timeUp: timeUp, seconds: secs, detail: detail, status: status,
-      isBest: (status.best === score)
+      isBest: fair.include && (status.best === score)
     };
   } catch (e) {
     return { ok: false, message: String(e.message || e) };
@@ -1076,13 +1150,14 @@ function collectQuiz_() {
   rows.forEach(function (r) {
     const email = String(r[m["email"] - 1]).trim().toLowerCase();
     if (!email) return;
-    if (!agg[email]) agg[email] = { tries: 0, best: null, sum: 0, last: "" };
+    if (!agg[email]) agg[email] = { tries: 0, best: null, sum: 0, skipped: 0, last: "" };
     const a = agg[email];
+    a.last = String(r[m["保存日時"] - 1]);
+    if (!quizCounts_(r, m)) { a.skipped++; return; }
     a.tries++;
     const sc = Number(r[m["成績(%)"] - 1]) || 0;
     if (a.best == null || sc > a.best) a.best = sc;
     a.sum += sc;
-    a.last = String(r[m["保存日時"] - 1]);
   });
   return agg;
 }
@@ -1103,13 +1178,14 @@ function totalRows_() {
                 points: 0, tries: 0, best: {}, rateSum: 0, maxScore: 0, fastest: null, last: quiz[email].last });
   });
   return list.map(function (a, i) {
-    const q = quiz[a.email] || { tries: 0, best: null, sum: 0, last: "" };
+    const q = quiz[a.email] || { tries: 0, best: null, sum: 0, skipped: 0, last: "" };
     return [i + 1, a.email, a.name, a.klass, a.no, a.points, max, a.tries,
             Object.keys(a.best).length, fullStagesOf_(a, per),
             a.tries ? Math.round(a.rateSum / a.tries) : 0,
             a.maxScore, a.fastest == null ? "" : a.fastest, rankName_(a.points, max),
             q.tries, q.best == null ? "" : q.best,
             q.tries ? Math.round(q.sum / q.tries) : "",
+            q.skipped || "",
             a.last || q.last];
   });
 }
@@ -1204,6 +1280,27 @@ function reportIssue(payload) {
 }
 
 function stripTags_(s) { return String(s || "").replace(/<[^>]*>/g, ""); }
+
+/** 速すぎるなどで成績に入れなかった小テストの一覧 */
+function showExcludedQuiz() {
+  const ui = tryUi_();
+  if (!ui) return;
+  const sh = book_().getSheetByName(SH_QUIZ);
+  if (!sh || sh.getLastRow() < 2) { ui.alert(APP_NAME, "小テストの記録がまだありません。", ui.ButtonSet.OK); return; }
+  const m = headerMap_(sh);
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+  const out = [];
+  rows.forEach(function (r, i) {
+    if (quizCounts_(r, m)) return;
+    out.push((i + 2) + "行目　" + String(r[m["氏名"] - 1] || r[m["email"] - 1]) +
+             "　成績" + r[m["成績(%)"] - 1] + "％　" + String(r[m["除外理由"] - 1] || ""));
+  });
+  ui.alert(APP_NAME + "　成績に入れなかった小テスト",
+    out.length ? (out.length + "件\n\n" + out.slice(0, 30).join("\n") +
+      "\n\n※ 問題ないと判断したら、その行の「成績に反映」を ○ に書き換えてください。次の集計から数えられます。")
+      : "ありません。",
+    ui.ButtonSet.OK);
+}
 
 function showIssueSummary() {
   const ui = tryUi_();

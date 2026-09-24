@@ -527,7 +527,7 @@
    古典クエスト ― クライアント側
    ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
    ============================================================ */
-var CLIENT_VERSION = 5;
+var CLIENT_VERSION = 6;
 
 var MARK  = ['ア','イ','ウ','エ'];
 var TYPES = ['仮名遣い','主語・指示語','内容理解','要旨・話し合い'];
@@ -1062,7 +1062,8 @@ function renderQuizPanel(){
   if(hero){
     if(!hero.dataset.normal) hero.dataset.normal=hero.innerHTML;
     hero.innerHTML = lock
-      ? 'いまは<b>小テストの時間</b>です。制限時間は<b>5分</b>。答えていない問題は不正解になります。終わったら先生の指示を待ちましょう。'
+      ? 'いまは<b>小テストの時間</b>です。制限時間は<b>5分</b>。答えていない問題は不正解になります。'+
+        'よく読まずに連打した回は成績に入りません。終わったら先生の指示を待ちましょう。'
       : hero.dataset.normal;
   }
 
@@ -1072,7 +1073,8 @@ function renderQuizPanel(){
   var lead='残り<b>'+QUIZ.remain+'</b>／'+QUIZ.total+'本'+
            (QUIZ.tries?'　これまで'+QUIZ.tries+'回':'')+
            (QUIZ.best!=null?'　最高成績 <b>'+QUIZ.best+'％</b>':'')+
-           (QUIZ.avg!=null?'　平均 '+QUIZ.avg+'％':'');
+           (QUIZ.avg!=null?'　平均 '+QUIZ.avg+'％':'')+
+           (QUIZ.skipped?'　<span style="color:var(--ng)">成績に入らなかった回 '+QUIZ.skipped+'</span>':'');
   document.getElementById('quizLead').innerHTML=lead;
 
   var one=(QUIZ.remain===1);
@@ -1098,7 +1100,8 @@ function startQuiz(){
   setMsg('quizMsg','');
   call('startQuiz',[], function(r){
     if(!r||!r.ok){ setMsg('quizMsg',(r&&r.message)||'始められませんでした。'); if(r&&r.remain!=null){ QUIZ.remain=r.remain; renderQuizPanel(); } return; }
-    QZ={stages:r.stages, count:r.count, startedAt:r.startedAt, picks:{}, blur:0, limit:r.limitSec||300};
+    QZ={stages:r.stages, count:r.count, startedAt:r.startedAt, picks:{}, stamps:{},
+        blur:0, limit:r.limitSec||300, t0:Date.now()};
     QUIZ=r.status||QUIZ;
     paintQuiz();
     startQClock(QZ.limit);
@@ -1149,8 +1152,9 @@ function qTate(si,v,btn){
 function totalQs(){ var n=0; QZ.stages.forEach(function(s){ n+=s.qs.length; }); return n; }
 
 function qPick(qid,oi){
-  if(!QZ) return;
+  if(!QZ || QZ.sent) return;
   QZ.picks[qid]=oi;
+  QZ.stamps[qid]=Date.now()-QZ.t0;     // 連打かどうかを見るため、押した時刻を残す
   var st=null,q=null;
   QZ.stages.forEach(function(s){ s.qs.forEach(function(x){ if(x.id===qid){ st=s; q=x; } }); });
   if(!q) return;
@@ -1199,7 +1203,8 @@ function submitQuiz(auto){
   call('submitQuiz',[{
     email: ME.email,
     stageIds: QZ.stages.map(function(s){ return s.id; }),
-    picks: QZ.picks, seconds: secs, blur: QZ.blur, timeUp: !!auto, startedAt: QZ.startedAt
+    picks: QZ.picks, stamps: QZ.stamps, seconds: secs, blur: QZ.blur,
+    timeUp: !!auto, startedAt: QZ.startedAt
   }], function(r){
     if(!r||!r.ok){
       QZ.sent=false;
@@ -1244,7 +1249,16 @@ function paintQuizResult(r, auto){
     Math.floor(r.seconds/60)+'分'+(r.seconds%60)+'秒'+(r.timeUp?'（時間切れ）':'')+
     (QUIZ&&QUIZ.best!=null?'　／　これまでの最高成績 '+QUIZ.best+'％':'')+
     (r.isBest&&QUIZ&&QUIZ.tries>1?'（更新）':'');
-  setMsg('qSaveMsg', r.duplicated?'この回はすでに記録されています。':'', 'warn');
+  if(r.counted===false){
+    setMsg('qSaveMsg',
+      '<b>この回は成績に入りません。</b>　'+esc(r.reason||'解答が速すぎます。')+
+      '　問題文と選択肢をきちんと読んでから答えましょう。（記録は先生に残ります）', 'err', true);
+  }else{
+    setMsg('qSaveMsg', r.duplicated?'この回はすでに記録されています。':'', 'warn');
+  }
+  document.getElementById('qRate').style.opacity = (r.counted===false) ? '.4' : '';
+  var rib=document.querySelector('#qresult .ribbon');
+  if(rib) rib.textContent = (r.counted===false) ? '成績に入りません' : '今日の成績';
 
   var byStage={};
   (r.detail||[]).forEach(function(d){ (byStage[d.stageId]=byStage[d.stageId]||[]).push(d); });
