@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<base target="_top">
+<script>var APP_URL="__APP_URL__";function openPage(pp){var b=APP_URL||"";if(b){window.open(b+"?p="+pp,"_blank");}else if(typeof google!=="undefined"&&google.script&&google.script.run){google.script.run.withSuccessHandler(function(u){window.open((u||"")+"?p="+pp,"_blank");}).getAppUrl();}}function openMenu(){var b=APP_URL||"";if(b){window.open(b,"_top");}else if(typeof google!=="undefined"&&google.script&&google.script.run){google.script.run.withSuccessHandler(function(u){window.open(u||"","_top");}).getAppUrl();}}</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--paper:#f6f2e8;--paper2:#efe9db;--ink:#2b2925;--sub:#6b665c;--navy:#20303f;--teal:#2e6e62;--crimson:#8e3a3a;--gold:#9a7b3f;--line:#d8d0bd;--card:#fffdf8;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Shippori Mincho',serif;background:var(--paper);color:var(--ink);line-height:1.6;-webkit-tap-highlight-color:transparent;}
+  .wrap{max-width:960px;margin:0 auto;padding:16px 22px 60px;}
+
+  .idbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 14px;font-size:12px;}
+  .idbar .who{font-weight:700;color:var(--navy);}
+  .idbar .status{margin-left:auto;font-size:11px;color:var(--sub);}
+  .idbar a{font-size:11px;color:var(--gold);}
+
+  header{margin-top:16px;}
+  .school{font-size:10.5px;letter-spacing:.3em;color:var(--sub);}
+  h1{font-size:clamp(20px,5vw,27px);font-weight:800;letter-spacing:.08em;color:var(--navy);margin-top:5px;}
+  .lead{font-size:12.5px;color:var(--sub);line-height:1.9;margin-top:6px;max-width:660px;}
+  .lead b{color:var(--navy);}
+
+  .tabs{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;}
+  .tab{font-family:inherit;font-size:13px;font-weight:700;border:1.5px solid var(--line);background:var(--card);color:var(--sub);border-radius:20px;padding:8px 18px;cursor:pointer;}
+  .tab.on{background:var(--navy);border-color:var(--navy);color:#fff;}
+  .tabs .sp{flex:1;}
+  .btn{font-family:inherit;font-size:12px;font-weight:700;border:1.5px solid var(--gold);background:var(--card);color:var(--gold);border-radius:20px;padding:8px 16px;cursor:pointer;white-space:nowrap;}
+  .btn:hover{background:var(--gold);color:#fff;}
+  .btn.solid{background:var(--navy);border-color:var(--navy);color:#fff;} .btn.solid:hover{background:#2c435a;}
+  .btn.ghost{border-color:var(--line);color:var(--sub);} .btn.ghost:hover{background:var(--line);color:var(--ink);}
+  .btn.danger{border-color:var(--crimson);color:var(--crimson);} .btn.danger:hover{background:var(--crimson);color:#fff;}
+
+  .gradehead{margin:18px 0 8px;font-size:12px;font-weight:700;letter-spacing:.14em;color:var(--navy);border-bottom:2px solid var(--navy);padding-bottom:4px;}
+  .ucard{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:12px 15px;margin-bottom:10px;}
+  .ucard.now{border-color:var(--gold);box-shadow:0 0 0 2px rgba(154,123,63,.2) inset;}
+  .ucard .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .ucard .nm{font-size:15px;font-weight:800;color:var(--navy);}
+  .ucard .id{font-size:10px;color:var(--sub);letter-spacing:.06em;}
+  .nowbadge{background:var(--gold);color:#fff;font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:8px;letter-spacing:.08em;}
+  .ucard .acts{margin-left:auto;display:flex;gap:6px;}
+  .ucard .tags{margin-top:7px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  .tag{background:var(--paper2);border-radius:10px;padding:3px 10px;font-size:11.5px;font-weight:700;color:var(--navy);}
+  .tag .mk{color:var(--gold);margin-right:3px;}
+  .tagnone{font-size:11.5px;color:var(--crimson);}
+  .ucard .note{margin-top:7px;font-size:11.5px;color:var(--sub);line-height:1.7;border-left:3px solid var(--line);padding-left:9px;}
+
+  /* 編集フォーム */
+  .form{margin-top:12px;border-top:1px dashed var(--line);padding-top:12px;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+  .f{display:flex;flex-direction:column;gap:3px;}
+  .f label{font-size:10.5px;color:var(--sub);font-weight:700;letter-spacing:.06em;}
+  .f input,.f textarea{font-family:inherit;font-size:13.5px;padding:7px 10px;border:1.5px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);}
+  .f input:focus,.f textarea:focus{outline:none;border-color:var(--gold);}
+  .f.grow{flex:1;min-width:180px;} .f.small input{width:88px;}
+  .f textarea{width:100%;min-height:64px;line-height:1.8;resize:vertical;}
+  .chk{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:var(--navy);background:var(--paper2);border-radius:10px;padding:8px 12px;cursor:pointer;}
+  .chk input{width:16px;height:16px;accent-color:#9a7b3f;}
+
+  .obsbox{background:var(--paper2);border-radius:12px;padding:12px 14px;}
+  .obshead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:9px;}
+  .obshead .t{font-size:13px;font-weight:800;color:var(--gold);}
+  .obshead .h{font-size:11px;color:var(--sub);}
+  .obshead .n{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--navy);}
+  .obshead .n.warn{color:var(--crimson);}
+  .laygrp{margin-bottom:9px;}
+  .laygrp .lt{font-size:10px;font-weight:700;letter-spacing:.1em;margin-bottom:5px;}
+  .laygrp.l1 .lt{color:var(--navy);} .laygrp.l2 .lt{color:var(--teal);} .laygrp.l3 .lt{color:var(--crimson);}
+  .obs{display:flex;gap:7px;flex-wrap:wrap;}
+  .obs label{display:flex;align-items:center;gap:6px;background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:6px 11px;font-size:12.5px;cursor:pointer;transition:all .15s;}
+  .obs label:hover{border-color:var(--gold);}
+  .obs input{width:15px;height:15px;accent-color:#9a7b3f;}
+  .obs label.on{background:var(--gold);border-color:var(--gold);color:#fff;font-weight:700;}
+  .formacts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;}
+  .formacts .sp{flex:1;}
+  .err{font-size:11.5px;color:var(--crimson);font-weight:700;}
+
+  .syl{margin-top:26px;border:1.5px solid var(--line);border-radius:16px;background:var(--card);padding:16px 18px;}
+  .syl h2{font-size:15px;color:var(--navy);letter-spacing:.06em;margin-bottom:4px;}
+  .syl .hsub{font-size:11.5px;color:var(--sub);margin-bottom:12px;line-height:1.7;}
+  .sylwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:10px;}
+  table.syl-t{border-collapse:separate;border-spacing:0;font-size:11px;min-width:100%;background:var(--card);}
+  table.syl-t th,table.syl-t td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:5px 7px;text-align:center;white-space:nowrap;}
+  table.syl-t thead th{background:var(--paper2);font-weight:700;color:var(--navy);font-size:10.5px;}
+  table.syl-t th.grade{background:var(--navy);color:#fff;letter-spacing:.1em;}
+  table.syl-t th.unit{min-width:104px;max-width:150px;white-space:normal;line-height:1.35;}
+  table.syl-t th.cor{background:var(--paper2);position:sticky;left:0;z-index:3;}
+  table.syl-t th.lay{position:sticky;left:0;z-index:2;background:var(--paper2);width:34px;min-width:34px;padding:6px 2px;}
+  table.syl-t th.lay span{display:inline-block;font-size:10.5px;letter-spacing:.1em;line-height:1.35;white-space:normal;word-break:break-all;}
+  table.syl-t th.lay.l1{color:var(--navy);} table.syl-t th.lay.l2{color:var(--teal);} table.syl-t th.lay.l3{color:var(--crimson);}
+  table.syl-t th.obsc{position:sticky;left:34px;z-index:2;background:var(--card);text-align:left;font-weight:700;color:var(--ink);min-width:96px;}
+  table.syl-t td.c{background:var(--card);cursor:pointer;} table.syl-t td.c.aim{background:rgba(154,123,63,.12);}
+  table.syl-t td.c:hover{background:rgba(32,48,63,.07);}
+  table.syl-t th.unit.now{background:var(--navy);color:#fff;}
+  table.syl-t td.cnt{background:var(--paper2);font-weight:700;color:var(--navy);}
+  .aimmark{color:var(--gold);font-size:13px;font-weight:700;}
+  .zero{color:#c3bba9;font-size:10px;}
+  .gapnote{margin-top:10px;font-size:11.5px;color:var(--crimson);line-height:1.7;} .gapnote b{font-weight:700;}
+  .hempty{font-size:12px;color:var(--sub);padding:14px 0;text-align:center;}
+  .guard{background:var(--card);border:1.5px solid var(--crimson);border-radius:14px;padding:16px 18px;margin-top:16px;font-size:12.5px;line-height:1.9;}
+  .guard b{color:var(--crimson);}
+  footer{margin-top:20px;text-align:center;font-size:10px;letter-spacing:.14em;color:var(--sub);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="idbar">
+    <span class="who" id="who">読み込み中…</span>
+    <a href="#" onclick="openMenu();return false;">メニュー</a>
+    <a href="#" onclick="openPage('bungaku');return false;">生徒画面（文学）</a>
+    <a href="#" onclick="openPage('setsumei');return false;">生徒画面（説明文）</a>
+    <span class="status" id="status"></span>
+  </div>
+
+  <header>
+    <div class="school">西原中学校 国語科</div>
+    <h1>単元と「全員がおさえる観点」の設定</h1>
+    <div class="lead">単元ごとに、<b>全員がおさえる観点（◎）</b>を2〜3個えらんでください。ここで決めたことが、そのまま生徒の画面と<b>系統表</b>に出ます。生徒の画面は見るだけで、入力はできません。</div>
+  </header>
+
+  <div class="guard" id="guard" style="display:none;"></div>
+
+  <div id="main" style="display:none;">
+    <div class="tabs">
+      <button class="tab on" data-genre="bungaku">文学的文章</button>
+      <button class="tab" data-genre="setsumei">説明的文章</button>
+      <span class="sp"></span>
+      <button class="btn" id="addBtn">＋ 単元を追加</button>
+    </div>
+
+    <div id="list"></div>
+
+    <section class="syl">
+      <h2>系統表（このジャンル）</h2>
+      <div class="hsub">たて＝観点、よこ＝単元。◎のマスを押すと、その単元の設定をひらきます。3年間で9つの観点がひと通りおさえられるか、ここで確かめられます。</div>
+      <div id="sylBody"><div class="hempty">読み込み中…</div></div>
+      <div class="gapnote" id="sylNote"></div>
+    </section>
+  </div>
+
+  <footer>西原中学校 国語科｜読みの観点</footer>
+</div>
+
+<script>
+const hasGAS=(typeof google!=='undefined'&&google.script&&google.script.run);
+const LAYER_LABEL=['第一層','第二層','第三層'];
+let GEN='bungaku';
+let DATA={bungaku:{layers:[],units:[]},setsumei:{layers:[],units:[]}};
+let editing=null;   // 編集中の単元ID（''なら新規）
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function obsAll(g){return [].concat.apply([],DATA[g].layers);}
+function setStatus(t){document.getElementById('status').textContent=t||'';}
+
+// ===== 起動 =====
+function boot(){
+  if(hasGAS){
+    google.script.run.withSuccessHandler(onData).withFailureHandler(e=>showGuard(String(e&&e.message||e))).getTeacherData();
+  }else{
+    onData({ctx:{isTeacher:true,name:'（プレビュー）',email:'preview@example.com'},
+      bungaku:{layers:[['登場人物','設定','構成','視点・語り'],['表現の工夫','題名','主題'],['批評・評価','自分に生かす']],
+        units:[{id:'B01',grade:'1年',name:'ベンチ',material:'ベンチ',order:1,active:false,must:['登場人物','視点・語り','題名'],note:''},
+               {id:'B02',grade:'1年',name:'オツベルと象',material:'オツベルと象',order:2,active:false,must:['設定','表現の工夫','主題'],note:''},
+               {id:'B03',grade:'1年',name:'少年の日の思い出',material:'少年の日の思い出',order:3,active:true,must:['構成','批評・評価','自分に生かす'],note:'今回は「構成」を手がかりに読みます。'}]},
+      setsumei:{layers:[['話題と問い','文章の構成','要点と要旨'],['主張と根拠','事例のえらび方','図表・写真'],['筆者の工夫','批判的な読み','自分の考え']],
+        units:[{id:'S01',grade:'1年',name:'ダイコンは大きな根？',material:'',order:1,active:true,must:['話題と問い','文章の構成'],note:''}]}});
+  }
+}
+function showGuard(msg){
+  const g=document.getElementById('guard');
+  g.style.display='';g.innerHTML=msg;
+  document.getElementById('main').style.display='none';
+}
+function onData(d){
+  if(!d){showGuard('読み込みに失敗しました。ページを開き直してください。');return;}
+  DATA.bungaku=d.bungaku||{layers:[],units:[]};
+  DATA.setsumei=d.setsumei||{layers:[],units:[]};
+  const ctx=d.ctx||{};
+  document.getElementById('who').textContent=(ctx.name||ctx.email||'ゲスト')+(ctx.isTeacher?'（教員）':'');
+  if(!ctx.isTeacher){
+    showGuard('<b>この画面は教員のみ編集できます。</b><br>'+
+      (ctx.email?('いまのログイン：'+esc(ctx.email)+'<br>教員名簿にこのメールアドレスを追加すると使えます。')
+               :'ログイン情報が取れない公開設定です。スプレッドシートの「単元マスタ」シートの<b>「おさえる観点」</b>列を直接編集してください（観点名を読点でくぎる）。'));
+    return;
+  }
+  document.getElementById('main').style.display='';
+  render();
+}
+
+// ===== タブ =====
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');GEN=b.dataset.genre;editing=null;render();
+}));
+document.getElementById('addBtn').addEventListener('click',()=>{editing='';render();
+  setTimeout(()=>{const f=document.getElementById('formTop');if(f)f.scrollIntoView({behavior:'smooth',block:'center'});},60);});
+
+// ===== 一覧 =====
+function render(){
+  const units=DATA[GEN].units||[];
+  const box=document.getElementById('list');
+  let html='';
+  if(editing===''){html+=formHTML(null);}
+  if(!units.length&&editing!==''){
+    html+='<div class="hempty">まだ単元がありません。「＋ 単元を追加」から登録してください。</div>';
+  }
+  let lastGrade=null;
+  units.forEach(u=>{
+    const g=u.grade||'学年みとうろく';
+    if(g!==lastGrade){html+=`<div class="gradehead">${esc(g)}</div>`;lastGrade=g;}
+    if(editing===u.id){html+=formHTML(u);return;}
+    const tags=(u.must||[]).length
+      ? (u.must||[]).map(o=>`<span class="tag"><span class="mk">◎</span>${esc(o)}</span>`).join('')
+      : '<span class="tagnone">おさえる観点が未設定です</span>';
+    html+=`<div class="ucard${u.active?' now':''}" id="u-${esc(u.id)}">
+      <div class="top">
+        <span class="nm">${esc(u.name)}</span>
+        ${u.active?'<span class="nowbadge">いま学習中</span>':''}
+        <span class="id">${esc(u.id)}${u.material?'／'+esc(u.material):''}</span>
+        <span class="acts"><button class="btn ghost" data-edit="${esc(u.id)}">観点を決める</button></span>
+      </div>
+      <div class="tags">${tags}</div>
+      ${u.note?`<div class="note">${esc(u.note)}</div>`:''}
+    </div>`;
+  });
+  box.innerHTML=html;
+  box.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>{editing=b.dataset.edit;render();
+    const el=document.getElementById('formTop');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});}));
+  bindForm();
+  renderSyllabus();
+}
+
+// ===== 編集フォーム =====
+function formHTML(u){
+  const isNew=!u;
+  const must=(u&&u.must)||[];
+  const layers=DATA[GEN].layers||[];
+  let obs='';
+  layers.forEach((arr,li)=>{
+    obs+=`<div class="laygrp l${li+1}"><div class="lt">${LAYER_LABEL[li]}</div><div class="obs">`;
+    arr.forEach(o=>{
+      const on=must.indexOf(o)>=0;
+      obs+=`<label class="${on?'on':''}"><input type="checkbox" value="${esc(o)}"${on?' checked':''}>${esc(o)}</label>`;
+    });
+    obs+='</div></div>';
+  });
+  return `<div class="ucard now" id="formTop">
+    <div class="top"><span class="nm">${isNew?'新しい単元':esc(u.name)}</span>
+      <span class="id">${isNew?'IDは自動でつきます':esc(u.id)}</span></div>
+    <div class="form">
+      <div class="row">
+        <div class="f small"><label>学年</label><input id="fGrade" value="${isNew?'':esc(u.grade)}" placeholder="1年"></div>
+        <div class="f grow"><label>単元名（生徒に見えます）</label><input id="fName" value="${isNew?'':esc(u.name)}" placeholder="少年の日の思い出"></div>
+        <div class="f grow"><label>教材名（任意）</label><input id="fMaterial" value="${isNew?'':esc(u.material||'')}" placeholder="少年の日の思い出"></div>
+        <div class="f small"><label>順序</label><input id="fOrder" inputmode="numeric" value="${isNew?'':(u.order||'')}" placeholder="1"></div>
+      </div>
+      <div class="row">
+        <label class="chk"><input type="checkbox" id="fActive"${(!isNew&&u.active)?' checked':''}>いま学習中（生徒の画面で最初に開く）</label>
+      </div>
+      <div class="obsbox">
+        <div class="obshead">
+          <span class="t">◎ 全員がおさえる観点</span>
+          <span class="h">この単元で、クラス全員がおさえる観点をえらぶ（2〜3個のめやす）</span>
+          <span class="n" id="fCount">0個</span>
+        </div>
+        ${obs}
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <div class="f grow"><label>生徒へのひとこと（任意・画面の上に出ます）</label>
+          <textarea id="fNote" placeholder="今回は「構成」を手がかりに、山場から人物の変化を読みます。">${isNew?'':esc(u.note||'')}</textarea></div>
+      </div>
+      <div class="formacts">
+        <button class="btn solid" id="fSave">保存する</button>
+        <button class="btn ghost" id="fCancel">やめる</button>
+        <span class="sp"></span>
+        <span class="err" id="fErr"></span>
+        ${isNew?'':'<button class="btn danger" id="fDelete">この単元を消す</button>'}
+      </div>
+    </div>
+  </div>`;
+}
+function bindForm(){
+  const top=document.getElementById('formTop');
+  if(!top)return;
+  const boxes=top.querySelectorAll('.obs input');
+  const count=()=>{
+    const n=top.querySelectorAll('.obs input:checked').length;
+    const el=document.getElementById('fCount');
+    el.textContent=n+'個'+(n>3?'（多いかも）':(n===0?'（未設定）':''));
+    el.classList.toggle('warn',n>3||n===0);
+  };
+  boxes.forEach(b=>b.addEventListener('change',()=>{b.parentNode.classList.toggle('on',b.checked);count();}));
+  count();
+  document.getElementById('fCancel').addEventListener('click',()=>{editing=null;render();});
+  const del=document.getElementById('fDelete');
+  if(del)del.addEventListener('click',()=>{
+    if(!confirm('この単元を消します。もとに戻せません。よろしいですか？'))return;
+    setStatus('削除中…');
+    if(!hasGAS){DATA[GEN].units=DATA[GEN].units.filter(x=>x.id!==editing);editing=null;setStatus('削除しました（プレビュー）');render();return;}
+    google.script.run.withSuccessHandler(res=>{
+      if(res&&res.ok){DATA[GEN].units=res.units||[];editing=null;setStatus('削除しました');render();}
+      else setStatus((res&&res.message)||'削除できませんでした');
+    }).withFailureHandler(e=>setStatus(String(e&&e.message||e))).deleteUnit(editing,GEN);
+  });
+  document.getElementById('fSave').addEventListener('click',()=>{
+    const payload={
+      id:editing||'',genre:GEN,
+      grade:document.getElementById('fGrade').value.trim(),
+      name:document.getElementById('fName').value.trim(),
+      material:document.getElementById('fMaterial').value.trim(),
+      order:Number(document.getElementById('fOrder').value.trim()||0),
+      active:document.getElementById('fActive').checked,
+      note:document.getElementById('fNote').value.trim(),
+      must:Array.prototype.slice.call(top.querySelectorAll('.obs input:checked')).map(b=>b.value)
+    };
+    if(!payload.name){document.getElementById('fErr').textContent='単元名を入れてください。';return;}
+    document.getElementById('fErr').textContent='';
+    setStatus('保存中…');
+    if(!hasGAS){
+      const list=DATA[GEN].units;
+      if(payload.id){const i=list.findIndex(x=>x.id===payload.id);list[i]=Object.assign(list[i],payload);}
+      else{payload.id='NEW'+(list.length+1);list.push(payload);}
+      if(payload.active)list.forEach(x=>{if(x.id!==payload.id)x.active=false;});
+      editing=null;setStatus('保存しました（プレビュー）');render();return;
+    }
+    google.script.run.withSuccessHandler(res=>{
+      if(res&&res.ok){DATA[GEN].units=res.units||[];editing=null;setStatus('保存しました');render();}
+      else setStatus((res&&res.message)||'保存できませんでした');
+    }).withFailureHandler(e=>setStatus(String(e&&e.message||e))).saveUnit(payload);
+  });
+}
+
+// ===== 系統表 =====
+function renderSyllabus(){
+  const units=DATA[GEN].units||[], layers=DATA[GEN].layers||[];
+  const body=document.getElementById('sylBody');
+  if(!units.length){body.innerHTML='<div class="hempty">単元を登録すると、ここに系統表が出ます。</div>';
+    document.getElementById('sylNote').innerHTML='';return;}
+  const all=obsAll(GEN), counts={};all.forEach(o=>counts[o]=0);
+  units.forEach(u=>(u.must||[]).forEach(o=>{if(counts[o]!==undefined)counts[o]++;}));
+
+  const groups=[];
+  units.forEach(u=>{const g=u.grade||'学年みとうろく';const last=groups[groups.length-1];
+    if(last&&last.g===g)last.n++;else groups.push({g:g,n:1});});
+
+  let html='<div class="sylwrap"><table class="syl-t"><thead><tr><th class="cor" colspan="2" rowspan="2">観点</th>';
+  groups.forEach(g=>{html+=`<th class="grade" colspan="${g.n}">${esc(g.g)}</th>`;});
+  html+='<th class="cor" rowspan="2">おさえる<br>回数</th></tr><tr>';
+  units.forEach(u=>{html+=`<th class="unit${u.active?' now':''}">${esc(u.name)}</th>`;});
+  html+='</tr></thead><tbody>';
+  layers.forEach((arr,li)=>{
+    arr.forEach((o,oi)=>{
+      html+='<tr>';
+      if(oi===0)html+=`<th class="lay l${li+1}" rowspan="${arr.length}"><span>${LAYER_LABEL[li]}</span></th>`;
+      html+=`<th class="obsc">${esc(o)}</th>`;
+      units.forEach(u=>{
+        const aim=(u.must||[]).indexOf(o)>=0;
+        html+=`<td class="c${aim?' aim':''}" data-unit="${esc(u.id)}" title="${esc(u.name)}｜${esc(o)}">${aim?'<span class="aimmark">◎</span>':''}</td>`;
+      });
+      html+=`<td class="cnt">${counts[o]?counts[o]+'回':'<span class="zero">0</span>'}</td></tr>`;
+    });
+  });
+  html+='</tbody></table></div>';
+  body.innerHTML=html;
+  body.querySelectorAll('td.c').forEach(td=>td.addEventListener('click',()=>{
+    editing=td.dataset.unit;render();
+    const el=document.getElementById('formTop');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});
+  }));
+  const yet=all.filter(o=>!counts[o]);
+  document.getElementById('sylNote').innerHTML=yet.length
+    ?`<b>まだどの単元でもおさえていない観点：</b>${yet.map(esc).join('、')}　—— どこかの単元で◎をつけましょう。`
+    :'';
+}
+
+boot();
+</script>
+</body>
+</html>

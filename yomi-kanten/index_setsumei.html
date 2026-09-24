@@ -13,30 +13,24 @@
   *{margin:0;padding:0;box-sizing:border-box;}
   html{scroll-behavior:smooth;}
   body{font-family:'Shippori Mincho',serif;background:var(--paper);color:var(--ink);line-height:1.6;-webkit-tap-highlight-color:transparent;}
-  .wrap{max-width:960px;margin:0 auto;padding:16px 22px 90px;}
-
-  .idbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 14px;font-size:12px;margin-bottom:10px;}
-  .idbar .who{font-weight:700;color:var(--navy);}
-  .idbar .who .cls{color:var(--sub);font-weight:500;margin-left:6px;font-size:11px;}
-  .idbar .status{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--sub);font-size:11px;}
-  .dot{width:8px;height:8px;border-radius:50%;background:var(--line);transition:background .3s;}
-  .dot.saving{background:var(--gold);animation:pulse 1s infinite;} .dot.saved{background:var(--teal);} .dot.err{background:var(--crimson);}
-  @keyframes pulse{50%{opacity:.35;}}
-  .idbar .edit{border:none;background:transparent;color:var(--gold);font-family:inherit;font-size:11px;cursor:pointer;text-decoration:underline;}
+  .wrap{max-width:960px;margin:0 auto;padding:16px 22px 40px;}
 
   /* 単元バー */
-  .unitbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--navy);color:#fff;border-radius:12px;padding:10px 14px;margin-bottom:14px;}
+  .unitbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--navy);color:#fff;border-radius:12px;padding:10px 14px;}
   .unitbar .ul{font-size:11px;letter-spacing:.14em;opacity:.85;white-space:nowrap;}
   .unitbar select{font-family:inherit;font-size:14px;font-weight:700;padding:6px 10px;border-radius:8px;border:none;background:#fff;color:var(--navy);max-width:100%;}
-  .unitbar .rec{font-size:11px;opacity:.9;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
-  .unitbar .rec b{opacity:.75;font-weight:500;}
-  .rectag{background:rgba(255,255,255,.16);border-radius:10px;padding:2px 9px;font-size:11px;}
   .gradetag{background:rgba(255,255,255,.22);border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700;letter-spacing:.08em;}
+  .nowtag{background:var(--gold);border-radius:8px;padding:2px 8px;font-size:10.5px;font-weight:700;letter-spacing:.08em;}
+  .unitbar .menu{margin-left:auto;font-size:11px;color:#fff;opacity:.8;text-decoration:underline;}
 
-  header{text-align:center;}
+  /* 先生からのひとこと */
+  .note{margin-top:10px;background:var(--card);border:1.5px solid var(--gold);border-left-width:6px;border-radius:12px;padding:11px 15px;font-size:12.5px;line-height:1.8;}
+  .note .nlab{font-size:9.5px;font-weight:700;letter-spacing:.14em;color:var(--gold);display:block;margin-bottom:2px;}
+
+  header{text-align:center;margin-top:18px;}
   .school{font-size:10.5px;letter-spacing:.3em;color:var(--sub);}
   h1{font-size:clamp(23px,6vw,32px);font-weight:800;letter-spacing:.1em;color:var(--navy);margin-top:6px;line-height:1.3;}
-  .lead{font-size:13px;color:var(--sub);line-height:1.9;margin:8px auto 0;max-width:600px;}
+  .lead{font-size:13px;color:var(--sub);line-height:1.9;margin:8px auto 0;max-width:620px;}
   .lead b{color:var(--navy);}
 
   .journey{display:flex;align-items:stretch;justify-content:center;gap:0;margin:18px auto 6px;max-width:680px;flex-wrap:wrap;}
@@ -57,7 +51,20 @@
   .depth-legend .arr{color:var(--sub);font-size:12px;}
   .note-1nen{text-align:center;font-size:11.5px;color:var(--crimson);font-weight:700;margin-top:8px;}
 
-  .toolbar{position:sticky;top:0;z-index:30;margin:16px -22px 0;padding:10px 22px;background:rgba(246,242,232,.92);backdrop-filter:blur(6px);border-top:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  /* この単元でおさえる観点 */
+  .must{margin-top:22px;background:var(--card);border:2px solid var(--gold);border-radius:16px;padding:15px 18px;scroll-margin-top:16px;}
+  .must h2{font-size:15px;color:var(--gold);letter-spacing:.06em;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .must h2 .mk{font-size:18px;}
+  .must .msub{font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.7;}
+  .mustlist{display:flex;gap:10px;flex-wrap:wrap;margin-top:11px;}
+  .mustitem{flex:1;min-width:200px;background:var(--paper2);border-radius:12px;padding:10px 13px;text-align:left;font-family:inherit;border:none;cursor:pointer;transition:background .2s;}
+  .mustitem:hover{background:#e7e0ce;}
+  .mustitem .mn{font-size:14px;font-weight:800;color:var(--navy);display:flex;align-items:center;gap:6px;}
+  .mustitem .mn .lay{font-size:9.5px;font-weight:700;color:#fff;background:var(--gold);border-radius:7px;padding:1px 6px;letter-spacing:.06em;}
+  .mustitem .mq{font-size:11px;color:var(--sub);margin-top:4px;line-height:1.6;}
+  .mustnone{font-size:12px;color:var(--sub);margin-top:8px;}
+
+  .toolbar{position:sticky;top:0;z-index:30;margin:18px -22px 0;padding:10px 22px;background:rgba(246,242,232,.92);backdrop-filter:blur(6px);border-top:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
   .toolbar .msg{font-size:12px;color:var(--sub);flex:1;min-width:170px;line-height:1.5;} .toolbar .msg b{color:var(--navy);}
   .btn{font-family:inherit;font-size:12px;font-weight:700;border:1.5px solid var(--gold);background:var(--card);color:var(--gold);border-radius:20px;padding:7px 15px;cursor:pointer;transition:all .2s;white-space:nowrap;}
   .btn:hover,.btn.on{background:var(--gold);color:#fff;}
@@ -74,25 +81,22 @@
   .l1 .grid,.l2 .grid,.l3 .grid{grid-template-columns:repeat(3,1fr);}
   @media(max-width:820px){.l1 .grid,.l2 .grid,.l3 .grid{grid-template-columns:1fr;}}
 
-  .card{background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:14px 14px 12px;position:relative;overflow:hidden;opacity:0;transform:translateY(16px);transition:opacity .5s,transform .5s,box-shadow .25s,border-color .25s;}
+  .card{background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:14px 14px 12px;position:relative;overflow:hidden;opacity:0;transform:translateY(16px);transition:opacity .5s,transform .5s,box-shadow .25s;scroll-margin-top:80px;}
   .card.in{opacity:1;transform:none;}
-  .card:hover{box-shadow:0 10px 26px rgba(43,41,37,.1);}
-  .card.recommend{border-color:var(--gold);}
+  .card.must{border-color:var(--gold);box-shadow:0 0 0 2px rgba(154,123,63,.25) inset;}
+  .card.flash{animation:flash 1.2s ease;}
+  @keyframes flash{0%,100%{box-shadow:0 0 0 2px rgba(154,123,63,.25) inset;}35%{box-shadow:0 0 0 5px rgba(154,123,63,.55) inset;}}
   .card .acc{position:absolute;top:0;left:0;right:0;height:4px;}
   .l1 .card .acc{background:var(--navy);} .l2 .card .acc{background:var(--teal);} .l3 .card .acc{background:var(--crimson);}
-  .aimtag{background:var(--gold);color:#fff;font-size:9px;padding:2px 7px;border-radius:8px;letter-spacing:.05em;white-space:nowrap;flex:none;}
-  .card-top{display:flex;align-items:center;gap:10px;}
+  .card-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .icon-wrap{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex:none;}
   .l1 .icon-wrap{background:var(--navy-t);} .l2 .icon-wrap{background:var(--teal-t);} .l3 .icon-wrap{background:var(--crimson-t);}
-  .card .name{font-size:15px;font-weight:800;}
+  .card .name{font-size:15px;font-weight:800;white-space:nowrap;}
   .l1 .name{color:var(--navy);} .l2 .name{color:var(--teal);} .l3 .name{color:var(--crimson);}
-  .star{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1.5px solid var(--line);background:transparent;cursor:pointer;display:grid;place-items:center;flex:none;transition:all .2s;}
-  .star svg{width:16px;height:16px;} .star:hover{border-color:var(--gold);}
-  .card.picked{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold) inset;}
-  .card.picked .star{background:var(--gold);border-color:var(--gold);} .card.picked .star svg{stroke:#fff;fill:#fff;}
+  .musttag{margin-left:auto;background:var(--gold);color:#fff;font-size:9.5px;padding:3px 8px;border-radius:9px;letter-spacing:.04em;white-space:nowrap;flex:none;}
   .ask{font-size:11.5px;line-height:1.65;margin:8px 2px 6px;min-height:36px;} .ask::before{content:"Q. ";color:var(--gold);font-weight:700;}
 
-  /* 具体例（観点ごとに「こう書けばいい」を明示）*/
+  /* 具体例 */
   .exbtn{font-family:inherit;font-size:10.5px;font-weight:700;color:var(--gold);background:rgba(154,123,63,.09);border:1px solid rgba(154,123,63,.35);border-radius:10px;padding:3px 10px;cursor:pointer;margin:0 2px 8px;}
   .exbtn:hover{background:rgba(154,123,63,.18);}
   .exbtn .cv{display:inline-block;transition:transform .2s;} .exbtn.open .cv{transform:rotate(90deg);}
@@ -103,45 +107,15 @@
   .exframe i{font-style:normal;color:var(--navy);font-weight:700;}
 
   .ladder{border-top:1px dashed var(--line);padding-top:9px;display:flex;flex-direction:column;gap:6px;}
-  .rung{display:grid;grid-template-columns:24px 1fr;gap:8px;align-items:center;font-size:10.5px;line-height:1.4;cursor:pointer;border-radius:8px;padding:3px 4px;transition:background .15s;}
-  .rung:hover{background:var(--paper2);}
-  .rung .num{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:10.5px;font-weight:700;color:#fff;flex:none;transition:transform .2s;}
+  .rung{display:grid;grid-template-columns:24px 1fr;gap:8px;align-items:center;font-size:10.5px;line-height:1.45;padding:2px 4px;}
+  .rung .num{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:10.5px;font-weight:700;color:#fff;flex:none;}
   .rung[data-d="1"] .num{background:#b9a26b;} .rung[data-d="2"] .num{background:#a3873f;} .rung[data-d="3"] .num{background:#7d6423;}
-  .rung.here .num{transform:scale(1.15);box-shadow:0 0 0 3px rgba(154,123,63,.3);}
-  .rung .txt{color:var(--sub);} .rung.here .txt{color:var(--ink);font-weight:700;}
-  .rung .flag{margin-left:6px;font-size:9px;color:var(--gold);opacity:0;transition:opacity .2s;} .rung.here .flag{opacity:1;}
-
-  /* 記述欄（文字数を指定）*/
-  .memo{border-top:1px dashed var(--line);margin-top:10px;padding-top:9px;}
-  .memo .mlab{font-size:10.5px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-  .memo .mtarget{background:var(--gold);color:#fff;border-radius:8px;padding:1px 7px;font-size:9.5px;letter-spacing:.05em;}
-  .memo textarea{width:100%;margin-top:6px;font-family:inherit;font-size:12px;line-height:1.8;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;background:#fff;resize:vertical;min-height:74px;color:var(--ink);}
-  .memo textarea:focus{outline:none;border-color:var(--gold);}
-  .cbar{font-size:10px;color:var(--sub);margin-top:4px;display:flex;gap:8px;align-items:center;}
-  .cbar b{font-size:12px;color:var(--ink);} .cbar .cmsg{margin-left:auto;}
-  .cbar.ok b,.cbar.ok .cmsg{color:var(--teal);} .cbar.over b,.cbar.over .cmsg{color:var(--crimson);}
-
-  /* 単元のふりかえり（総括）*/
-  .reflect{scroll-margin-top:70px;margin-top:30px;border:1.5px solid var(--gold);border-radius:16px;background:var(--card);padding:16px 18px;}
-  .reflect h2{font-size:16px;color:var(--gold);letter-spacing:.06em;margin-bottom:4px;}
-  .reflect .hsub{font-size:11.5px;color:var(--sub);margin-bottom:10px;line-height:1.7;}
-  .rchips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;}
-  .rchip{background:var(--paper2);border-radius:12px;padding:3px 10px;font-size:11.5px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:5px;}
-  .rnone{font-size:11.5px;color:var(--sub);}
-  .rhint{list-style:none;display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
-  .rhint li{font-size:10.5px;color:var(--sub);background:var(--paper2);border-radius:10px;padding:4px 10px;}
-  .reflect textarea{width:100%;font-family:inherit;font-size:12.5px;line-height:1.9;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:#fff;resize:vertical;min-height:120px;color:var(--ink);}
-  .reflect textarea:focus{outline:none;border-color:var(--gold);}
+  .rung .txt{color:var(--sub);}
 
   /* 系統表 */
-  .syl{scroll-margin-top:70px;margin-top:24px;border:1.5px solid var(--line);border-radius:16px;background:var(--card);padding:16px 18px;}
+  .syl{scroll-margin-top:70px;margin-top:26px;border:1.5px solid var(--line);border-radius:16px;background:var(--card);padding:16px 18px;}
   .syl h2{font-size:16px;color:var(--navy);letter-spacing:.06em;margin-bottom:4px;}
   .syl .hsub{font-size:11.5px;color:var(--sub);margin-bottom:12px;line-height:1.7;} .syl .hsub b{color:var(--gold);}
-  .ssum{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
-  .sc{background:var(--paper2);border-radius:12px;padding:8px 14px;display:flex;align-items:baseline;gap:8px;}
-  .sbig{font-size:22px;font-weight:800;color:var(--navy);line-height:1;}
-  .sof{font-size:12px;color:var(--sub);font-weight:700;}
-  .slab{font-size:10.5px;color:var(--sub);}
   .sylwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:10px;}
   table.syl-t{border-collapse:separate;border-spacing:0;font-size:11px;min-width:100%;background:var(--card);}
   table.syl-t th,table.syl-t td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:5px 7px;text-align:center;white-space:nowrap;}
@@ -154,65 +128,41 @@
   table.syl-t th.lay span{display:inline-block;font-size:10.5px;letter-spacing:.1em;line-height:1.35;white-space:normal;word-break:break-all;}
   table.syl-t th.lay.l1{color:var(--navy);} table.syl-t th.lay.l2{color:var(--teal);} table.syl-t th.lay.l3{color:var(--crimson);}
   table.syl-t th.obs{position:sticky;left:34px;z-index:2;background:var(--card);text-align:left;font-weight:700;color:var(--ink);min-width:96px;}
-  table.syl-t td.c{background:var(--card);} table.syl-t td.c.aim{background:rgba(154,123,63,.10);}
+  table.syl-t td.c{background:var(--card);} table.syl-t td.c.aim{background:rgba(154,123,63,.12);}
   table.syl-t td.c.now{box-shadow:inset 2px 0 0 rgba(32,48,63,.28),inset -2px 0 0 rgba(32,48,63,.28);}
   table.syl-t th.unit.now{background:var(--navy);color:#fff;}
   table.syl-t th.unit.now::after{content:"いま";display:block;font-size:9px;opacity:.8;letter-spacing:.1em;}
-  table.syl-t td.bestcell{background:var(--paper2);}
-  .aimmark{color:var(--gold);font-size:12px;font-weight:700;}
-  .pk{color:var(--gold);font-size:12px;}
-  .yet{color:#c3bba9;font-size:10px;}
-  .lvchip{display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;color:#fff;font-size:11px;font-weight:700;}
-  .lv1{background:#b9a26b;} .lv2{background:#a3873f;} .lv3{background:#7d6423;}
-  .slegend{margin-top:9px;font-size:10.5px;color:var(--sub);display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
-  .slegend span{display:flex;align-items:center;gap:4px;}
-  .gapnote{margin-top:10px;font-size:11.5px;color:var(--crimson);line-height:1.7;} .gapnote b{font-weight:700;}
+  table.syl-t td.cnt{background:var(--paper2);font-weight:700;color:var(--navy);}
+  .aimmark{color:var(--gold);font-size:13px;font-weight:700;}
+  .zero{color:#c3bba9;font-size:10px;}
+  .slegend{margin-top:9px;font-size:10.5px;color:var(--sub);display:flex;gap:14px;flex-wrap:wrap;align-items:center;}
+  .slegend b{color:var(--gold);font-size:12px;}
+  .gapnote{margin-top:10px;font-size:11.5px;color:var(--sub);line-height:1.7;} .gapnote b{color:var(--navy);font-weight:700;}
   .hempty{font-size:12px;color:var(--sub);padding:14px 0;text-align:center;}
-
-  .tray{position:fixed;left:0;right:0;bottom:0;z-index:40;transform:translateY(110%);transition:transform .35s cubic-bezier(.2,.8,.2,1);background:var(--navy);color:#fff;padding:12px 18px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px rgba(0,0,0,.2);}
-  .tray.show{transform:none;}
-  .tray-inner{max-width:960px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
-  .tray .tlab{font-size:12px;font-weight:700;letter-spacing:.1em;opacity:.9;white-space:nowrap;}
-  .tray .chips{display:flex;gap:8px;flex-wrap:wrap;flex:1;}
-  .chip{background:rgba(255,255,255,.15);border-radius:14px;padding:5px 12px;font-size:12px;display:flex;align-items:center;gap:6px;}
-  .chip .x{cursor:pointer;opacity:.7;font-weight:700;} .chip .x:hover{opacity:1;} .tray .cnt{font-size:11px;opacity:.8;white-space:nowrap;}
 
   .rules{margin-top:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
   @media(max-width:700px){.rules{grid-template-columns:1fr;}}
   .rule{background:var(--card);border:1.5px dashed var(--gold);border-radius:14px;padding:12px 15px;font-size:11.5px;line-height:1.7;} .rule b{display:block;font-size:13px;color:var(--gold);font-weight:800;margin-bottom:3px;}
   .goal{margin-top:16px;background:var(--navy);color:#fff;border-radius:16px;text-align:center;padding:18px;} .goal .t{font-size:10px;letter-spacing:.3em;opacity:.8;} .goal .x{font-size:clamp(16px,4vw,20px);font-weight:800;letter-spacing:.08em;margin-top:4px;}
   footer{margin-top:16px;text-align:center;font-size:10px;letter-spacing:.14em;color:var(--sub);}
-
-  .modal-bg{position:fixed;inset:0;background:rgba(43,41,37,.5);z-index:60;display:none;align-items:center;justify-content:center;padding:20px;}
-  .modal-bg.show{display:flex;}
-  .modal{background:var(--card);border-radius:16px;padding:22px;max-width:360px;width:100%;}
-  .modal h3{font-size:15px;color:var(--navy);margin-bottom:6px;} .modal p{font-size:11.5px;color:var(--sub);margin-bottom:14px;line-height:1.7;}
-  .modal label{font-size:11px;color:var(--sub);display:block;margin:8px 0 3px;}
-  .modal input,.modal select{width:100%;font-family:inherit;font-size:14px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:#fff;}
-  .modal .save{margin-top:16px;width:100%;background:var(--navy);color:#fff;border:none;border-radius:10px;padding:11px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;}
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <div class="idbar">
-    <span class="who" id="who">読み込み中…</span>
-    <span class="status"><span class="dot" id="dot"></span><span id="statusText">準備中</span></span>
-    <a id="menuLink" href="#" onclick="openMenu();return false;" style="font-size:11px;color:var(--gold);text-decoration:underline;">メニュー</a>
-    <button class="edit" id="editId" style="display:none;">名前を直す</button>
-  </div>
-
   <div class="unitbar">
     <span class="ul">単元</span>
     <span class="gradetag" id="gradeTag" style="display:none;"></span>
     <select id="unitSel"><option>読み込み中…</option></select>
-    <span class="rec" id="recBox"></span>
+    <span class="nowtag" id="nowTag" style="display:none;">いま学習中</span>
+    <a class="menu" href="#" onclick="openMenu();return false;">メニュー</a>
   </div>
+  <div class="note" id="noteBox" style="display:none;"><span class="nlab">先生から</span><span id="noteText"></span></div>
 
   <header>
     <div class="school">西原中学校 国語科</div>
     <h1>説明的文章　読みの観点</h1>
-    <div class="lead">この単元でつかう<b>観点</b>を、<b>2〜3個</b>えらんで深く読もう。えらんだ観点は<b>記述</b>まで書くと、系統表に記録が残ります。</div>
+    <div class="lead"><b>◎</b>がついた観点が、<b>この単元で全員がおさえる観点</b>です。ほかの観点は、自分の読みを深めたいときの手がかり。</div>
     <div class="journey">
       <div class="jq j1" data-go="layer1"><div class="n">問い 1</div><div class="t">何の話? どんな組み立て?</div><div class="mini">全体像をつかむ</div></div>
       <div class="jarrow">→</div>
@@ -229,65 +179,41 @@
     <div class="note-1nen">深さは学年で決まらない。1年生から「3」にチャレンジしてOK!</div>
   </header>
 
+  <section class="must" id="mustSec">
+    <h2><span class="mk">◎</span><span id="mustTitle">この単元で全員がおさえる観点</span></h2>
+    <div class="msub">まずはこの観点で読もう。押すと、くわしい説明にとびます。</div>
+    <div class="mustlist" id="mustList"></div>
+  </section>
+
   <div class="toolbar">
-    <div class="msg" id="msg"><b>使い方：</b><b>☆</b>で今日の観点をえらび（最大3つ）、<b>深さ</b>で「いまここ」を記録。えらぶと<b>記述らん</b>が出るので、目安の文字数で書こう。</div>
-    <button class="btn" id="pickBtn">☆ 今日の観点をえらぶ</button>
+    <div class="msg" id="msg"><b>見かた：</b>観点カードには<b>問い</b>・<b>具体例</b>・<b>深さの3段階</b>がのっています。◎の観点からどうぞ。</div>
+    <button class="btn" id="exAllBtn">具体例をぜんぶひらく</button>
   </div>
 
   <section class="layer l1" id="layer1"><div class="layer-head"><span class="badge">第1層</span><span class="q">何の話? どんな組み立て?</span><span class="d">文章の全体像をつかむ</span></div><div class="grid" id="grid1"></div></section>
   <section class="layer l2" id="layer2"><div class="layer-head"><span class="badge">第2層</span><span class="q">どうつながっている?</span><span class="d">論理の筋道をたしかめる</span></div><div class="grid" id="grid2"></div></section>
   <section class="layer l3" id="layer3"><div class="layer-head"><span class="badge">第3層</span><span class="q">ほんとにそうかな?</span><span class="d">自分の頭で判断する</span></div><div class="grid" id="grid3"></div></section>
 
-  <section class="reflect" id="reflectSec">
-    <h2>この単元のふりかえり（総括）</h2>
-    <div class="hsub">観点をつかって読んでみて、どうだった？　<b id="rTarget">200字くらい</b>で書こう。</div>
-    <div class="rchips" id="rchips"></div>
-    <ul class="rhint">
-      <li>いちばん役に立った観点は？　なぜ？</li>
-      <li>深さ「3」に近づけたのはどこ？</li>
-      <li>つぎの単元でねらいたい観点は？</li>
-    </ul>
-    <textarea id="reflectBox" placeholder="例：今回は「構成」をつかって読んだ。山場を見つけてから登場人物の変化を見ると、理由がはっきり分かった。つぎは「批評・評価」で、自分の読みを友達に説明できるようにしたい。"></textarea>
-    <div class="cbar" id="rCount"></div>
-  </section>
-
   <section class="syl" id="syl">
     <h2>読みの観点　系統表</h2>
-    <div class="hsub">たて＝9つの観点、よこ＝これまでとこれからの単元。<b>◎は先生のねらい</b>、数字は自分がとどいた深さ。空いているところが、これからのチャレンジ。</div>
-    <div class="ssum" id="sylSummary"></div>
+    <div class="hsub">たて＝9つの観点、よこ＝1年から3年までの単元。<b>◎＝その単元で全員がおさえる観点</b>。3年間で、9つの観点をひと通り使えるようになります。</div>
     <div id="sylBody"><div class="hempty">読み込み中…</div></div>
     <div class="slegend">
-      <span><b class="aimmark">◎</b>先生のねらい</span>
-      <span><b class="pk">☆</b>えらんだ</span>
-      <span><i class="lvchip lv1" style="font-style:normal">1</i>見つける</span>
-      <span><i class="lvchip lv2" style="font-style:normal">2</i>つなげて考える</span>
-      <span><i class="lvchip lv3" style="font-style:normal">3</i>自分の考えをもつ</span>
+      <span><b>◎</b> 全員がおさえる観点</span>
+      <span>右はし＝3年間でおさえる回数</span>
+      <span>こい色の列＝いまの単元</span>
     </div>
     <div class="gapnote" id="sylNote"></div>
   </section>
 
   <div class="rules">
-    <div class="rule"><b>観点はえらぶ</b>9つ全部じゃなくていい。文章に合わせて2〜3個。◎は先生のねらい。</div>
-    <div class="rule"><b>根拠は本文に</b>「どこに書いてある?」——記述にも段落や引用を入れよう。</div>
+    <div class="rule"><b>◎はみんなで</b>◎の観点は、この単元で全員がおさえる。授業でここを深めます。</div>
+    <div class="rule"><b>根拠は本文に</b>「どこに書いてある?」——段落をさして言えるようにしよう。</div>
     <div class="rule"><b>疑うのは悪くない</b>筆者を疑って調べるのは、深く読んでいる証拠。</div>
   </div>
   <div class="goal"><div class="t">めざす姿</div><div class="x">根拠をたしかめて、自分で判断できる読み手</div></div>
   <footer>西原中学校 国語科｜説明的文章の読み方ガイド</footer>
 </div>
-
-<div class="tray" id="tray"><div class="tray-inner">
-  <span class="tlab">今日の観点</span><div class="chips" id="chips"></div><span class="cnt" id="cnt">0 / 3</span>
-</div></div>
-
-<div class="modal-bg" id="modalBg"><div class="modal">
-  <h3>クラスと番号をえらんでね</h3>
-  <p>名簿とつなぐために、クラスと出席番号を選んでね。（メールアドレスは自動で記録されます）</p>
-  <label>クラス</label><select id="mKlass"><option value="">選んでください</option></select>
-  <label>出席番号</label><input id="mNumber" inputmode="numeric" placeholder="例：12">
-  <div id="mResolved" style="margin-top:10px;font-size:12.5px;color:var(--teal);font-weight:700;min-height:18px;"></div>
-  <div id="mNameWrap" style="display:none;"><label>名前（名簿に無いとき）</label><input id="mName"></div>
-  <button class="save" id="mSave">名簿でかくにん →</button>
-</div></div>
 
 <script>
 const GENRE='setsumei';
@@ -315,7 +241,7 @@ const DATA={
     {icon:'gist',name:'要点と要旨',ask:'筆者がいちばん言いたいことは、ひとことで?',
      rungs:['目的に合わせて大事な所を選ぶ','要点をつないで要約する','要旨を自分のことばでまとめ直す'],
      ex:'例（ダイコンは大きな根？）：要旨は「ダイコンの白い部分は根と胚軸からできていて、部分によって味がちがうので、料理に合わせて使い分けるとよい」ということ。',
-     frame:'筆者がいちばん言いたいのは、〜ということだ。（指定された字数でまとめる）'}
+     frame:'筆者がいちばん言いたいのは、〜ということだ。'}
   ],
   2:[
     {icon:'claim',name:'主張と根拠',ask:'それは意見? 事実? 主張を支える根拠は?',
@@ -350,230 +276,129 @@ const STROKE={1:'#20303f',2:'#2e6e62',3:'#8e3a3a'};
 const LAYER_OBS=[DATA[1].map(o=>o.name),DATA[2].map(o=>o.name),DATA[3].map(o=>o.name)];
 const ALL_OBS=[].concat.apply([],LAYER_OBS);
 const LAYER_LABEL=['第一層','第二層','第三層'];
-const DEF_CHARS=100, DEF_RCHARS=200;
+const ITEM={};[1,2,3].forEach(l=>DATA[l].forEach(it=>{ITEM[it.name]={item:it,layer:l};}));
 
-let state={picked:[],levels:{},memos:{},reflection:''};
-let userInfo={email:'',klass:'',number:'',name:'',grade:'',resolved:false};
 let units=[], currentUnit=null;
 const hasGAS=(typeof google!=='undefined'&&google.script&&google.script.run);
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function len(s){return [...String(s==null?'':s).trim()].length;}
-function charTarget(){return (currentUnit&&currentUnit.chars)?currentUnit.chars:DEF_CHARS;}
-function reflectTarget(){return (currentUnit&&currentUnit.reflectChars)?currentUnit.reflectChars:DEF_RCHARS;}
+function mustOf(u){return (u&&u.must)||[];}
 
-// ===== カード =====
+// ===== 観点カード（見るだけ）=====
 function cardHTML(item,layer){
-  const rungs=item.rungs.map((r,i)=>{const d=i+1;const here=state.levels[item.name]===d?' here':'';
-    return `<div class="rung${here}" data-d="${d}" data-name="${esc(item.name)}"><span class="num">${d}</span><span class="txt">${r}<span class="flag">いまここ</span></span></div>`;}).join('');
-  const isPicked=state.picked.includes(item.name);
-  const rec=currentUnit&&currentUnit.recommend&&currentUnit.recommend.includes(item.name);
-  const t=charTarget();
-  return `<div class="card${isPicked?' picked':''}${rec?' recommend':''}" data-name="${esc(item.name)}">
+  const rungs=item.rungs.map((r,i)=>`<div class="rung" data-d="${i+1}"><span class="num">${i+1}</span><span class="txt">${r}</span></div>`).join('');
+  const isMust=mustOf(currentUnit).indexOf(item.name)>=0;
+  return `<div class="card${isMust?' must':''}" id="card-${esc(item.name)}" data-name="${esc(item.name)}">
     <div class="acc"></div>
     <div class="card-top">
       <span class="icon-wrap"><svg width="24" height="24" viewBox="0 0 34 34" fill="none" stroke="${STROKE[layer]}" stroke-width="1.8">${ICON[item.icon]}</svg></span>
-      <span class="name">${esc(item.name)}</span>${rec?'<span class="aimtag">◎ねらい</span>':''}
-      <button class="star" aria-label="えらぶ"><svg viewBox="0 0 24 24" fill="none" stroke="#9a7b3f" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.6 5.8 6.4.7-4.8 4.3 1.3 6.2L12 17.8 6.5 20l1.3-6.2L3 9.5l6.4-.7z"/></svg></button>
+      <span class="name">${esc(item.name)}</span>${isMust?'<span class="musttag">◎ 全員がおさえる</span>':''}
     </div>
     <div class="ask">${item.ask}</div>
     <button class="exbtn" type="button"><span class="cv">▸</span> 具体例を見る</button>
     <div class="exbox" hidden>
-      <div class="exlab">こう書けたらOK</div><p class="extext">${item.ex}</p>
-      <div class="exframe"><i>書き出しの型：</i>${item.frame}</div>
+      <div class="exlab">こう読めたらOK</div><p class="extext">${item.ex}</p>
+      <div class="exframe"><i>言い方の型：</i>${item.frame}</div>
     </div>
     <div class="ladder">${rungs}</div>
-    <div class="memo"${isPicked?'':' hidden'}>
-      <div class="mlab">この観点で読み取ったこと<span class="mtarget">${t}字くらい</span></div>
-      <textarea data-name="${esc(item.name)}" placeholder="上の「具体例」をまねて、本文のことばを入れて書こう。">${esc(state.memos[item.name]||'')}</textarea>
-      <div class="cbar"></div>
-    </div>
   </div>`;
 }
 function render(){
   [1,2,3].forEach(l=>{document.getElementById('grid'+l).innerHTML=DATA[l].map(it=>cardHTML(it,l)).join('');});
-  bindCards();renderTray();renderReflect();
+  bindCards();renderMust();
   const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{threshold:.12});
   document.querySelectorAll('.card').forEach((c,i)=>{c.style.transitionDelay=(i%4*55)+'ms';io.observe(c);});
+  exAllOpen=false;document.getElementById('exAllBtn').textContent='具体例をぜんぶひらく';
 }
 function bindCards(){
-  document.querySelectorAll('.star').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();togglePick(b.closest('.card').dataset.name,b.closest('.card'));}));
-  document.querySelectorAll('.exbtn').forEach(b=>b.addEventListener('click',()=>{
-    const box=b.nextElementSibling;box.hidden=!box.hidden;b.classList.toggle('open',!box.hidden);
-    b.innerHTML=(box.hidden?'<span class="cv">▸</span> 具体例を見る':'<span class="cv">▸</span> 具体例をとじる');
-    b.classList.toggle('open',!box.hidden);}));
-  document.querySelectorAll('.rung').forEach(r=>r.addEventListener('click',()=>{
-    const name=r.dataset.name,d=+r.dataset.d,card=r.closest('.card');
-    card.querySelectorAll('.rung').forEach(x=>x.classList.remove('here'));
-    if(state.levels[name]===d)delete state.levels[name];else{state.levels[name]=d;r.classList.add('here');}
-    renderReflectChips();queueSave();}));
-  document.querySelectorAll('.memo textarea').forEach(t=>{
-    updCounter(t,charTarget(),t.nextElementSibling);
-    t.addEventListener('input',()=>{
-      state.memos[t.dataset.name]=t.value;
-      updCounter(t,charTarget(),t.nextElementSibling);queueSave();});
-  });
+  document.querySelectorAll('.exbtn').forEach(b=>b.addEventListener('click',()=>toggleEx(b)));
 }
-function updCounter(el,target,out){
-  if(!out)return;
-  const n=len(el.value);const lo=Math.ceil(target*0.8),hi=Math.floor(target*1.3);
-  let cls='',msg='';
-  if(n===0){msg='目安は '+target+' 字';}
-  else if(n<lo){msg='あと '+(lo-n)+' 字くらい';}
-  else if(n<=hi){cls='ok';msg='ちょうどいい長さ';}
-  else{cls='over';msg=(n-hi)+' 字ほど長い。けずってみよう';}
-  out.className='cbar '+cls;
-  out.innerHTML=`<b>${n}</b> / ${target}字<span class="cmsg">${msg}</span>`;
+function toggleEx(b,force){
+  const box=b.nextElementSibling;
+  box.hidden=(force===undefined)?!box.hidden:!force;
+  b.classList.toggle('open',!box.hidden);
+  b.innerHTML=(box.hidden?'<span class="cv">▸</span> 具体例を見る':'<span class="cv">▸</span> 具体例をとじる');
 }
-function togglePick(name,card){
-  const i=state.picked.indexOf(name);
-  if(i>=0){state.picked.splice(i,1);card.classList.remove('picked');}
-  else{if(state.picked.length>=3){flashMsg('観点は2〜3個まで。まず1つ外そう。');return;}state.picked.push(name);card.classList.add('picked');}
-  const memo=card.querySelector('.memo');
-  if(memo){memo.hidden=!card.classList.contains('picked');
-    if(!memo.hidden){const ta=memo.querySelector('textarea');if(ta)setTimeout(()=>ta.focus(),80);}}
-  renderTray();renderReflectChips();queueSave();
-}
+let exAllOpen=false;
+document.getElementById('exAllBtn').addEventListener('click',function(){
+  exAllOpen=!exAllOpen;
+  document.querySelectorAll('.exbtn').forEach(b=>toggleEx(b,exAllOpen));
+  this.textContent=exAllOpen?'具体例をぜんぶとじる':'具体例をぜんぶひらく';
+});
 
-const tray=document.getElementById('tray'),chips=document.getElementById('chips'),cnt=document.getElementById('cnt');
-function renderTray(){
-  chips.innerHTML=state.picked.map(n=>`<span class="chip">${esc(n)}<span class="x" data-name="${esc(n)}">×</span></span>`).join('');
-  cnt.textContent=state.picked.length+' / 3';
-  tray.classList.toggle('show',state.picked.length>0);
-  chips.querySelectorAll('.x').forEach(x=>x.addEventListener('click',()=>{
-    const n=x.dataset.name;state.picked=state.picked.filter(p=>p!==n);
-    const card=document.querySelector('.card[data-name="'+CSS.escape(n)+'"]');
-    if(card){card.classList.remove('picked');const m=card.querySelector('.memo');if(m)m.hidden=true;}
-    renderTray();renderReflectChips();queueSave();}));
-}
-
-// ===== ふりかえり（総括）=====
-const reflectBox=document.getElementById('reflectBox');
-function renderReflectChips(){
-  const box=document.getElementById('rchips');
-  if(!state.picked.length){box.innerHTML='<span class="rnone">まだ観点をえらんでいません。カードの☆から2〜3個えらぼう。</span>';return;}
-  box.innerHTML=state.picked.map(n=>{const lv=state.levels[n];
-    return `<span class="rchip">${esc(n)}${lv?`<i class="lvchip lv${lv}" style="font-style:normal">${lv}</i>`:'<i style="font-style:normal;font-size:10px;color:var(--sub)">深さ未記録</i>'}</span>`;}).join('');
-}
-function renderReflect(){
-  document.getElementById('rTarget').textContent=reflectTarget()+'字くらい';
-  if(document.activeElement!==reflectBox)reflectBox.value=state.reflection||'';
-  updCounter(reflectBox,reflectTarget(),document.getElementById('rCount'));
-  renderReflectChips();
-}
-reflectBox.addEventListener('input',()=>{
-  state.reflection=reflectBox.value;
-  updCounter(reflectBox,reflectTarget(),document.getElementById('rCount'));queueSave();});
-
-// ===== 保存（単元別・デバウンス）=====
-let saveTimer=null;
-function queueSave(){
-  if(!currentUnit){flashMsg('先に単元をえらんでね。');return;}
-  setStatus('saving','保存中…');clearTimeout(saveTimer);saveTimer=setTimeout(doSave,700);
-}
-function doSave(){
-  const payload={genre:GENRE,unitId:currentUnit.id,unitName:currentUnit.name,picked:state.picked,levels:state.levels,
-                 memos:state.memos,reflection:state.reflection,
-                 klass:userInfo.klass,number:userInfo.number,name:userInfo.name,grade:userInfo.grade};
-  if(hasGAS){
-    google.script.run.withSuccessHandler(res=>{
-      if(res&&res.ok){setStatus('saved','保存しました');loadHistory();}else{setStatus('err',(res&&res.message)||'保存できませんでした');}
-    }).withFailureHandler(()=>setStatus('err','通信エラー')).saveRecord(payload);
-  }else{
-    try{localStorage.setItem('yomi_'+GENRE+'_'+currentUnit.id,JSON.stringify(state));setStatus('saved','保存（この端末）');renderHistoryLocal();}
-    catch(e){setStatus('err','保存できませんでした');}
+// ===== この単元でおさえる観点 =====
+function renderMust(){
+  const list=document.getElementById('mustList');
+  const must=mustOf(currentUnit).filter(n=>ITEM[n]);
+  document.getElementById('mustTitle').textContent=
+    currentUnit?('「'+currentUnit.name+'」で全員がおさえる観点'):'この単元で全員がおさえる観点';
+  if(!must.length){
+    list.innerHTML='<div class="mustnone">この単元は、まだ先生が観点を決めていません。下の9つから、自分で手がかりをえらんで読もう。</div>';
+    return;
   }
+  list.innerHTML=must.map(n=>{const o=ITEM[n];
+    return `<button class="mustitem" data-go="${esc(n)}"><span class="mn">${esc(n)}<span class="lay">${LAYER_LABEL[o.layer-1]}</span></span><span class="mq">${o.item.ask}</span></button>`;}).join('');
+  list.querySelectorAll('.mustitem').forEach(b=>b.addEventListener('click',()=>{
+    const card=document.getElementById('card-'+b.dataset.go);
+    if(!card)return;
+    card.scrollIntoView({behavior:'smooth',block:'center'});
+    card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');
+  }));
 }
-function setStatus(cls,text){document.getElementById('dot').className='dot '+cls;document.getElementById('statusText').textContent=text;}
 
 // ===== 起動 =====
 function boot(){
   if(hasGAS){
-    google.script.run.withSuccessHandler(onUser).withFailureHandler(()=>onUser({email:'',resolved:false})).getUserInfo();
+    google.script.run.withSuccessHandler(onSyllabus).withFailureHandler(()=>onSyllabus(null)).getSyllabus(GENRE);
   }else{
-    userInfo={email:'(プレビュー)',name:'プレビュー',grade:'1年',resolved:true};
-    units=[{id:'S01',grade:'1年',name:'（プレビュー）ダイコンは大きな根？',active:true,recommend:['話題と問い','文章の構成','要点と要旨'],chars:100,reflectChars:200},
-             {id:'S02',grade:'2年',name:'（プレビュー）モアイは語る',recommend:['文章の構成','主張と根拠','自分の考え'],chars:120,reflectChars:200}];
-    showWho();fillUnits();setStatus('saved','この端末で動作中');
+    onSyllabus({units:[{id:'S01',grade:'1年',name:'（プレビュー）ダイコンは大きな根？',active:true,must:['話題と問い','文章の構成','要点と要旨'],note:'問いの文をさがすところから始めます。'},
+              {id:'S02',grade:'2年',name:'（プレビュー）モアイは語る',must:['文章の構成','主張と根拠','自分の考え'],note:''}]});
   }
 }
-function onUser(info){
-  userInfo=info||{email:'',resolved:false};showWho();
-  if(!userInfo.resolved)openModal();
-  loadUnits();
-}
-function loadUnits(){
-  if(!hasGAS){fillUnits();return;}
-  google.script.run.withSuccessHandler(list=>{units=list||[];fillUnits();}).withFailureHandler(()=>{units=[];fillUnits();}).getUnits(GENRE);
+function onSyllabus(s){
+  units=(s&&s.units)||[];
+  fillUnits();
 }
 function fillUnits(){
   const sel=document.getElementById('unitSel');
   if(!units.length){
     sel.innerHTML='<option value="">単元がまだ登録されていません</option>';
-    document.getElementById('sylBody').innerHTML='<div class="hempty">「単元マスタ」に単元が登録されると、ここに系統表が出ます。</div>';
-    return;
+    document.getElementById('sylBody').innerHTML='<div class="hempty">先生が「単元マスタ」に単元を登録すると、ここに系統表が出ます。</div>';
+    currentUnit=null;render();return;
   }
   sel.innerHTML=units.map(u=>`<option value="${esc(u.id)}"${u.active?' selected':''}>${esc((u.grade?u.grade+'　':'')+u.name)}</option>`).join('');
   if(!units.some(u=>u.active))sel.value=units[0].id;
-  onUnitChange();
   sel.addEventListener('change',onUnitChange);
+  onUnitChange();
 }
 function onUnitChange(){
   const id=document.getElementById('unitSel').value;
   currentUnit=units.find(u=>u.id===id)||null;
-  renderRec();
-  state={picked:[],levels:{},memos:{},reflection:''};
-  render();
-  loadRecord();
-  loadHistory();
-}
-function renderRec(){
-  const box=document.getElementById('recBox'),tag=document.getElementById('gradeTag');
+  const tag=document.getElementById('gradeTag'),now=document.getElementById('nowTag');
   if(currentUnit&&currentUnit.grade){tag.textContent=currentUnit.grade;tag.style.display='';}else tag.style.display='none';
-  if(currentUnit&&currentUnit.recommend&&currentUnit.recommend.length){
-    box.innerHTML='<b>この単元のねらい ◎</b>'+currentUnit.recommend.map(r=>`<span class="rectag">${esc(r)}</span>`).join('');
-  }else box.innerHTML='';
-}
-function loadRecord(){
-  if(!currentUnit)return;
-  if(!hasGAS){
-    try{const s=localStorage.getItem('yomi_'+GENRE+'_'+currentUnit.id);
-      if(s){const o=JSON.parse(s);state={picked:o.picked||[],levels:o.levels||{},memos:o.memos||{},reflection:o.reflection||''};}}catch(e){}
-    render();return;
-  }
-  google.script.run.withSuccessHandler(rec=>{
-    state.picked=(rec&&rec.picked)||[];state.levels=(rec&&rec.levels)||{};
-    state.memos=(rec&&rec.memos)||{};state.reflection=(rec&&rec.reflection)||'';
-    render();
-    setStatus('saved',(state.picked.length||Object.keys(state.levels).length)?'この単元の続きを読み込みました':'準備OK');
-  }).withFailureHandler(()=>render()).getRecord(GENRE,currentUnit.id,userInfo.klass,userInfo.number);
+  now.style.display=(currentUnit&&currentUnit.active)?'':'none';
+  const nb=document.getElementById('noteBox');
+  if(currentUnit&&currentUnit.note){document.getElementById('noteText').textContent=currentUnit.note;nb.style.display='';}
+  else nb.style.display='none';
+  render();
+  renderSyllabus();
 }
 
-// ===== 系統表 =====
-function loadHistory(){
-  if(!hasGAS){renderHistoryLocal();return;}
-  google.script.run.withSuccessHandler(renderSyllabus).withFailureHandler(()=>{}).getMyHistory(GENRE,userInfo.klass,userInfo.number);
-}
-function renderSyllabus(h){
+// ===== 系統表（◎だけ）=====
+function renderSyllabus(){
   const body=document.getElementById('sylBody');
-  const list=(h&&h.syllabus&&h.syllabus.length)?h.syllabus:[];
-  const records=(h&&h.records)||{};
-  if(!list.length){
-    body.innerHTML='<div class="hempty">「単元マスタ」に単元が登録されると、ここに系統表が出ます。</div>';
-    document.getElementById('sylSummary').innerHTML='';document.getElementById('sylNote').innerHTML='';return;
-  }
-  const counts={},best={};ALL_OBS.forEach(o=>{counts[o]=0;best[o]=0;});
-  list.forEach(u=>{const r=records[u.id];if(!r)return;
-    ALL_OBS.forEach(o=>{const lv=r.levels&&r.levels[o];if(lv){counts[o]++;if(lv>best[o])best[o]=lv;}});});
+  if(!units.length){body.innerHTML='<div class="hempty">単元が登録されると、ここに系統表が出ます。</div>';return;}
+  const counts={};ALL_OBS.forEach(o=>counts[o]=0);
+  units.forEach(u=>mustOf(u).forEach(o=>{if(counts[o]!==undefined)counts[o]++;}));
 
   const groups=[];
-  list.forEach(u=>{const g=u.grade||'学年みとうろく';const last=groups[groups.length-1];
+  units.forEach(u=>{const g=u.grade||'学年みとうろく';const last=groups[groups.length-1];
     if(last&&last.g===g)last.n++;else groups.push({g:g,n:1});});
 
   let html='<div class="sylwrap"><table class="syl-t"><thead><tr><th class="cor" colspan="2" rowspan="2">観点</th>';
   groups.forEach(g=>{html+=`<th class="grade" colspan="${g.n}">${esc(g.g)}</th>`;});
-  html+='<th class="cor" rowspan="2">これまでの<br>最高</th></tr><tr>';
-  list.forEach(u=>{const now=currentUnit&&currentUnit.id===u.id;
+  html+='<th class="cor" rowspan="2">おさえる<br>回数</th></tr><tr>';
+  units.forEach(u=>{const now=currentUnit&&currentUnit.id===u.id;
     html+=`<th class="unit${now?' now':''}">${esc(u.name)}</th>`;});
   html+='</tr></thead><tbody>';
   LAYER_OBS.forEach((obsList,li)=>{
@@ -581,104 +406,24 @@ function renderSyllabus(h){
       html+='<tr>';
       if(oi===0)html+=`<th class="lay l${li+1}" rowspan="${obsList.length}"><span>${LAYER_LABEL[li]}</span></th>`;
       html+=`<th class="obs">${esc(o)}</th>`;
-      list.forEach(u=>{
-        const aim=(u.recommend||[]).indexOf(o)>=0;
-        const r=records[u.id]||{};
-        const lv=(r.levels&&r.levels[o])||0;
-        const pk=(r.picked||[]).indexOf(o)>=0;
+      units.forEach(u=>{
+        const aim=mustOf(u).indexOf(o)>=0;
         const now=currentUnit&&currentUnit.id===u.id;
-        let inner='';
-        if(lv)inner=`<span class="lvchip lv${lv}">${lv}</span>`;
-        else if(pk)inner='<span class="pk">☆</span>';
-        else if(aim)inner='<span class="aimmark">◎</span>';
-        html+=`<td class="c${aim?' aim':''}${now?' now':''}">${inner}</td>`;
+        html+=`<td class="c${aim?' aim':''}${now?' now':''}">${aim?'<span class="aimmark">◎</span>':''}</td>`;
       });
-      html+=`<td class="bestcell">${best[o]?`<span class="lvchip lv${best[o]}">${best[o]}</span>`:'<span class="yet">まだ</span>'}</td></tr>`;
+      html+=`<td class="cnt">${counts[o]?counts[o]+'回':'<span class="zero">—</span>'}</td></tr>`;
     });
   });
   html+='</tbody></table></div>';
   body.innerHTML=html;
 
-  const done=ALL_OBS.filter(o=>counts[o]).length;
-  const deep3=ALL_OBS.filter(o=>best[o]===3).length;
-  const doneUnits=list.filter(u=>records[u.id]).length;
-  document.getElementById('sylSummary').innerHTML=
-    `<div class="sc"><span class="sbig">${done}<span class="sof">/${ALL_OBS.length}</span></span><span class="slab">つかった観点</span></div>`+
-    `<div class="sc"><span class="sbig">${deep3}</span><span class="slab">深さ3までいった観点</span></div>`+
-    `<div class="sc"><span class="sbig">${doneUnits}<span class="sof">/${list.length}</span></span><span class="slab">記録した単元</span></div>`;
-  const unused=ALL_OBS.filter(o=>!counts[o]);
-  document.getElementById('sylNote').innerHTML=unused.length
-    ?`<b>まだ使っていない観点：</b>${unused.map(esc).join('、')}　—— つぎの単元でねらってみよう。`
-    :'<b>9つの観点、ぜんぶ使いました。</b>つぎは「深さ3」をねらってみよう。';
-}
-function renderHistoryLocal(){
-  const records={};
-  units.forEach(u=>{try{const s=localStorage.getItem('yomi_'+GENRE+'_'+u.id);
-    if(s){const st=JSON.parse(s);records[u.id]={picked:st.picked||[],levels:st.levels||{},reflection:st.reflection||''};}}catch(e){}});
-  renderSyllabus({syllabus:units,records:records});
+  const yet=ALL_OBS.filter(o=>!counts[o]);
+  document.getElementById('sylNote').innerHTML=yet.length
+    ?`<b>まだ単元が決まっていない観点：</b>${yet.map(esc).join('、')}`
+    :'<b>9つの観点すべてに、おさえる単元があります。</b>';
 }
 
-// ===== who / モーダル =====
-function showWho(){
-  const who=document.getElementById('who');
-  if(userInfo.name){who.innerHTML=esc(userInfo.name)+'<span class="cls">'+esc(userInfo.klass?userInfo.klass+'　':'')+esc(userInfo.number?userInfo.number+'番':'')+'</span>';document.getElementById('editId').style.display='inline';}
-  else who.textContent=userInfo.email||'ゲスト';
-}
-const modalBg=document.getElementById('modalBg');
-let mConfirmed=false;
-function openModal(){
-  if(hasGAS){google.script.run.withSuccessHandler(fillClassOptions).withFailureHandler(()=>fillClassOptions([])).getRosterClasses();}
-  else fillClassOptions(['１年１組','１年２組']);
-  document.getElementById('mNumber').value=userInfo.number||'';
-  document.getElementById('mResolved').textContent='';document.getElementById('mNameWrap').style.display='none';
-  document.getElementById('mSave').textContent='名簿でかくにん →';mConfirmed=false;
-  modalBg.classList.add('show');
-}
-function fillClassOptions(list){
-  const sel=document.getElementById('mKlass');
-  const cur=userInfo.klass||'';
-  sel.innerHTML='<option value="">選んでください</option>'+(list||[]).map(c=>`<option value="${esc(c)}"${c===cur?' selected':''}>${esc(c)}</option>`).join('');
-}
-document.getElementById('mSave').addEventListener('click',()=>{
-  const kl=document.getElementById('mKlass').value.trim();
-  const nu=document.getElementById('mNumber').value.trim();
-  if(!kl){document.getElementById('mKlass').focus();return;}
-  if(!nu){document.getElementById('mNumber').focus();return;}
-  if(!mConfirmed){
-    if(hasGAS){
-      google.script.run.withSuccessHandler(res=>afterResolve(kl,nu,res)).withFailureHandler(()=>afterResolve(kl,nu,{ok:false})).resolveStudent(kl,nu);
-    }else{afterResolve(kl,nu,{ok:true,name:'（プレビュー）'+kl+nu+'番'});}
-    return;
-  }
-  userInfo.klass=kl;userInfo.number=nu;
-  if(!userInfo.grade)userInfo.grade=kl;
-  const manual=document.getElementById('mName');
-  if(manual&&document.getElementById('mNameWrap').style.display!=='none')userInfo.name=manual.value.trim();
-  if(!userInfo.name){document.getElementById('mResolved').textContent='氏名を入力してね。';return;}
-  modalBg.classList.remove('show');showWho();loadHistory();queueSave();
-});
-function afterResolve(kl,nu,res){
-  const box=document.getElementById('mResolved');
-  if(res&&res.ok&&res.name){
-    userInfo.name=res.name;if(res.grade)userInfo.grade=res.grade;mConfirmed=true;
-    box.style.color='var(--teal)';box.textContent='→ '+res.name+' さん でよければ「これではじめる」を押してね。';
-    document.getElementById('mNameWrap').style.display='none';
-    document.getElementById('mSave').textContent='これではじめる';
-  }else{
-    box.style.color='var(--crimson)';box.textContent='名簿で見つかりませんでした。名前を入力してね。';
-    document.getElementById('mNameWrap').style.display='block';mConfirmed=true;
-    document.getElementById('mSave').textContent='これではじめる';
-  }
-}
-document.getElementById('editId').addEventListener('click',openModal);
-
-const msg=document.getElementById('msg');let msgTimer;
-const defaultMsg='<b>使い方：</b><b>☆</b>で今日の観点をえらび（最大3つ）、<b>深さ</b>で「いまここ」を記録。えらぶと<b>記述らん</b>が出るので、目安の文字数で書こう。';
-function flashMsg(t){msg.innerHTML='<b>'+t+'</b>';clearTimeout(msgTimer);msgTimer=setTimeout(()=>msg.innerHTML=defaultMsg,2600);}
-let pickMode=false;
-document.getElementById('pickBtn').addEventListener('click',function(){pickMode=!pickMode;this.classList.toggle('on',pickMode);flashMsg(pickMode?'☆マークを押して、今日使う観点を2〜3個えらぼう。◎は先生のねらいだよ。':'えらぶモードをやめました。');});
 document.querySelectorAll('.jq').forEach(j=>j.addEventListener('click',()=>document.getElementById(j.dataset.go).scrollIntoView({behavior:'smooth',block:'start'})));
-
 boot();
 </script>
 </body>
