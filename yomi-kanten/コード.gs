@@ -12,7 +12,7 @@
  *   コード.gs            … これ
  *   index_bungaku.html   … 生徒用（文学的文章）※閲覧のみ
  *   index_setsumei.html  … 生徒用（説明的文章）※閲覧のみ
- *   teacher.html         … 教員用（おすすめ観点の設定・系統表の確認）
+ *   teacher.html         … 教員用（おさえる観点の設定・系統表の確認）
  *   menu.html            … 入口（任意）
  *
  * ■ 公開設定のめやす
