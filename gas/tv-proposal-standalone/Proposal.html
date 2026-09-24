@@ -361,7 +361,7 @@ ul.plain li { margin-bottom: 6px; }
       <thead><tr><th>要素</th><th>テレビ表示</th><th>理由</th></tr></thead>
       <tbody>
         <tr><td>日直・週・日課・清掃・部活</td><td><span class="pill pill-on">表示</span></td><td>一日中変わらず、全員が何度も確認する情報。上部に固定します。</td></tr>
-        <tr><td>本日・明日の予定</td><td><span class="pill pill-on">表示</span></td><td>行事取込の予定を今のダッシュボードと同じ箇条書きで並べます。時刻の欄は設けません。午後は明日の予定を目立たせます。</td></tr>
+        <tr><td>本日・明日の予定</td><td><span class="pill pill-on">表示</span></td><td>行事取込の予定を今のダッシュボードと同じ箇条書きで並べます。時刻の欄は設けません。</td></tr>
         <tr><td>連絡事項</td><td><span class="pill pill-cond">条件付き</span></td><td>優先順（校長・教頭・教務主任・重要）で先頭6件。「生徒指導」タグの連絡は生徒個人に関わるため表示しません。本文は80字で切り、続きは各自のPCで読みます。6件で画面に収まらない場合は自動でゆっくりスクロールして繰り返します。</td></tr>
         <tr><td>授業変更・自習</td><td><span class="pill pill-on">表示</span></td><td>突発で変わり、空き時間の先生が気づいて動ける情報。テレビ表示で最も価値が高い項目です。</td></tr>
         <tr><td>出張</td><td><span class="pill pill-on">表示</span></td><td>「誰がいないか」がわかると、来客や電話の取り次ぎがすぐ判断できます。</td></tr>
@@ -374,16 +374,6 @@ ul.plain li { margin-bottom: 6px; }
         <tr><td>投稿フォーム・編集ボタン</td><td><span class="pill pill-off">表示しない</span></td><td>テレビは見るだけ。操作はこれまでどおり各自のPCで行います。</td></tr>
       </tbody>
     </table>
-    </div>
-  </section>
-
-  <section>
-    <h2>時間帯による切り替え</h2>
-    <div class="timeline">
-      <div class="tslot"><div class="when">朝〜12:00</div><p>本日中心。本日の予定を大きく、授業変更・自習は本日分。</p></div>
-      <div class="tslot"><div class="when">12:00〜16:00</div><p>右列に明日の授業変更・自習も並べます。午後のうちに明日の穴が見えます。</p></div>
-      <div class="tslot"><div class="when">16:00〜</div><p>明日の予定を上に。放課後は「明日の準備モード」に切り替えます。</p></div>
-      <div class="tslot"><div class="when">常時</div><p>3分ごとに自動更新。連絡が多いときは自動でゆっくりスクロールして繰り返します。</p></div>
     </div>
   </section>
 
@@ -412,7 +402,7 @@ ul.plain li { margin-bottom: 6px; }
         <h3>ダッシュボード側の改修</h3>
         <ul class="plain">
           <li>「テレビ表示モード」を追加（URLの末尾に <code>?mode=tv</code>）</li>
-          <li>表示項目の絞り込み、文字の拡大、自動更新、連絡欄の自動スクロール、時間帯切替</li>
+          <li>表示項目の絞り込み、文字の拡大、3分ごとの自動更新、連絡欄の自動スクロール</li>
           <li>既存の画面は変更なし。開発の目安は1〜2週間</li>
         </ul>
       </div>
