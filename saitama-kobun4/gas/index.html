@@ -554,7 +554,7 @@
    古典クエスト ― クライアント側
    ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
    ============================================================ */
-var CLIENT_VERSION = 8;
+var CLIENT_VERSION = 9;
 
 var MARK  = ['ア','イ','ウ','エ'];
 var TYPES = ['仮名遣い','主語・指示語','内容理解','要旨・話し合い'];
@@ -1126,10 +1126,24 @@ function renderQuizPanel(){
 
   var one=(QUIZ.remain===1);
   document.getElementById('quizStart').disabled=(QUIZ.remain<1);
-  setMsg('quizMsg',
-    QUIZ.remain<1 ? '小テストで出せる問題が、もうありません。先生にお知らせください。'
-    : one ? '残りが1本なので、今回は大問1つだけの出題になります。'
-    : '', 'warn');
+
+  var teach=!!(ME && ME.teacher);
+  var msg='', kind='warn';
+  if(QUIZ.total<1){
+    // 在庫切れではなく、小テスト用の大問がそもそも登録されていない
+    kind='err';
+    msg = '<b>小テスト用の問題が、まだ設定されていません。</b>'
+        + (teach
+           ? '<br>集計スプレッドシートのメニュー「⚙ 古典クエスト管理」→'
+             + '<b>「小テスト用の問題を割り当てる（用途列を整える）」</b>を実行してください。'
+             + '<br><small>問題マスターの「本文」シートに「用途」列を作り、練習5本／小テスト5本に振り分けます。</small>'
+           : '<br>先生にお知らせください。');
+  }else if(QUIZ.remain<1){
+    msg='小テストで出せる問題が、もうありません。先生にお知らせください。';
+  }else if(one){
+    msg='残りが1本なので、今回は大問1つだけの出題になります。';
+  }
+  setMsg('quizMsg', msg, kind, true);
 }
 
 function setQuiz(on){

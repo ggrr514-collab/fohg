@@ -20,7 +20,7 @@ const SPREADSHEET_ID = "1Yuf_jzWZYfQKaYuZV6LN6-RDAODoOLeX-uyn9nYecwU";
 const MASTER_ID      = "1OaMsGfk_-s-BMa_osO3d8hwK04ikP0G34J7TWbs2lJo";
 
 /** index.html 側の CLIENT_VERSION と必ず同じ値にすること */
-const CLIENT_VERSION = 8;
+const CLIENT_VERSION = 9;
 
 const APP_NAME = "古典クエスト";
 
@@ -391,6 +391,7 @@ function onOpen() {
   ui.createMenu("⚙ " + APP_NAME + "管理")
     .addItem("初回セットアップ（必要なシートを生成）", "setupSheets")
     .addSeparator()
+    .addItem("小テスト用の問題を割り当てる（用途列を整える）", "assignQuizUse")
     .addItem("問題プールのキャッシュをクリア", "clearPoolCache")
     .addItem("集計を再計算", "rebuildTotals")
     .addSeparator()
@@ -419,6 +420,83 @@ function toggleQuizFromMenu_(on) {
   if (ui) ui.alert(APP_NAME, on
     ? "小テストモードを開始しました。\n生徒の画面は小テストに切り替わります（再読み込みが必要です）。\n終わったら必ず「小テストモードを終了」を実行してください。"
     : "小テストモードを終了しました。生徒は通常の練習に戻ります。", ui.ButtonSet.OK);
+}
+
+/** 用途列が無い・空の問題マスターに、練習／小テストの既定を書き込む */
+const DEFAULT_USE = {
+  "S01": "練習",   "S02": "小テスト", "S03": "練習",   "S04": "小テスト", "S05": "練習",
+  "S06": "練習",   "S07": "小テスト", "S08": "練習",   "S09": "小テスト", "S10": "小テスト"
+};
+
+/**
+ * 問題マスターの「用途」列を整える。
+ * 列が無ければ作り、空欄は既定（S01…の並びで練習5本・小テスト5本）で埋める。
+ * すでに入っている値は書き換えない。
+ */
+function assignQuizUse() {
+  const ui = tryUi_();
+  const r = assignQuizUse_();
+  const msg = r.ok
+    ? "「用途」列を整えました。\n\n" +
+      "・練習　　" + r.practice + "本\n" +
+      "・小テスト " + r.quiz + "本\n" +
+      (r.filled ? "・今回うめた行　" + r.filled + "\n" : "・うめる行はありませんでした\n") +
+      (r.unknown.length ? "・見覚えのない本文IDは交互に振りました：" + r.unknown.join("、") + "\n" : "") +
+      "\n問題プールのキャッシュも消したので、次の出題から反映されます。"
+    : "うまくいきませんでした。\n" + r.message;
+  if (ui) ui.alert(APP_NAME, msg, ui.ButtonSet.OK); else Logger.log(msg);
+  return r;
+}
+
+function assignQuizUse_() {
+  try {
+    const sh = master_().getSheetByName("本文");
+    if (!sh) return { ok: false, message: "問題マスターに「本文」シートが見つかりません。" };
+    const last = sh.getLastRow();
+    if (last < 2) return { ok: false, message: "問題マスターの「本文」シートに行がありません。" };
+
+    let m = headerMap_(sh);
+    if (!m["本文ID"]) return { ok: false, message: "「本文」シートに「本文ID」の列が見つかりません。" };
+
+    // 用途列が無ければ、右端に作る
+    let col = m["用途"];
+    if (!col) {
+      col = sh.getLastColumn() + 1;
+      const head = sh.getRange(1, col);
+      head.setValue("用途").setFontWeight("bold");
+      const style = sh.getRange(1, m["本文ID"]);
+      head.setBackground(style.getBackground()).setFontColor(style.getFontColor());
+    }
+
+    const ids  = sh.getRange(2, m["本文ID"], last - 1, 1).getValues();
+    const uses = sh.getRange(2, col, last - 1, 1).getValues();
+    const unknown = [];
+    let filled = 0, practice = 0, quiz = 0, odd = 0;
+
+    for (let i = 0; i < ids.length; i++) {
+      const id = String(ids[i][0]).trim();
+      if (!id) continue;
+      let v = String(uses[i][0]).trim();
+      if (v !== "練習" && v !== "小テスト") {
+        if (DEFAULT_USE[id]) {
+          v = DEFAULT_USE[id];
+        } else {
+          // 見覚えのない本文IDは、練習と小テストが半々になるように交互に振る
+          v = (odd++ % 2) ? "小テスト" : "練習";
+          unknown.push(id);
+        }
+        uses[i][0] = v;
+        filled++;
+      }
+      if (v === "小テスト") quiz++; else practice++;
+    }
+    sh.getRange(2, col, last - 1, 1).setValues(uses);
+
+    CacheService.getScriptCache().remove(CACHE_KEY);
+    return { ok: true, filled: filled, practice: practice, quiz: quiz, unknown: unknown };
+  } catch (e) {
+    return { ok: false, message: String(e.message || e) };
+  }
 }
 
 function clearPoolCache() {
@@ -792,8 +870,11 @@ function startQuiz() {
 
     const st = pickQuizStage_(me.email, []);
     if (!st) {
-      return { ok: false, remain: 0,
-        message: "小テストで出せる問題が、もうありません。先生にお知らせください。" };
+      const none = (quizStages_().length === 0);
+      return { ok: false, remain: 0, noPool: none,
+        message: none
+          ? "小テスト用の問題がまだ設定されていません。先生にお知らせください。"
+          : "小テストで出せる問題が、もうありません。先生にお知らせください。" };
     }
     return {
       ok: true,
