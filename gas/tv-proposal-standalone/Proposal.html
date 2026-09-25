@@ -174,28 +174,33 @@ ul.plain li { margin-bottom: 6px; }
 .sh b { min-width: 6cqw; }
 .sh .t { color: #2c5f8d; font-size: 1.05cqw; font-weight: 700; }
 .sh .pl { color: #6c7684; font-size: 1.05cqw; margin-left: auto; white-space: nowrap; }
-.s-foot { background: #fbeedc; color: #7c3a0b; font-size: 1.3cqw; padding: 0.55cqw 1.6cqw; display: flex; align-items: center; gap: 1.4cqw; font-weight: 500; min-width: 0; }
+.s-foot { background: #fbeedc; color: #7c3a0b; font-size: 1.3cqw; padding: 0.55cqw 1.6cqw; display: flex; align-items: center; gap: 2.2cqw; font-weight: 500; min-width: 0; overflow: hidden; white-space: nowrap; }
 .s-foot b { font-weight: 700; }
 .s-foot .lbl { background: #b45309; color: #fff; padding: 0 0.8cqw; border-radius: 999px; font-size: 1.1cqw; font-weight: 700; flex-shrink: 0; }
-.s-foot-viewport { flex: 1; min-width: 0; overflow: hidden; position: relative; -webkit-mask-image: linear-gradient(to right, transparent 0, #000 4%, #000 96%, transparent 100%); mask-image: linear-gradient(to right, transparent 0, #000 4%, #000 96%, transparent 100%); }
-.s-foot-track { display: flex; gap: 2.4cqw; white-space: nowrap; width: max-content; animation: sf-scroll 16s linear infinite; }
-@keyframes sf-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-@media (prefers-reduced-motion: reduce) { .s-foot-track { animation: none; } }
 .caption { font-size: 13px; color: var(--ink-faint); margin-top: 10px; }
 .callouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 14px; }
 .callouts div { font-size: 13px; border-left: 3px solid var(--accent); padding-left: 10px; color: var(--ink-soft); }
 .callouts div b { color: var(--ink); display: block; }
 
-/* 連絡事項の自動スクロール（ライブデモ：見本のため実際より速い） */
+/* 連絡事項の画面切り替え（ライブデモ：見本のため実際より速い） */
 .rk-panel { display: flex; flex-direction: column; min-height: 0; }
 .rk-panel h4 { flex-shrink: 0; }
-.rk-viewport { flex: 1; min-height: 0; overflow: hidden; position: relative; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 6%, #000 94%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 6%, #000 94%, transparent 100%); }
-.rk-track { animation: rk-scroll 13s linear infinite; }
-@keyframes rk-scroll {
-  0%, 12% { transform: translateY(0); }
-  88%, 100% { transform: translateY(-50%); }
+.rk-viewport { flex: 1; min-height: 0; position: relative; }
+.rk-page { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.55cqw; }
+.rk-page-a { animation: rk-page-a 14s ease-in-out infinite; }
+.rk-page-b { animation: rk-page-b 14s ease-in-out infinite; }
+@keyframes rk-page-a { 0%, 42% { opacity: 1; } 50% { opacity: 0; } 92% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes rk-page-b { 0%, 42% { opacity: 0; } 50% { opacity: 1; } 92% { opacity: 1; } 100% { opacity: 0; } }
+.rk-dots { position: absolute; right: 0; bottom: -1.1cqw; display: flex; gap: 0.5cqw; }
+.rk-dots span { width: 0.7cqw; height: 0.7cqw; border-radius: 50%; background: var(--line); }
+.rk-dots span:nth-child(1) { animation: rk-dot-a 14s ease-in-out infinite; }
+.rk-dots span:nth-child(2) { animation: rk-dot-b 14s ease-in-out infinite; }
+@keyframes rk-dot-a { 0%, 42% { background: #2c5f8d; } 50%, 92% { background: var(--line); } 100% { background: #2c5f8d; } }
+@keyframes rk-dot-b { 0%, 42% { background: var(--line); } 50%, 92% { background: #2c5f8d; } 100% { background: var(--line); } }
+@media (prefers-reduced-motion: reduce) {
+  .rk-page-a, .rk-dots span:nth-child(1) { animation: none; opacity: 1; background: #2c5f8d; }
+  .rk-page-b, .rk-dots span:nth-child(2) { animation: none; opacity: 0; background: var(--line); }
 }
-@media (prefers-reduced-motion: reduce) { .rk-track { animation: none; } }
 
 @media (max-width: 640px) {
   .wrap { padding-block: 24px 48px; }
@@ -257,57 +262,37 @@ ul.plain li { margin-bottom: 6px; }
         <div class="col" style="grid-template-rows:1fr;">
           <div class="panel rk-panel">
             <h4>連絡事項 <small>重要・管理職の連絡を先頭に6件</small></h4>
-            <div class="rk-viewport"><div class="rk-track">
-              <div class="rk imp">
-                <div class="who">校長 <span class="tag imp">重要</span><span class="tag irai">依頼</span></div>
-                <div class="txt">明日の市総体、引率の先生は8:00までに体育館前集合。名簿と救急セットは職員室で受け取ってください。</div>
+            <div class="rk-viewport">
+              <div class="rk-page rk-page-a">
+                <div class="rk imp">
+                  <div class="who">校長 <span class="tag imp">重要</span><span class="tag irai">依頼</span></div>
+                  <div class="txt">明日の市総体、引率の先生は8:00までに体育館前集合。名簿と救急セットは職員室で受け取ってください。</div>
+                </div>
+                <div class="rk">
+                  <div class="who">教務主任 <span class="tag">連絡</span></div>
+                  <div class="txt">来週の時間割変更を配付しました。各学級の掲示をお願いします。</div>
+                </div>
+                <div class="rk">
+                  <div class="who">【研究部】田中 <span class="tag irai">依頼</span></div>
+                  <div class="txt">公開授業・授業参観について。「授業つながりシート」の授業参観予定が未入力の方は、今週中に入力をお願いします。</div>
+                </div>
               </div>
-              <div class="rk">
-                <div class="who">教務主任 <span class="tag">連絡</span></div>
-                <div class="txt">来週の時間割変更を配付しました。各学級の掲示をお願いします。</div>
+              <div class="rk-page rk-page-b">
+                <div class="rk">
+                  <div class="who">保健室 <span class="tag">連絡</span></div>
+                  <div class="txt">尿検査の未提出者は本日中に保健室へ。容器は保健室前に置いてあります。</div>
+                </div>
+                <div class="rk">
+                  <div class="who">教頭 <span class="tag">連絡</span></div>
+                  <div class="txt">来客用スリッパを補充しました。玄関の在庫が減ったら声をかけてください。</div>
+                </div>
+                <div class="rk">
+                  <div class="who">3学年 <span class="tag irai">依頼</span></div>
+                  <div class="txt">修学旅行の参加確認票、未回収のクラスは9/26までに学年会に提出をお願いします。</div>
+                </div>
               </div>
-              <div class="rk">
-                <div class="who">【研究部】田中 <span class="tag irai">依頼</span></div>
-                <div class="txt">公開授業・授業参観について。「授業つながりシート」の授業参観予定が未入力の方は、今週中に入力をお願いします。</div>
-              </div>
-              <div class="rk">
-                <div class="who">保健室 <span class="tag">連絡</span></div>
-                <div class="txt">尿検査の未提出者は本日中に保健室へ。容器は保健室前に置いてあります。</div>
-              </div>
-              <div class="rk">
-                <div class="who">教頭 <span class="tag">連絡</span></div>
-                <div class="txt">来客用スリッパを補充しました。玄関の在庫が減ったら声をかけてください。</div>
-              </div>
-              <div class="rk">
-                <div class="who">3学年 <span class="tag irai">依頼</span></div>
-                <div class="txt">修学旅行の参加確認票、未回収のクラスは9/26までに学年会に提出をお願いします。</div>
-              </div>
-              <!-- 継ぎ目のない繰り返しのため同じ内容をもう一度並べる -->
-              <div class="rk imp" aria-hidden="true">
-                <div class="who">校長 <span class="tag imp">重要</span><span class="tag irai">依頼</span></div>
-                <div class="txt">明日の市総体、引率の先生は8:00までに体育館前集合。名簿と救急セットは職員室で受け取ってください。</div>
-              </div>
-              <div class="rk" aria-hidden="true">
-                <div class="who">教務主任 <span class="tag">連絡</span></div>
-                <div class="txt">来週の時間割変更を配付しました。各学級の掲示をお願いします。</div>
-              </div>
-              <div class="rk" aria-hidden="true">
-                <div class="who">【研究部】田中 <span class="tag irai">依頼</span></div>
-                <div class="txt">公開授業・授業参観について。「授業つながりシート」の授業参観予定が未入力の方は、今週中に入力をお願いします。</div>
-              </div>
-              <div class="rk" aria-hidden="true">
-                <div class="who">保健室 <span class="tag">連絡</span></div>
-                <div class="txt">尿検査の未提出者は本日中に保健室へ。容器は保健室前に置いてあります。</div>
-              </div>
-              <div class="rk" aria-hidden="true">
-                <div class="who">教頭 <span class="tag">連絡</span></div>
-                <div class="txt">来客用スリッパを補充しました。玄関の在庫が減ったら声をかけてください。</div>
-              </div>
-              <div class="rk" aria-hidden="true">
-                <div class="who">3学年 <span class="tag irai">依頼</span></div>
-                <div class="txt">修学旅行の参加確認票、未回収のクラスは9/26までに学年会に提出をお願いします。</div>
-              </div>
-            </div></div>
+              <div class="rk-dots"><span></span><span></span></div>
+            </div>
           </div>
         </div>
         <div class="col">
@@ -334,24 +319,19 @@ ul.plain li { margin-bottom: 6px; }
       </div>
       <div class="s-foot">
         <span class="lbl">締切</span>
-        <div class="s-foot-viewport"><div class="s-foot-track">
-          <span><b>9/25</b> 成績処理の入力（教務）</span>
-          <span><b>9/26</b> 修学旅行 参加確認票の回収（3学年）</span>
-          <span><b>9/30</b> 研修報告書（研究部）</span>
-          <span aria-hidden="true"><b>9/25</b> 成績処理の入力（教務）</span>
-          <span aria-hidden="true"><b>9/26</b> 修学旅行 参加確認票の回収（3学年）</span>
-          <span aria-hidden="true"><b>9/30</b> 研修報告書（研究部）</span>
-        </div></div>
+        <span><b>9/25</b> 成績処理の入力（教務）</span>
+        <span><b>9/26</b> 修学旅行 参加確認票の回収（3学年）</span>
+        <span><b>9/30</b> 研修報告書（研究部）</span>
       </div>
     </div></div>
-    <div class="caption">例の内容は架空です。実際の画面は、いま使っているダッシュボードと同じデータを表示します。中央の連絡事項は実際に自動スクロールしています（見本のため速さを上げています。実際は1周30〜40秒の予定）。</div>
+    <div class="caption">例の内容は架空です。実際の画面は、いま使っているダッシュボードと同じデータを表示します。中央の連絡事項は実際に3件ずつ画面が切り替わっています（見本のため速さを上げています。実際は1画面あたり10秒前後の予定）。</div>
     <div class="callouts">
       <div><b>左列</b>今日と明日の予定、出張。一日の流れをつかむ列です。</div>
-      <div><b>中央列</b>連絡事項。重要と管理職の連絡が先頭。入りきらない分は自動でゆっくりスクロールして繰り返します。</div>
+      <div><b>中央列</b>連絡事項。重要と管理職の連絡が先頭。6件を3件ずつ、画面が切り替わって表示します。</div>
       <div><b>右列</b>授業変更・自習と特別教室の予約表。突発の変更と教室の空きが見える列です。</div>
-      <div><b>下段</b>7日以内の提出物・締切をゆっくり流します。</div>
+      <div><b>下段</b>7日以内の提出物・締切をそのまま並べて表示します。</div>
     </div>
-    <p class="lede" style="margin-top:14px;">連絡事項が6件を超えて画面に収まらない日は、中央列を自動でゆっくり下にスクロールします。1周30〜40秒を目安に、上に戻ったところで2〜3秒静止してから再び流れる形にし、通りがかりでも読み進められるようにします。</p>
+    <p class="lede" style="margin-top:14px;">連絡事項が6件を超えて画面に収まらない日は、中央列を3件ずつの画面に分け、自動で切り替えて表示します。1画面あたり10秒前後を目安に、文字が止まった状態で読み終えてから次の画面に変わる形にし、通りがかりでも読みやすくします。右下の小さな点は、いま何番目の画面かを示します。</p>
   </section>
 
   <section>
@@ -362,7 +342,7 @@ ul.plain li { margin-bottom: 6px; }
       <tbody>
         <tr><td>日直・週・日課・清掃・部活</td><td><span class="pill pill-on">表示</span></td><td>一日中変わらず、全員が何度も確認する情報。上部に固定します。</td></tr>
         <tr><td>本日・明日の予定</td><td><span class="pill pill-on">表示</span></td><td>行事取込の予定を今のダッシュボードと同じ箇条書きで並べます。時刻の欄は設けません。</td></tr>
-        <tr><td>連絡事項</td><td><span class="pill pill-cond">条件付き</span></td><td>優先順（校長・教頭・教務主任・重要）で先頭6件。「生徒指導」タグの連絡は生徒個人に関わるため表示しません。本文は80字で切り、続きは各自のPCで読みます。6件で画面に収まらない場合は自動でゆっくりスクロールして繰り返します。</td></tr>
+        <tr><td>連絡事項</td><td><span class="pill pill-cond">条件付き</span></td><td>優先順（校長・教頭・教務主任・重要）で先頭6件。「生徒指導」タグの連絡は生徒個人に関わるため表示しません。本文は80字で切り、続きは各自のPCで読みます。6件で画面に収まらない場合は3件ずつの画面に分け、自動で切り替えて表示します。</td></tr>
         <tr><td>授業変更・自習</td><td><span class="pill pill-on">表示</span></td><td>突発で変わり、空き時間の先生が気づいて動ける情報。テレビ表示で最も価値が高い項目です。</td></tr>
         <tr><td>出張</td><td><span class="pill pill-on">表示</span></td><td>「誰がいないか」がわかると、来客や電話の取り次ぎがすぐ判断できます。</td></tr>
         <tr><td>特別教室の利用予定</td><td><span class="pill pill-on">表示</span></td><td>予約表を見ながら空きを判断でき、ダブルブッキングを防げます。</td></tr>
@@ -402,7 +382,7 @@ ul.plain li { margin-bottom: 6px; }
         <h3>ダッシュボード側の改修</h3>
         <ul class="plain">
           <li>「テレビ表示モード」を追加（URLの末尾に <code>?mode=tv</code>）</li>
-          <li>表示項目の絞り込み、文字の拡大、3分ごとの自動更新、連絡欄の自動スクロール</li>
+          <li>表示項目の絞り込み、文字の拡大、3分ごとの自動更新、連絡欄の自動切り替え表示</li>
           <li>既存の画面は変更なし。開発の目安は1〜2週間</li>
         </ul>
       </div>
@@ -420,7 +400,7 @@ ul.plain li { margin-bottom: 6px; }
     <ol class="decide">
       <li><strong>置く場所と向き</strong><span>職員室後方のどこに置くか。来客カウンターから見えない向きにできるか。</span></li>
       <li><strong>表示しない項目の線引き</strong><span>上の表の案でよいか。「テスト・成績」タグの連絡も外すか。</span></li>
-      <li><strong>連絡の表示件数とスクロール速さ</strong><span>先頭6件を自動でゆっくりスクロールして繰り返す形でよいか。1周30〜40秒を目安にするが、実際に見て調整してよいか。</span></li>
+      <li><strong>連絡の表示件数と切り替え間隔</strong><span>先頭6件を3件ずつ、自動で画面切り替えする形でよいか。1画面あたり10秒前後を目安にするが、実際に見て調整してよいか。</span></li>
       <li><strong>端末と管理担当</strong><span>何で映すか。電源の入切と不具合時の連絡先を誰にするか。</span></li>
       <li><strong>試験期間</strong><span>2週間の試験表示のあと、どの部会で判断するか。</span></li>
     </ol>
