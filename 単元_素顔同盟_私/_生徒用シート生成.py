@@ -28,6 +28,8 @@ CRIT_S = ("「読むこと」において、文章を批判的に読みながら
           "文章に表れているものの見方や考え方について考えている。")
 CRIT_A = ("積極的に文章を批判的に読み、学習課題に沿って、"
           "考えたことを互いに伝え合おうとしている。")
+CRIT_K = ("語句の意味や働きに注意して文章を読むことを通して、"
+          "語感を磨き語彙を豊かにしている。")
 
 TOPICS = [
     ('論題1', '仮面とデータは、同じものか', '「私」を消しているもの'),
@@ -135,11 +137,34 @@ ws=wb.create_sheet('評価基準')
 for col,w in zip('ABCD',[8,12,58,16]): ws.column_dimensions[col].width=w
 mg(ws,1,1,1,4,'評価基準',F_TITLE,NAVY,center,h=28)
 mg(ws,2,1,2,4,'単元目標：'+GOAL,F_GOAL,ORANGE_F,wrapc,h=34)
-mg(ws,3,1,3,4,'この単元で評価するのは【思考・判断・表現】と【主体的に学習に取り組む態度】の2つ。',
+mg(ws,3,1,3,4,'この単元で評価するのは【思考・判断・表現】と【主体的に学習に取り組む態度】の2つ。'
+               '知識・技能は指導のみで、評価は別の単元で行う。',
    F_RED,None,wrapc,h=20)
 
 r=5
-mg(ws,r,1,r,4,'【思考・判断・表現】　C 読むこと(1)イ',F_HEAD,NAVY,wrapc,h=20); r+=1
+# ---- 知識・技能（参考掲載：本単元では評価しない）----
+mg(ws,r,1,r,4,'【知識・技能】　(1)イ　語感を磨き語彙を豊かにする　＜本単元では評価しない＞',
+   Font(size=10,bold=True,color='FFFFFF'),PatternFill('solid',fgColor='808080'),wrapc,h=20); r+=1
+mg(ws,r,1,r,4,'★ この単元では【指導だけ】を行い、評価はしない。第3時に「私」のカギカッコ付きの語'
+               '（「解決」「誠意」「模範的」「正常な状態」）を扱う。評価は別の単元または定期テストで行う。',
+   F_RED,PINK,wrapc,h=32); r+=1
+mg(ws,r,1,r,1,'評価規準',F_LBL,GRAY,center,border=True)
+mg(ws,r,2,r,4,CRIT_K,Font(size=10,bold=True,color='595959'),
+   PatternFill('solid',fgColor='EFEFEF'),wrapc,border=True,h=28); r+=1
+mg(ws,r,1,r,4,'見るもの：（評価する場合）カギカッコ付きの語の働きを説明した記述',F_SMALL,None,wrapc,h=18); r+=1
+mg(ws,r,1,r,1,'段階',F_HEAD,NAVY,center,border=True)
+mg(ws,r,2,r,4,'判断の目安',F_HEAD,NAVY,center,border=True); r+=1
+for g,t,h in [
+    ('A','選んだ語の働きを、語り手の立場（制度を運用する側）と結びつけて説明している。'
+         '例「『解決』とは相手が満足することであって、問題が解決することではない、と語り手自身が知っている」',30),
+    ('B','その語が「言葉だけは立派で中身が空」と示すことを説明し、自分の経験を挙げている',22),
+    ('C','語を挙げるだけ、または経験を挙げるだけ',20),
+]:
+    mg(ws,r,1,r,1,g,Font(size=12,bold=True,color='808080'),GRAY,center,border=True)
+    mg(ws,r,2,r,4,t,Font(size=10,color='595959'),None,wrapc,border=True,h=h); r+=1
+r+=1
+
+mg(ws,r,1,r,4,'【思考・判断・表現】　C 読むこと(1)イ　＜この単元で評価する＞',F_HEAD,NAVY,wrapc,h=20); r+=1
 mg(ws,r,1,r,1,'評価規準',F_LBL,GRAY,center,border=True)
 mg(ws,r,2,r,4,CRIT_S,Font(size=10,bold=True,color='1F3864'),LBLUE,wrapc,border=True,h=34); r+=1
 mg(ws,r,1,r,4,'見るもの：3つの論題の記述　＋　当日の発言　＋　見直し200字',F_SMALL,None,wrapc,h=18); r+=1
@@ -166,7 +191,7 @@ mg(ws,r,1,r,4,'※ どの観点を選んだかでは評価しない。どの観�
 mg(ws,r,1,r,4,'※ AIの評価は「記述」だけを見た暫定。当日の発言は先生が加えて確定する。',
    F_SMALL,None,wrapc,h=18); r+=2
 
-mg(ws,r,1,r,4,'【主体的に学習に取り組む態度】',F_HEAD,NAVY,wrapc,h=20); r+=1
+mg(ws,r,1,r,4,'【主体的に学習に取り組む態度】　＜この単元で評価する＞',F_HEAD,NAVY,wrapc,h=20); r+=1
 mg(ws,r,1,r,1,'評価規準',F_LBL,GRAY,center,border=True)
 mg(ws,r,2,r,4,CRIT_A,Font(size=10,bold=True,color='1F3864'),LBLUE,wrapc,border=True,h=30); r+=1
 mg(ws,r,1,r,4,'見るもの：観点と選んだ理由（2時）・記録係シート・見えなかったこと（6時）・フロア記録',
@@ -190,7 +215,8 @@ for a,b in [('S ・ A','A（十分満足できる）'),('B','B（おおむね満
             ('C ・ D','C（努力を要する）')]:
     mg(ws,r,1,r,2,a,Font(size=11,bold=True),GRAY,center,border=True)
     mg(ws,r,3,r,4,b,F_BODY,None,center,border=True,h=22); r+=1
-mg(ws,r,1,r,4,'※ 生徒への返却はS〜Dのまま。指導要録へはこの表で読みかえる。',F_SMALL,None,wrapc,h=18)
+mg(ws,r,1,r,4,'※ 生徒への返却はS〜Dのまま。指導要録へはこの表で読みかえる。'
+               '知識・技能と態度はもともとA・B・Cなので、そのまま転記する。',F_SMALL,None,wrapc,h=18)
 
 # ===================== Sheet3 考えをまとめる ★GAS参照 =====================
 ws=wb.create_sheet('考えをまとめる')
