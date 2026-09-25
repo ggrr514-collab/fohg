@@ -308,6 +308,52 @@
   .report-btn{margin-top:10px; font-size:12px; color:var(--muted); background:none; border:0;
     text-decoration:underline; text-underline-offset:3px; padding:0}
   .report-btn:hover{color:var(--navy)}
+
+  /* ===== 登場人物とできごとの図解 ===== */
+  .scenes{margin:18px 0 6px; border:1px solid var(--line); border-radius:14px;
+    background:linear-gradient(180deg,#fdfcf8,#fff); padding:16px 16px 6px}
+  .scenes h4{margin:0 0 14px; font-size:15px; color:var(--navy); font-family:"Shippori Mincho",serif}
+  .scenes h4 small{font-weight:400; color:var(--muted); font-size:12.5px}
+  .scenes .cast{display:flex; flex-wrap:wrap; gap:10px; padding-bottom:14px;
+    border-bottom:1px dashed var(--line); margin-bottom:12px}
+  .scenes .who{flex:0 0 auto; min-width:92px; text-align:center; padding:8px 10px 6px;
+    border:1px solid var(--line); border-radius:12px; background:#fff;
+    border-top:3px solid var(--c)}
+  .scenes .who .nm{font-size:13px; font-weight:700; color:var(--c); margin-top:2px}
+  .scenes .who .rl{font-size:11px; color:var(--muted); line-height:1.4; margin-top:1px}
+  .scenes svg.fig{display:block; margin:0 auto}
+  .scenes .flow{list-style:none; margin:0; padding:0; counter-reset:sc}
+  .scenes .flow li{display:flex; gap:10px; padding:0 0 14px 0; position:relative}
+  .scenes .flow li::before{content:""; position:absolute; left:17px; top:38px; bottom:0;
+    width:2px; background:var(--line)}
+  .scenes .flow li:last-child::before{display:none}
+  .scenes .flow .ic{flex:0 0 36px; width:36px; height:36px; border-radius:50%;
+    background:#fff; border:2px solid var(--c); display:flex; align-items:center;
+    justify-content:center; overflow:hidden; z-index:1}
+  .scenes .flow .ic.note{border-color:var(--line); color:var(--muted); font-size:10px;
+    letter-spacing:.02em}
+  .scenes .flow .bd{flex:1 1 auto; min-width:0; padding-top:2px}
+  .scenes .flow .bd>b{display:block; font-size:12.5px; margin-bottom:4px}
+  .scenes .flow .bd>b.muted{color:var(--muted); font-weight:600}
+  .scenes .did{font-size:13.5px; line-height:1.75; color:#3a4555;
+    background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px 11px}
+  .scenes .did.note{background:#f6f7fa; color:var(--muted); border-style:dashed}
+  .scenes .bubble{position:relative; background:#fffdf4; border:1px solid #e6dcc0;
+    border-radius:12px; padding:9px 12px}
+  .scenes .bubble::before{content:""; position:absolute; left:-7px; top:13px; width:10px; height:10px;
+    background:#fffdf4; border-left:1px solid #e6dcc0; border-bottom:1px solid #e6dcc0;
+    transform:rotate(45deg)}
+  .scenes .kotoba{display:block; font-size:15px; color:var(--navy); line-height:1.7}
+  .scenes .yaku{display:block; font-size:12.5px; color:var(--muted); line-height:1.7; margin-top:4px}
+  .scenes .point{margin:4px 0 12px; font-size:13.5px; line-height:1.8; color:#3a4555;
+    background:#f3f6fb; border-left:4px solid var(--navy); border-radius:0 10px 10px 0;
+    padding:10px 13px}
+  @media(max-width:520px){
+    .scenes{padding:14px 12px 4px}
+    .scenes .who{min-width:78px; padding:6px 7px 5px}
+    .scenes .flow li::before{left:15px}
+    .scenes .flow .ic{flex-basis:32px; width:32px; height:32px}
+  }
 </style>
 </head>
 <body>
@@ -459,6 +505,7 @@
   </div>
   <div class="msg err" id="saveMsg"></div>
   <details class="yaku" id="rYaku"><summary>現代語訳を読む</summary><div class="inner" id="rYakuBody"></div></details>
+  <div id="rScenes"></div>
   <div id="rReview"></div>
   <div class="actions">
     <button class="btn primary" id="rNext" onclick="nextStage()">次のステージへ</button>
@@ -557,7 +604,7 @@
    古典クエスト ― クライアント側
    ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
    ============================================================ */
-var CLIENT_VERSION = 10;
+var CLIENT_VERSION = 11;
 
 var MARK  = ['ア','イ','ウ','エ'];
 var TYPES = ['仮名遣い','主語・指示語','内容理解','要旨・話し合い'];
@@ -981,6 +1028,8 @@ function paintResult(r, secs){
   setMsg('saveMsg', r.duplicated ? 'この回はすでに記録されています（二重送信を防ぎました）。' : '', 'warn');
   document.getElementById('rYakuBody').innerHTML=st.yaku;
   document.getElementById('rYaku').open=false;
+
+  document.getElementById('rScenes').innerHTML=scenesHtml(st.scenes, st.title);
 
   document.getElementById('rReview').innerHTML=st.qs.map(function(q,qi){
     var d=r.detail[qi], ok=d.ok;
@@ -1472,6 +1521,7 @@ function paintQuizResult(parts, noMore){
   document.getElementById('qReview').innerHTML=parts.map(function(x,i){
     var st=x.stage||{qs:[]};
     return '<div class="qsec"><h3>'+(i+1)+'つ目　'+esc(x.title)+'<small>（'+esc(x.src||'')+'より）</small></h3>'+
+      scenesHtml(x.scenes, '')+
       (x.detail||[]).map(function(d){
         var q=null; (st.qs||[]).forEach(function(y){ if(y.id===d.id) q=y; });
         if(!q) return '';
@@ -1485,6 +1535,108 @@ function paintQuizResult(parts, noMore){
           '<div class="exp">'+d.exp+'</div></div>';
       }).join('')+'</div>';
   }).join('');
+}
+
+/* ============================================================
+   登場人物とできごとの図解
+   採点が終わったあとに、だれが何をして何と言ったかを絵で示す
+   ============================================================ */
+/** このまとまりだけで使う文字エスケープ（標準版にも貼れるように独立させている） */
+function escS(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+var FIG_COLORS = ['#2f4a7a','#a4553b','#3f7a5e','#7a4a7a','#8a6a2f','#4a6a8a'];
+
+/** 人物の絵（SVG）。kind ごとに描き分ける */
+function figureSvg(kind, color, size){
+  var s = size || 56, c = color || FIG_COLORS[0];
+  var head = '#f3e3d2', ink = '#2a2f3a';
+  var body = '';
+  switch(kind){
+    case 'sou':    // 僧
+      body = '<path d="M20 34 L12 52 h24 L28 34 Z" fill="'+c+'"/>'
+           + '<path d="M20 34 L30 46 L34 52 h2 L28 34 Z" fill="#d9b06a" opacity=".85"/>'
+           + '<circle cx="24" cy="24" r="8" fill="'+head+'"/>'
+           + '<path d="M16 23 a8 8 0 0 1 16 0" fill="#e7d3bd"/>';
+      break;
+    case 'otoko':  // 烏帽子の男
+      body = '<path d="M20 34 L12 52 h24 L28 34 Z" fill="'+c+'"/>'
+           + '<circle cx="24" cy="24" r="8" fill="'+head+'"/>'
+           + '<path d="M18 17 q6 -12 12 0 z" fill="'+ink+'"/>';
+      break;
+    case 'onna':   // 女
+      body = '<path d="M14 52 q0 -20 10 -22 q10 2 10 22 z" fill="'+c+'"/>'
+           + '<path d="M15 28 q0 -14 9 -14 q9 0 9 14 q-3 -6 -9 -6 q-6 0 -9 6 z" fill="'+ink+'"/>'
+           + '<circle cx="24" cy="24" r="7.5" fill="'+head+'"/>'
+           + '<path d="M16 22 q8 -8 16 0 q-2 -8 -8 -8 q-6 0 -8 8 z" fill="'+ink+'"/>';
+      break;
+    case 'ko':     // 子ども
+      body = '<path d="M20 36 L14 52 h20 L28 36 Z" fill="'+c+'"/>'
+           + '<circle cx="24" cy="27" r="8.5" fill="'+head+'"/>'
+           + '<path d="M15 26 q1 -10 9 -10 q8 0 9 10 q-3 -5 -9 -5 q-6 0 -9 5 z" fill="'+ink+'"/>';
+      break;
+    case 'mikado': // 帝
+      body = '<path d="M18 34 L10 52 h28 L30 34 Z" fill="'+c+'"/>'
+           + '<circle cx="24" cy="24" r="8" fill="'+head+'"/>'
+           + '<path d="M17 17 q7 -11 14 0 z" fill="'+ink+'"/>'
+           + '<path d="M30 14 q10 -2 10 8" stroke="'+ink+'" stroke-width="2.5" fill="none" stroke-linecap="round"/>';
+      break;
+    case 'tori':   // 鳥（鳩）
+      body = '<ellipse cx="24" cy="36" rx="13" ry="9" fill="'+c+'"/>'
+           + '<path d="M14 34 q10 -6 18 2 q-8 6 -18 -2 z" fill="#fff" opacity=".55"/>'
+           + '<circle cx="34" cy="26" r="6" fill="'+c+'"/>'
+           + '<path d="M39 25 l6 2 l-6 2 z" fill="#d9a441"/>'
+           + '<circle cx="35.5" cy="25" r="1.2" fill="#fff"/>'
+           + '<path d="M12 40 q-6 4 -2 6" stroke="'+c+'" stroke-width="2" fill="none"/>';
+      break;
+    case 'mushi':  // 虫（蟻）
+      body = '<circle cx="15" cy="36" r="6" fill="'+c+'"/>'
+           + '<circle cx="26" cy="36" r="5" fill="'+c+'"/>'
+           + '<circle cx="35" cy="35" r="6.5" fill="'+c+'"/>'
+           + '<path d="M13 31 l-3 -6 M17 31 l3 -6" stroke="'+c+'" stroke-width="1.8" stroke-linecap="round"/>'
+           + '<path d="M20 41 l-4 6 M26 41 l0 6 M32 41 l4 6" stroke="'+c+'" stroke-width="1.8" stroke-linecap="round"/>';
+      break;
+    default:       // その他の人
+      body = '<path d="M20 34 L13 52 h22 L28 34 Z" fill="'+c+'"/>'
+           + '<circle cx="24" cy="24" r="8" fill="'+head+'"/>'
+           + '<path d="M16 22 q8 -9 16 0 q-1 -9 -8 -9 q-7 0 -8 9 z" fill="'+ink+'"/>';
+  }
+  return '<svg class="fig" width="'+s+'" height="'+s+'" viewBox="0 0 48 56" aria-hidden="true">'+body+'</svg>';
+}
+
+/** 図解のまとまりを組み立てる */
+function scenesHtml(scenes, title){
+  if(!scenes || !scenes.people || !scenes.events) return '';
+  var ppl = scenes.people.map(function(p,i){
+    return { name:p.name, role:p.role||'', kind:p.kind||'hito', color:FIG_COLORS[i%FIG_COLORS.length] };
+  });
+
+  var cast = '<div class="cast">' + ppl.map(function(p){
+    return '<div class="who" style="--c:'+p.color+'">'+figureSvg(p.kind,p.color,56)+
+      '<div class="nm">'+escS(p.name)+'</div>'+
+      (p.role?'<div class="rl">'+escS(p.role)+'</div>':'')+'</div>';
+  }).join('') + '</div>';
+
+  var flow = '<ol class="flow">' + scenes.events.map(function(ev){
+    var p = (ev.w!=null && ev.w>=0 && ppl[ev.w]) ? ppl[ev.w] : null;
+    var icon = p ? '<span class="ic" style="--c:'+p.color+'">'+figureSvg(p.kind,p.color,34)+'</span>'
+                 : '<span class="ic note" aria-hidden="true">＊</span>';
+    var name = p ? '<b style="color:'+p.color+'">'+escS(p.name)+'</b>' : '<b class="muted">場面</b>';
+    var text = (ev.t==='say')
+      ? '<div class="bubble"><span class="kotoba mincho">「'+escS(ev.q||'')+'」</span>'+
+        (ev.y?'<span class="yaku">'+escS(ev.y)+'</span>':'')+'</div>'
+      : '<div class="did'+(ev.t==='note'?' note':'')+'">'+escS(ev.y||'')+'</div>';
+    return '<li'+(p?' style="--c:'+p.color+'"':' class="nb"')+'>'+icon+
+           '<div class="bd">'+name+text+'</div></li>';
+  }).join('') + '</ol>';
+
+  return '<div class="scenes">'+
+    '<h4>登場人物とできごと'+(title?'<small>　'+escS(title)+'</small>':'')+'</h4>'+
+    cast + flow +
+    (scenes.point?'<p class="point"><b>この話のまとめ</b>　'+escS(scenes.point)+'</p>':'')+
+    '</div>';
 }
 </script>
 </body>

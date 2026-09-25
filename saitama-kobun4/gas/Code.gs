@@ -20,7 +20,7 @@ const SPREADSHEET_ID = "1Yuf_jzWZYfQKaYuZV6LN6-RDAODoOLeX-uyn9nYecwU";
 const MASTER_ID      = "1OaMsGfk_-s-BMa_osO3d8hwK04ikP0G34J7TWbs2lJo";
 
 /** index.html 側の CLIENT_VERSION と必ず同じ値にすること */
-const CLIENT_VERSION = 10;
+const CLIENT_VERSION = 11;
 
 const APP_NAME = "古典クエスト";
 
@@ -766,6 +766,8 @@ function loadPool_() {
       use: (pick(row, tMap, "用途").trim() === "小テスト") ? "小テスト" : "練習",
       ord: Number(pick(row, tMap, "表示順")) || 9999, qs: []
     };
+    // 登場人物とできごとの図解。問題マスターの「図解」列があればそちらを優先する
+    st.scenes = parseScenes_(pick(row, tMap, "図解")) || scenesOf_(id);
     stages.push(st); byId[id] = st;
   });
 
@@ -793,6 +795,16 @@ function loadPool_() {
   return usable;
 }
 
+/** 問題マスターの「図解」列（JSON）を読む。空や壊れていれば null */
+function parseScenes_(text) {
+  const t = String(text || "").trim();
+  if (!t) return null;
+  try {
+    const v = JSON.parse(t);
+    return (v && v.people && v.events) ? v : null;
+  } catch (e) { return null; }
+}
+
 /**
  * 練習で出すステージ。
  * 用途が「練習」のものに加えて、小テストで一度使い終わった大問も練習に回る。
@@ -817,7 +829,7 @@ function roundStages_(round) {
   return (round.ids || []).map(function (id) { return by[id]; })
                           .filter(function (s) { return !!s; });
 }
-/** 採点前に画面へ渡す用。正解と解説を落とす */
+/** 採点前に画面へ渡す用。正解・解説・図解を落とす */
 function hideAnswers_(stages) {
   return stages.map(function (s) {
     return {
@@ -1197,6 +1209,7 @@ function submitQuizPart(payload) {
     const res = {
       ok: true, index: index, stageId: sid, title: stage.title, src: stage.src,
       total: total, correct: correct, score: score,
+      scenes: stage.scenes || null,
       counted: fair.include, cheated: !!fair.cheated, reason: fair.reason, pace: pace,
       blur: blur, keys: keys,
       timeUp: timeUp, seconds: secs, detail: detail,
