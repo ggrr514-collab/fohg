@@ -150,7 +150,7 @@ ul.plain li { margin-bottom: 6px; }
 .li::before { content: "・"; position: absolute; left: 0; color: #2c5f8d; }
 .li:last-child { border-bottom: none; }
 .li.dim { color: #7a838f; }
-.rk { border-left: 0.35cqw solid #2c5f8d; padding: 0.45cqw 0.8cqw; margin-bottom: 0.55cqw; background: #f4f6f8; border-radius: 0.3cqw; }
+.rk { border-left: 0.35cqw solid #2c5f8d; padding: 0.45cqw 0.8cqw; background: #f4f6f8; border-radius: 0.3cqw; }
 .rk.imp { border-left-color: #b91c1c; background: linear-gradient(to right, #fbe3e3 0, #f6f6f6 35%); }
 .rk .who { font-size: 1.15cqw; font-weight: 700; display: flex; gap: 0.6cqw; align-items: center; }
 .rk .who .tag { font-size: 0.95cqw; font-weight: 700; padding: 0 0.6cqw; border-radius: 999px; background: #dbeafe; color: #1e40af; }
@@ -182,25 +182,22 @@ ul.plain li { margin-bottom: 6px; }
 .callouts div { font-size: 13px; border-left: 3px solid var(--accent); padding-left: 10px; color: var(--ink-soft); }
 .callouts div b { color: var(--ink); display: block; }
 
-/* 連絡事項の画面切り替え（ライブデモ：見本のため実際より速い） */
+/* 連絡事項：入りきらないときだけ自動で画面切り替え（実際に高さを測って判定） */
 .rk-panel { display: flex; flex-direction: column; min-height: 0; }
 .rk-panel h4 { flex-shrink: 0; }
-.rk-viewport { flex: 1; min-height: 0; position: relative; }
-.rk-page { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.55cqw; }
-.rk-page-a { animation: rk-page-a 14s ease-in-out infinite; }
-.rk-page-b { animation: rk-page-b 14s ease-in-out infinite; }
-@keyframes rk-page-a { 0%, 42% { opacity: 1; } 50% { opacity: 0; } 92% { opacity: 0; } 100% { opacity: 1; } }
-@keyframes rk-page-b { 0%, 42% { opacity: 0; } 50% { opacity: 1; } 92% { opacity: 1; } 100% { opacity: 0; } }
+.rk-toggle-row { flex-shrink: 0; text-align: right; margin: 0.3cqw 0 0.35cqw; }
+.rk-demo-toggle { font-size: 0.95cqw; padding: 0.15cqw 0.7cqw; border-radius: 999px; border: 0.08cqw solid var(--tv-line); background: #fff; color: #2c5f8d; cursor: pointer; font-family: inherit; }
+.rk-demo-toggle:hover { background: #eef4fa; }
+.rk-viewport { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; gap: 0.55cqw; overflow: visible; }
+.rk-viewport.rk-paged { overflow: hidden; display: block; }
+.rk-page { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.55cqw; opacity: 0; transition: opacity 0.7s ease; }
+.rk-page.on { opacity: 1; }
 .rk-dots { position: absolute; right: 0; bottom: -1.1cqw; display: flex; gap: 0.5cqw; }
-.rk-dots span { width: 0.7cqw; height: 0.7cqw; border-radius: 50%; background: var(--line); }
-.rk-dots span:nth-child(1) { animation: rk-dot-a 14s ease-in-out infinite; }
-.rk-dots span:nth-child(2) { animation: rk-dot-b 14s ease-in-out infinite; }
-@keyframes rk-dot-a { 0%, 42% { background: #2c5f8d; } 50%, 92% { background: var(--line); } 100% { background: #2c5f8d; } }
-@keyframes rk-dot-b { 0%, 42% { background: var(--line); } 50%, 92% { background: #2c5f8d; } 100% { background: var(--line); } }
-@media (prefers-reduced-motion: reduce) {
-  .rk-page-a, .rk-dots span:nth-child(1) { animation: none; opacity: 1; background: #2c5f8d; }
-  .rk-page-b, .rk-dots span:nth-child(2) { animation: none; opacity: 0; background: var(--line); }
-}
+.rk-dots span { width: 0.7cqw; height: 0.7cqw; border-radius: 50%; background: var(--line); transition: background 0.3s ease; }
+.rk-dots span.on { background: #2c5f8d; }
+.rk-viewport [data-rk-extra] { display: none; }
+.rk-viewport.rk-show-extra [data-rk-extra] { display: block; }
+@media (prefers-reduced-motion: reduce) { .rk-page { transition: none; } }
 
 @media (max-width: 640px) {
   .wrap { padding-block: 24px 48px; }
@@ -261,37 +258,35 @@ ul.plain li { margin-bottom: 6px; }
         </div>
         <div class="col" style="grid-template-rows:1fr;">
           <div class="panel rk-panel">
-            <h4>連絡事項 <small>重要・管理職の連絡を先頭に6件</small></h4>
-            <div class="rk-viewport">
-              <div class="rk-page rk-page-a">
-                <div class="rk imp">
-                  <div class="who">校長 <span class="tag imp">重要</span><span class="tag irai">依頼</span></div>
-                  <div class="txt">明日の市総体、引率の先生は8:00までに体育館前集合。名簿と救急セットは職員室で受け取ってください。</div>
-                </div>
-                <div class="rk">
-                  <div class="who">教務主任 <span class="tag">連絡</span></div>
-                  <div class="txt">来週の時間割変更を配付しました。各学級の掲示をお願いします。</div>
-                </div>
-                <div class="rk">
-                  <div class="who">【研究部】田中 <span class="tag irai">依頼</span></div>
-                  <div class="txt">公開授業・授業参観について。「授業つながりシート」の授業参観予定が未入力の方は、今週中に入力をお願いします。</div>
-                </div>
+            <h4>連絡事項 <small>重要・管理職の連絡を先頭に</small></h4>
+            <div class="rk-toggle-row">
+              <button type="button" class="rk-demo-toggle" id="rkDemoToggle" onclick="rkToggleDemo()">表示を切り替えてためす：多い日</button>
+            </div>
+            <div class="rk-viewport" id="rkViewport">
+              <div class="rk imp">
+                <div class="who">校長 <span class="tag imp">重要</span><span class="tag irai">依頼</span></div>
+                <div class="txt">明日の市総体、引率の先生は8:00までに体育館前集合。名簿と救急セットは職員室で受け取ってください。</div>
               </div>
-              <div class="rk-page rk-page-b">
-                <div class="rk">
-                  <div class="who">保健室 <span class="tag">連絡</span></div>
-                  <div class="txt">尿検査の未提出者は本日中に保健室へ。容器は保健室前に置いてあります。</div>
-                </div>
-                <div class="rk">
-                  <div class="who">教頭 <span class="tag">連絡</span></div>
-                  <div class="txt">来客用スリッパを補充しました。玄関の在庫が減ったら声をかけてください。</div>
-                </div>
-                <div class="rk">
-                  <div class="who">3学年 <span class="tag irai">依頼</span></div>
-                  <div class="txt">修学旅行の参加確認票、未回収のクラスは9/26までに学年会に提出をお願いします。</div>
-                </div>
+              <div class="rk">
+                <div class="who">教務主任 <span class="tag">連絡</span></div>
+                <div class="txt">来週の時間割変更を配付しました。各学級の掲示をお願いします。</div>
               </div>
-              <div class="rk-dots"><span></span><span></span></div>
+              <div class="rk">
+                <div class="who">【研究部】田中 <span class="tag irai">依頼</span></div>
+                <div class="txt">公開授業・授業参観について。「授業つながりシート」の授業参観予定が未入力の方は、今週中に入力をお願いします。</div>
+              </div>
+              <div class="rk" data-rk-extra>
+                <div class="who">保健室 <span class="tag">連絡</span></div>
+                <div class="txt">尿検査の未提出者は本日中に保健室へ。容器は保健室前に置いてあります。</div>
+              </div>
+              <div class="rk" data-rk-extra>
+                <div class="who">教頭 <span class="tag">連絡</span></div>
+                <div class="txt">来客用スリッパを補充しました。玄関の在庫が減ったら声をかけてください。</div>
+              </div>
+              <div class="rk" data-rk-extra>
+                <div class="who">3学年 <span class="tag irai">依頼</span></div>
+                <div class="txt">修学旅行の参加確認票、未回収のクラスは9/26までに学年会に提出をお願いします。</div>
+              </div>
             </div>
           </div>
         </div>
@@ -324,14 +319,14 @@ ul.plain li { margin-bottom: 6px; }
         <span><b>9/30</b> 研修報告書（研究部）</span>
       </div>
     </div></div>
-    <div class="caption">例の内容は架空です。実際の画面は、いま使っているダッシュボードと同じデータを表示します。中央の連絡事項は実際に3件ずつ画面が切り替わっています（見本のため速さを上げています。実際は1画面あたり10秒前後の予定）。</div>
+    <div class="caption">例の内容は架空です。実際の画面は、いま使っているダッシュボードと同じデータを表示します。中央の連絡事項は実際に高さを測って動いています。右上のボタンで「少ない日」「多い日」を切り替えてためせます（見本のため速さを上げています。実際は1画面あたり10秒前後の予定）。</div>
     <div class="callouts">
       <div><b>左列</b>今日と明日の予定、出張。一日の流れをつかむ列です。</div>
-      <div><b>中央列</b>連絡事項。重要と管理職の連絡が先頭。6件を3件ずつ、画面が切り替わって表示します。</div>
+      <div><b>中央列</b>連絡事項。重要と管理職の連絡が先頭。画面に収まる日はそのまま静止表示し、収まらない日だけ自動で複数画面に分けて切り替えます。</div>
       <div><b>右列</b>授業変更・自習と特別教室の予約表。突発の変更と教室の空きが見える列です。</div>
       <div><b>下段</b>7日以内の提出物・締切をそのまま並べて表示します。</div>
     </div>
-    <p class="lede" style="margin-top:14px;">連絡事項が6件を超えて画面に収まらない日は、中央列を3件ずつの画面に分け、自動で切り替えて表示します。1画面あたり10秒前後を目安に、文字が止まった状態で読み終えてから次の画面に変わる形にし、通りがかりでも読みやすくします。右下の小さな点は、いま何番目の画面かを示します。</p>
+    <p class="lede" style="margin-top:14px;">連絡事項の件数が少なく1画面に収まる日は、切り替えを一切行わず静止表示のままにします。文字量が多く収まらない日だけ、実際の高さを測って自動で複数画面に分け、切り替えて表示します。1画面あたり10秒前後を目安に、文字が止まった状態で読み終えてから次の画面に変わる形にし、通りがかりでも読みやすくします。右下の小さな点は、いま何番目の画面かを示します。上のボタンで両方の動きを試せます。</p>
   </section>
 
   <section>
@@ -342,7 +337,7 @@ ul.plain li { margin-bottom: 6px; }
       <tbody>
         <tr><td>日直・週・日課・清掃・部活</td><td><span class="pill pill-on">表示</span></td><td>一日中変わらず、全員が何度も確認する情報。上部に固定します。</td></tr>
         <tr><td>本日・明日の予定</td><td><span class="pill pill-on">表示</span></td><td>行事取込の予定を今のダッシュボードと同じ箇条書きで並べます。時刻の欄は設けません。</td></tr>
-        <tr><td>連絡事項</td><td><span class="pill pill-cond">条件付き</span></td><td>優先順（校長・教頭・教務主任・重要）で先頭6件。「生徒指導」タグの連絡は生徒個人に関わるため表示しません。本文は80字で切り、続きは各自のPCで読みます。6件で画面に収まらない場合は3件ずつの画面に分け、自動で切り替えて表示します。</td></tr>
+        <tr><td>連絡事項</td><td><span class="pill pill-cond">条件付き</span></td><td>優先順（校長・教頭・教務主任・重要）で先頭6件。「生徒指導」タグの連絡は生徒個人に関わるため表示しません。本文は80字で切り、続きは各自のPCで読みます。画面に収まる日は静止表示のまま。収まらない日だけ、実際の高さを測って自動で複数画面に分けて切り替えます。</td></tr>
         <tr><td>授業変更・自習</td><td><span class="pill pill-on">表示</span></td><td>突発で変わり、空き時間の先生が気づいて動ける情報。テレビ表示で最も価値が高い項目です。</td></tr>
         <tr><td>出張</td><td><span class="pill pill-on">表示</span></td><td>「誰がいないか」がわかると、来客や電話の取り次ぎがすぐ判断できます。</td></tr>
         <tr><td>特別教室の利用予定</td><td><span class="pill pill-on">表示</span></td><td>予約表を見ながら空きを判断でき、ダブルブッキングを防げます。</td></tr>
@@ -382,7 +377,7 @@ ul.plain li { margin-bottom: 6px; }
         <h3>ダッシュボード側の改修</h3>
         <ul class="plain">
           <li>「テレビ表示モード」を追加（URLの末尾に <code>?mode=tv</code>）</li>
-          <li>表示項目の絞り込み、文字の拡大、3分ごとの自動更新、連絡欄の自動切り替え表示</li>
+          <li>表示項目の絞り込み、文字の拡大、3分ごとの自動更新、連絡欄は収まらないときだけ自動で画面切り替え</li>
           <li>既存の画面は変更なし。開発の目安は1〜2週間</li>
         </ul>
       </div>
@@ -400,11 +395,128 @@ ul.plain li { margin-bottom: 6px; }
     <ol class="decide">
       <li><strong>置く場所と向き</strong><span>職員室後方のどこに置くか。来客カウンターから見えない向きにできるか。</span></li>
       <li><strong>表示しない項目の線引き</strong><span>上の表の案でよいか。「テスト・成績」タグの連絡も外すか。</span></li>
-      <li><strong>連絡の表示件数と切り替え間隔</strong><span>先頭6件を3件ずつ、自動で画面切り替えする形でよいか。1画面あたり10秒前後を目安にするが、実際に見て調整してよいか。</span></li>
+      <li><strong>連絡の表示件数と切り替え間隔</strong><span>先頭6件までとし、画面に収まらないときだけ自動で複数画面に分けて切り替える形でよいか。1画面あたり10秒前後を目安にするが、実際に見て調整してよいか。</span></li>
       <li><strong>端末と管理担当</strong><span>何で映すか。電源の入切と不具合時の連絡先を誰にするか。</span></li>
       <li><strong>試験期間</strong><span>2週間の試験表示のあと、どの部会で判断するか。</span></li>
     </ol>
   </section>
 </div>
+
+<script>
+(function() {
+  function rkItems(vp) {
+    return Array.prototype.slice.call(vp.children).filter(function(el) {
+      return el.classList.contains('rk') && el.style.display !== 'none';
+    });
+  }
+  window.rkPaginate = function() {
+    var vp = document.getElementById('rkViewport');
+    if (!vp) return;
+    if (vp._rkTimer) { clearInterval(vp._rkTimer); vp._rkTimer = null; }
+    // 既存のページ分けを解いて、元の並びのまま平らに戻す
+    Array.prototype.slice.call(vp.querySelectorAll(':scope > .rk-page')).forEach(function(pg) {
+      while (pg.firstChild) vp.insertBefore(pg.firstChild, pg);
+      pg.remove();
+    });
+    var oldDots = vp.querySelector(':scope > .rk-dots');
+    if (oldDots) oldDots.remove();
+    vp.classList.remove('rk-paged');
+
+    var items = rkItems(vp);
+    if (!items.length) return;
+    void vp.offsetHeight; // 高さ確定のため強制リフロー
+
+    // 実際に収まるかどうかを高さで判定する
+    var maxH = vp.clientHeight;
+    var totalH = vp.scrollHeight;
+    if (totalH <= maxH + 1) return; // 収まる日はここで終わり（静止表示のまま）
+
+    // 収まらない日だけ、実際の高さを測って複数画面に分ける
+    var cs = getComputedStyle(vp);
+    var gap = parseFloat(cs.rowGap || cs.gap || '0') || 0;
+    var heights = items.map(function(it) { return it.offsetHeight; });
+
+    // まず高さ基準で詰め込み、最低限必要な画面数を求める
+    function packByHeight(list) {
+      var out = [];
+      var cur = [];
+      var curH = 0;
+      list.forEach(function(h, i) {
+        var addH = cur.length ? h + gap : h;
+        if (cur.length && curH + addH > maxH) {
+          out.push(cur);
+          cur = [];
+          addH = h;
+        }
+        cur.push(i);
+        curH = cur.length === 1 ? addH : curH + addH;
+      });
+      if (cur.length) out.push(cur);
+      return out;
+    }
+    var byHeight = packByHeight(heights);
+    if (byHeight.length < 2) return; // 念のための安全策
+
+    // 件数がそろうよう、求めた画面数で均等に割り直す（各連絡はだいたい同じ高さのため）
+    var pageCount = byHeight.length;
+    var perPage = Math.ceil(items.length / pageCount);
+    var balanced = [];
+    for (var i = 0; i < items.length; i += perPage) balanced.push(Array.from({ length: Math.min(perPage, items.length - i) }, function(_, k) { return i + k; }));
+
+    // 均等割りが実際に収まるか確認し、収まらなければ高さ基準の詰め込みに戻す
+    function fits(idxGroups) {
+      return idxGroups.every(function(g) {
+        var h = 0;
+        g.forEach(function(i, k) { h += k === 0 ? heights[i] : heights[i] + gap; });
+        return h <= maxH + 1;
+      });
+    }
+    var groupsIdx = fits(balanced) ? balanced : byHeight;
+    var groups = groupsIdx.map(function(g) { return g.map(function(i) { return items[i]; }); });
+
+    vp.classList.add('rk-paged');
+    groups.forEach(function(group, i) {
+      var page = document.createElement('div');
+      page.className = 'rk-page' + (i === 0 ? ' on' : '');
+      group.forEach(function(it) { page.appendChild(it); });
+      vp.appendChild(page);
+    });
+    var dots = document.createElement('div');
+    dots.className = 'rk-dots';
+    groups.forEach(function(_, i) {
+      var d = document.createElement('span');
+      if (i === 0) d.className = 'on';
+      dots.appendChild(d);
+    });
+    vp.appendChild(dots);
+
+    var idx = 0;
+    vp._rkTimer = setInterval(function() {
+      var pageEls = vp.querySelectorAll(':scope > .rk-page');
+      var dotEls = vp.querySelectorAll(':scope > .rk-dots > span');
+      if (!pageEls.length) return;
+      pageEls[idx].classList.remove('on');
+      if (dotEls[idx]) dotEls[idx].classList.remove('on');
+      idx = (idx + 1) % pageEls.length;
+      pageEls[idx].classList.add('on');
+      if (dotEls[idx]) dotEls[idx].classList.add('on');
+    }, 9000); // 見本のため速め。実際は10秒前後を想定
+  };
+
+  window.rkToggleDemo = function() {
+    var vp = document.getElementById('rkViewport');
+    var btn = document.getElementById('rkDemoToggle');
+    if (!vp || !btn) return;
+    var nowShowingExtra = vp.classList.toggle('rk-show-extra');
+    btn.textContent = nowShowingExtra ? '表示を切り替えてためす：少ない日' : '表示を切り替えてためす：多い日';
+    rkPaginate();
+  };
+
+  document.addEventListener('DOMContentLoaded', function() {
+    rkPaginate();
+    window.addEventListener('resize', rkPaginate);
+  });
+})();
+</script>
 </body>
 </html>
