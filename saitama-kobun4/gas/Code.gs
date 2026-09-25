@@ -20,7 +20,7 @@ const SPREADSHEET_ID = "1Yuf_jzWZYfQKaYuZV6LN6-RDAODoOLeX-uyn9nYecwU";
 const MASTER_ID      = "1OaMsGfk_-s-BMa_osO3d8hwK04ikP0G34J7TWbs2lJo";
 
 /** index.html 側の CLIENT_VERSION と必ず同じ値にすること */
-const CLIENT_VERSION = 14;
+const CLIENT_VERSION = 15;
 
 const APP_NAME = "古典クエスト";
 
@@ -176,9 +176,19 @@ const H_RESULT = ["UUID","保存日時","email","氏名","組","番号","ステ�
 const H_ANSWER = ["UUID","結果UUID","保存日時","email","氏名","組","番号","ステージID","問題ID","問番号",
                   "設問タイプ","生徒の解答","正解","正誤","配点","所要時間(秒)"];
 
-const H_TOTAL  = ["順位","email","氏名","組","番号","累計得点","満点","挑戦回数","クリアステージ数","満点ステージ数",
+const H_TOTAL  = ["順位","email","氏名","組","番号",
+                  "のべ得点合計","練習のべ得点","小テストのべ得点",
+                  "累計得点","満点","挑戦回数","クリアステージ数","満点ステージ数",
                   "平均正答率(%)","最高得点","最速タイム(秒)","称号",
                   "小テスト・解いた大問数","小テスト最高成績(%)","小テスト平均成績(%)","成績に入れなかった大問数","最終挑戦日時"];
+
+/* 1回ぶんの得点は12点満点（1問3点×4問）。
+   小テストは正答数×3、無ければ正答率から換算する。 */
+const PER_STAGE_POINTS = 12;
+function quizPoints_(correct, score) {
+  if (correct != null && isFinite(correct)) return Math.round(Number(correct) * 3);
+  return Math.round((Number(score) || 0) / 100 * PER_STAGE_POINTS);
+}
 
 const H_QUIZ   = ["UUID","保存日時","email","氏名","組","番号","回ID","何問目",
                   "成績(%)","成績に反映","除外理由","ステージID","ステージ名",
@@ -440,6 +450,8 @@ function setupSheets() {
 function onOpen() {
   const ui = tryUi_();
   if (!ui) return;
+  // 生徒を待たせないためにためておいた集計を、ここで作り直す
+  try { rebuildTotalsIfDirty_(); } catch (e) {}
   ui.createMenu("⚙ " + APP_NAME + "管理")
     .addItem("初回セットアップ（必要なシートを生成）", "setupSheets")
     .addSeparator()
@@ -751,6 +763,7 @@ function sessionFor_(me) {
     blocked: timeBlocked_(me.teacher),
     stages: practiceStages_(),          // 小テスト用の本文は画面に渡さない
     progress: progressOf_(me.email),
+    quizPoints: quizPointsOf_(me.email),      // 小テストののべ得点
     quiz: quizStatus_(me.email)
   };
 }
@@ -1050,7 +1063,8 @@ function quizLog_() {
     if (m["email"]) {
       // いるのは前のほうの列だけなので、そこまでで読み止める
       let need = 1;
-      ["保存日時", "email", "回ID", "何問目", "成績(%)", "成績に反映", "ステージID"].forEach(function (h) {
+      ["保存日時", "email", "回ID", "何問目", "成績(%)", "成績に反映",
+       "ステージID", "ステージ名", "正答数"].forEach(function (h) {
         if (m[h] && m[h] > need) need = m[h];
       });
       const rows = sh.getRange(2, 1, sh.getLastRow() - 1, need).getValues();
@@ -1063,6 +1077,8 @@ function quizLog_() {
           stageId: m["ステージID"] ? String(r[m["ステージID"] - 1] || "").trim() : "",
           index: m["何問目"] ? (Number(r[m["何問目"] - 1]) || 0) : 0,
           score: m["成績(%)"] ? (Number(r[m["成績(%)"] - 1]) || 0) : 0,
+          correct: m["正答数"] ? (Number(r[m["正答数"] - 1]) || 0) : null,
+          stage: m["ステージ名"] ? String(r[m["ステージ名"] - 1] || "") : "",
           at: m["保存日時"] ? String(r[m["保存日時"] - 1] || "") : "",
           counted: quizCounts_(r, m)
         });
@@ -1163,6 +1179,17 @@ function quizCounts_(row, m) {
   if (!c) return true;                       // 旧い記録は従来どおり数える
   const v = String(row[c - 1]).trim();
   return v !== "×" && v !== "x" && v.toUpperCase() !== "FALSE";
+}
+
+/** その生徒の小テストのべ得点（12点満点に直した合計） */
+function quizPointsOf_(email) {
+  const key = String(email || "").toLowerCase();
+  let n = 0;
+  quizLog_().forEach(function (r) {
+    if (r.email !== key || !r.counted) return;
+    n += quizPoints_(r.correct, r.score);
+  });
+  return n;
 }
 
 /** 小テストの状況（この回のこと＋これまでの成績） */
@@ -1351,6 +1378,7 @@ function submitQuizPart(payload) {
       ok: true, index: index, stageId: sid, title: stage.title, src: stage.src,
       total: total, correct: correct, score: score,
       scenes: stage.scenes || null,
+      quizPoints: quizPointsOf_(me.email),     // 小テストののべ得点（ホームの表示用）
       counted: fair.include, cheated: !!fair.cheated, reason: fair.reason, pace: pace,
       blur: blur, keys: keys,
       timeUp: timeUp, seconds: secs, detail: detail,
@@ -1418,6 +1446,7 @@ function progressCoreCached_(email) {
   if (!core.stats) core.stats = {};
   if (!core.wrong) core.wrong = [];
   if (!core.tries) core.tries = 0;
+  if (!core.sum) core.sum = 0;
   return core;
 }
 function progressOf_(email) { return finishProgress_(progressCoreCached_(email)); }
@@ -1428,7 +1457,8 @@ function saveProgressCore_(email, core) {
 /** 満点・累計・称号は、そのつど計算し直す（練習の本数が増えると変わるため） */
 function finishProgress_(core) {
   const prog = { best: core.best || {}, stats: core.stats || {}, wrong: core.wrong || [],
-                 tries: core.tries || 0, points: 0, maxPoints: 0, rankName: "" };
+                 tries: core.tries || 0, sum: core.sum || 0,
+                 points: 0, maxPoints: 0, rankName: "" };
   Q_TYPES.forEach(function (t) { if (!prog.stats[t]) prog.stats[t] = { c: 0, t: 0 }; });
   Object.keys(prog.best).forEach(function (sid) { prog.points += prog.best[sid]; });
   prog.maxPoints = maxPoints_();
@@ -1439,7 +1469,7 @@ function finishProgress_(core) {
 function emptyCore_() {
   const stats = {};
   Q_TYPES.forEach(function (t) { stats[t] = { c: 0, t: 0 }; });
-  return { best: {}, stats: stats, wrong: [], tries: 0 };
+  return { best: {}, stats: stats, wrong: [], tries: 0, sum: 0 };
 }
 
 /** 結果シートと解答履歴シートを1回ずつ読んで、全員ぶんの進捗を作る */
@@ -1461,6 +1491,7 @@ function progressAllCores_() {
       const sc = Number(r[m["得点"] - 1]) || 0;
       if (c.best[sid] == null || sc > c.best[sid]) c.best[sid] = sc;
       c.tries++;
+      c.sum = (c.sum || 0) + sc;              // 毎回の得点を足していく（のべ得点）
     });
   }
 
@@ -1472,9 +1503,10 @@ function progressAllCores_() {
       const e = String(r[m["email"] - 1] || "").trim().toLowerCase();
       if (!e) return;
       const c = core(e);
-      const type = String(r[m["設問タイプ"] - 1] || "").trim();
+      const type = String(r[m["設問タイプ"] - 1] || "").trim() || "その他";
       const ok = String(r[m["正誤"] - 1] || "").trim() === "○";
-      if (c.stats[type]) { c.stats[type].t++; if (ok) c.stats[type].c++; }
+      if (!c.stats[type]) c.stats[type] = { c: 0, t: 0 };   // 見覚えのないタイプも数える
+      c.stats[type].t++; if (ok) c.stats[type].c++;
       if (!latest[e]) latest[e] = {};
       latest[e][String(r[m["問題ID"] - 1] || "").trim()] = ok;
     });
@@ -1504,6 +1536,7 @@ function progressCore_(email) {
       const sc  = Number(r[m["得点"] - 1]) || 0;
       if (prog.best[sid] == null || sc > prog.best[sid]) prog.best[sid] = sc;
       prog.tries++;
+      prog.sum = (prog.sum || 0) + sc;
     });
   }
 
@@ -1513,15 +1546,16 @@ function progressCore_(email) {
     const latest = {};
     vA.rows.forEach(function (r) {
       if (String(r[m["email"] - 1]).trim().toLowerCase() !== key) return;
-      const type = String(r[m["設問タイプ"] - 1]).trim();
+      const type = String(r[m["設問タイプ"] - 1]).trim() || "その他";
       const ok   = String(r[m["正誤"] - 1]).trim() === "○";
-      if (prog.stats[type]) { prog.stats[type].t++; if (ok) prog.stats[type].c++; }
+      if (!prog.stats[type]) prog.stats[type] = { c: 0, t: 0 };
+      prog.stats[type].t++; if (ok) prog.stats[type].c++;
       latest[String(r[m["問題ID"] - 1]).trim()] = ok;
     });
     Object.keys(latest).forEach(function (qid) { if (!latest[qid]) prog.wrong.push(qid); });
   }
 
-  return { best: prog.best, stats: prog.stats, wrong: prog.wrong, tries: prog.tries };
+  return { best: prog.best, stats: prog.stats, wrong: prog.wrong, tries: prog.tries, sum: prog.sum || 0 };
 }
 
 function rankName_(points, maxPoints) {
@@ -1620,6 +1654,7 @@ function submitResult(payload) {
     // 進捗は、シートを読み直さずに「いま解いたぶん」を足して更新する
     const core = progressCoreCached_(me.email);
     core.tries += 1;
+    core.sum = (core.sum || 0) + score;       // のべ得点にも足す
     if (core.best[stage.id] == null || score > core.best[stage.id]) core.best[stage.id] = score;
     stage.qs.forEach(function (q, i) {
       const ok = detail[i].ok;
@@ -1681,7 +1716,7 @@ function collectTotals_() {
     const email = String(r[m["email"] - 1]).trim().toLowerCase();
     if (!email) return;
     if (!agg[email]) {
-      agg[email] = { email: email, name: "", klass: "", no: "", tries: 0,
+      agg[email] = { email: email, name: "", klass: "", no: "", tries: 0, sum: 0,
                      best: {}, rateSum: 0, maxScore: 0, fastest: null, last: "" };
     }
     const a = agg[email];
@@ -1691,6 +1726,7 @@ function collectTotals_() {
     a.tries += 1;
     a.rateSum += Number(r[m["正答率(%)"] - 1]) || 0;
     const sc = Number(r[m["得点"] - 1]) || 0;
+    a.sum = (a.sum || 0) + sc;                 // 毎回の得点をそのまま足していく
     const sid = String(r[m["ステージID"] - 1]).trim();
     if (a.best[sid] == null || sc > a.best[sid]) a.best[sid] = sc;
     if (sc > a.maxScore) a.maxScore = sc;
@@ -1722,13 +1758,14 @@ function rankedList_() {
 function collectQuiz_() {
   const agg = {};
   quizLog_().forEach(function (r) {
-    if (!agg[r.email]) agg[r.email] = { tries: 0, best: null, sum: 0, skipped: 0, last: "" };
+    if (!agg[r.email]) agg[r.email] = { tries: 0, best: null, sum: 0, pts: 0, skipped: 0, last: "" };
     const a = agg[r.email];
     a.last = r.at;
     if (!r.counted) { a.skipped++; return; }
     a.tries++;
     if (a.best == null || r.score > a.best) a.best = r.score;
     a.sum += r.score;
+    a.pts += quizPoints_(r.correct, r.score);   // 12点満点に直して足す
   });
   return agg;
 }
@@ -1746,11 +1783,16 @@ function totalRows_() {
     if (seen[email]) return;
     const who = findByEmail_(email) || { name: "", klass: "", no: "" };
     list.push({ email: email, name: who.name, klass: who.klass, no: who.no,
-                points: 0, tries: 0, best: {}, rateSum: 0, maxScore: 0, fastest: null, last: quiz[email].last });
+                points: 0, tries: 0, sum: 0, best: {}, rateSum: 0, maxScore: 0,
+                fastest: null, last: quiz[email].last });
   });
   return list.map(function (a, i) {
     const q = quiz[a.email] || { tries: 0, best: null, sum: 0, skipped: 0, last: "" };
-    return [i + 1, a.email, a.name, a.klass, a.no, a.points, max, a.tries,
+    const pSum = a.sum || 0;                 // 練習のべ得点
+    const qSum = q.pts || 0;                 // 小テストのべ得点
+    return [i + 1, a.email, a.name, a.klass, a.no,
+            pSum + qSum, pSum, qSum,
+            a.points, max, a.tries,
             Object.keys(a.best).length, fullStagesOf_(a, per),
             a.tries ? Math.round(a.rateSum / a.tries) : 0,
             a.maxScore, a.fastest == null ? "" : a.fastest, rankName_(a.points, max),
@@ -1763,10 +1805,25 @@ function totalRows_() {
 
 function updateTotals_() {
   const sh = sheet_(SH_TOTAL, H_TOTAL);
-  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, H_TOTAL.length).clearContent();
+  ensureHeaders_(sh, H_TOTAL);          // 列が増えたときは見出しをそろえ直す
+  const width = Math.max(sh.getLastColumn(), H_TOTAL.length);
+  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, width).clearContent();
   const rows = totalRows_();
   if (rows.length) sh.getRange(2, 1, rows.length, H_TOTAL.length).setValues(rows);
   return rows.length;
+}
+
+/** 見出し行が古いときに、決められた見出しにそろえる */
+function ensureHeaders_(sh, headers) {
+  const cur = sh.getLastColumn() ? sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0] : [];
+  let same = (cur.length >= headers.length);
+  for (let i = 0; same && i < headers.length; i++) {
+    if (String(cur[i]).trim() !== headers[i]) same = false;
+  }
+  if (same) return;
+  sh.getRange(1, 1, 1, headers.length).setValues([headers])
+    .setFontWeight("bold").setBackground("#16223d").setFontColor("#ffffff");
+  try { sh.setFrozenRows(1); } catch (e) {}
 }
 
 function rebuildTotals() {
@@ -1803,25 +1860,53 @@ function getRanking(claimed) {
 }
 
 /** 自分の解答履歴（新しい順） */
+/**
+ * 生徒に見せる成績表。練習と小テストの「各回の得点」をまとめて返す。
+ * 得点は1回12点満点（1問3点×4問）でそろえてある。
+ */
 function getMyHistory(limit, claimed) {
   clearMemo_();
   try {
     const email = resolveEmail_(claimed);
-    const sh = book_().getSheetByName(SH_RESULT);
     const out = [];
-    if (!email || !sh || sh.getLastRow() < 2) return { ok: true, rows: out };
-    const m = headerMap_(sh);
-    const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
-    rows.forEach(function (r) {
-      if (String(r[m["email"] - 1]).trim().toLowerCase() !== email) return;
-      out.push({
-        at: String(r[m["保存日時"] - 1]), stage: String(r[m["ステージ名"] - 1]),
-        score: Number(r[m["得点"] - 1]) || 0, full: Number(r[m["満点"] - 1]) || 0,
-        secs: Number(r[m["所要時間(秒)"] - 1]) || 0
+    if (!email) return { ok: true, rows: out, total: 0, practice: 0, quiz: 0 };
+
+    let pSum = 0, qSum = 0, pN = 0, qN = 0, rateSum = 0, rateN = 0;
+
+    // 練習
+    const v = sheetValues_(SH_RESULT);
+    if (v.map["email"]) {
+      const m = v.map;
+      v.rows.forEach(function (r) {
+        if (String(r[m["email"] - 1]).trim().toLowerCase() !== email) return;
+        const sc = Number(r[m["得点"] - 1]) || 0;
+        const full = Number(r[m["満点"] - 1]) || PER_STAGE_POINTS;
+        const rate = Number(r[m["正答率(%)"] - 1]) || 0;
+        pSum += sc; pN++; rateSum += rate; rateN++;
+        out.push({ kind: "練習", at: String(r[m["保存日時"] - 1]),
+                   stage: String(r[m["ステージ名"] - 1]), score: sc, full: full, rate: rate,
+                   secs: Number(r[m["所要時間(秒)"] - 1]) || 0, counted: true });
       });
+    }
+
+    // 小テスト（成績に入らなかった回は、得点0として並べる）
+    quizLog_().forEach(function (r) {
+      if (r.email !== email) return;
+      const pt = r.counted ? quizPoints_(r.correct, r.score) : 0;
+      if (r.counted) { qSum += pt; qN++; rateSum += r.score; rateN++; }
+      out.push({ kind: "小テスト", at: r.at, stage: r.stage || "小テスト",
+                 score: pt, full: PER_STAGE_POINTS, rate: r.score,
+                 secs: 0, counted: r.counted });
     });
-    out.reverse();
-    return { ok: true, rows: out.slice(0, Number(limit) || 30) };
+
+    out.sort(function (a, b) { return (a.at < b.at) ? 1 : (a.at > b.at ? -1 : 0); });
+
+    return { ok: true,
+             rows: out.slice(0, Number(limit) || 100),
+             shown: Math.min(out.length, Number(limit) || 100), all: out.length,
+             total: pSum + qSum, practice: pSum, quiz: qSum,
+             practiceCount: pN, quizCount: qN,
+             avgRate: rateN ? Math.round(rateSum / rateN) : null };
   } catch (e) {
     return { ok: false, message: String(e.message || e) };
   }
@@ -1943,6 +2028,43 @@ function testConnection() {
     }
     out.push("  小テストモード: " + (readConfig_().quizMode ? "ON" : "OFF"));
   } catch (e) { out.push("問題マスター: NG " + e.message); }
+
+  // 累計得点・正答率・弱点分析が出ないときの手がかり
+  try {
+    const me = activeEmail_();
+    const v = sheetValues_(SH_ANSWER);
+    const seen = {};
+    if (v.map["設問タイプ"]) {
+      v.rows.forEach(function (r) {
+        const t = String(r[v.map["設問タイプ"] - 1] || "").trim() || "（空欄）";
+        seen[t] = (seen[t] || 0) + 1;
+      });
+    }
+    const known = {}; Q_TYPES.forEach(function (t) { known[t] = true; });
+    const odd = Object.keys(seen).filter(function (t) { return !known[t]; });
+    out.push("解答履歴: " + v.rows.length + "行");
+    out.push("  設問タイプ … " + (Object.keys(seen).length
+      ? Object.keys(seen).map(function (t) { return t + ":" + seen[t]; }).join(" / ") : "（記録なし）"));
+    if (odd.length) {
+      out.push("  ※ 弱点分析の既定にないタイプがあります：" + odd.join("、"));
+      out.push("　　問題マスターの「設問タイプ」を " + Q_TYPES.join("／") + " にそろえると、きれいに並びます。");
+    }
+    if (me) {
+      const prog = progressOf_(me);
+      out.push("あなた（" + me + "）の記録 … 挑戦" + prog.tries + "回 / 累計" + prog.points + "点（満点" + prog.maxPoints +
+               "） / のべ得点 練習" + (prog.sum || 0) + "点・小テスト" + quizPointsOf_(me) + "点");
+      out.push("  タイプ別 … " + Q_TYPES.map(function (t) {
+        const x = prog.stats[t] || { c: 0, t: 0 };
+        return t + " " + x.c + "/" + x.t;
+      }).join(" / "));
+      if (prog.tries === 0) out.push("　　※ 記録が0件です。シートを手で直したときは「読み込みをやり直す（キャッシュをクリア）」を実行してください。");
+    }
+  } catch (e) { out.push("記録の確認: NG " + e.message); }
+
+  try {
+    const dirty = PropertiesService.getScriptProperties().getProperty("totalsDirty") === "1";
+    out.push("集計シート: " + (dirty ? "未反映の記録があります（スプレッドシートを開き直すか、メニューの「集計を今すぐ作り直す」で反映されます）" : "最新です"));
+  } catch (e) {}
   Logger.log(out.join("\n"));
   return out.join("\n");
 }
