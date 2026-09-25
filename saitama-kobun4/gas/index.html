@@ -420,7 +420,8 @@
     <div class="pad">
       <p class="hint" id="quizLead" style="margin:0 0 14px"></p>
       <div class="rule">
-        <b>制限時間は5分。まず大問1つを解きます。</b>
+        <b>制限時間は5分。先生が始めた時刻から数えます（クラス全員同じ）。</b>
+        <span>まず大問1つを解きます。</span>
         <span>解き終わったら、<b>その成績で終えるか、2つ目にも挑戦するか</b>を選べます。</span>
         <span>2つ目に進むと、<b>1つ目と2つ目の両方が成績として記録されます</b>。</span>
         <span><b>受けられるのは1人1回だけ</b>です。やり直しはできません。</span>
@@ -430,7 +431,7 @@
       <div class="toolrow" style="margin-top:16px">
         <button class="btn primary" id="quizStart" onclick="startQuiz()">小テストを始める</button>
       </div>
-      <p class="hint" style="margin-top:14px">・制限時間は<b>5分</b>。0になると自動で提出されます。<br>・答えていない問題は<b>不正解</b>になります。<br>・この時間の問題は<b>クラス全員同じ</b>です。<br>・一度小テストに使った大問は、次の小テストには出ません（練習では解けるようになります）。</p>
+      <p class="hint" style="margin-top:14px">・制限時間は<b>5分</b>。<b>先生が「開始」を押した時刻から</b>数えます。<br>・あとから入っても、終わる時刻は<b>クラス全員同じ</b>です。0になると自動で提出されます。<br>・答えていない問題は<b>不正解</b>になります。<br>・この時間の問題は<b>クラス全員同じ</b>です。<br>・一度小テストに使った大問は、次の小テストには出ません（練習では解けるようになります）。</p>
     </div>
   </section>
 
@@ -525,6 +526,7 @@
   </div>
   <div class="quizbar">この画面を閉じたり、ほかのページに移ったりしないでください。<b>ほかの画面に移る・キーボードを使う</b>と、その大問は成績に入りません。答えていない問題は不正解になります。</div>
   <div class="msg err hidden" id="qWarn"></div>
+  <div class="msg warn hidden show" id="qNote"></div>
   <div id="qBody"></div>
   <div class="actions">
     <button class="btn primary" id="qSubmit" onclick="submitPart(false)">解答を確定する</button>
@@ -543,6 +545,7 @@
     <div class="bigrate" id="qmRate">0<small>％</small></div>
     <p class="meta" id="qmMeta"></p>
   </div>
+  <div class="msg warn hidden show" id="qmNote"></div>
   <div class="msg" id="qmMsg"></div>
   <div class="picker" style="margin-top:18px">
     <button class="pick" onclick="finishHere()">
@@ -604,7 +607,7 @@
    古典クエスト ― クライアント側
    ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
    ============================================================ */
-var CLIENT_VERSION = 11;
+var CLIENT_VERSION = 13;
 
 var MARK  = ['ア','イ','ウ','エ'];
 var TYPES = ['仮名遣い','主語・指示語','内容理解','要旨・話し合い'];
@@ -740,6 +743,7 @@ function gateError(msg){
 function applySession(r){
   ME=r.student; STAGES=r.stages||[]; PROG=r.progress; SETTINGS=r.settings||{}; BLOCKED=r.blocked||'';
   QUIZ=r.quiz||null;
+  if(QUIZ) syncClock({serverNow:QUIZ.serverNow});   // 端末の時計のずれを補正する
   var label=(ME.klass?esc(ME.klass)+' ':'')+(ME.no?esc(ME.no)+'番 ':'')+'<b>'+esc(ME.name||ME.email)+'</b> さん'
             +(ME.teacher?'（教員）':'');
   document.getElementById('whoChip').innerHTML=label;
@@ -1171,7 +1175,8 @@ function renderQuizPanel(){
   if(hero){
     if(!hero.dataset.normal) hero.dataset.normal=hero.innerHTML;
     hero.innerHTML = lock
-      ? 'いまは<b>小テストの時間</b>です。制限時間は<b>5分</b>、受けられるのは<b>1人1回</b>だけ。'+
+      ? 'いまは<b>小テストの時間</b>です。制限時間は<b>5分</b>（先生が始めた時刻から。終わる時刻はクラス全員同じ）、'+
+        '受けられるのは<b>1人1回</b>だけ。'+
         '答えていない問題は不正解になります。ほかの画面に移る・キーボードを使う・よく読まずに連打する、'+
         'のいずれかがあった大問は成績に入りません。終わったら先生の指示を待ちましょう。'
       : hero.dataset.normal;
@@ -1184,8 +1189,9 @@ function renderQuizPanel(){
   var round=QUIZ.round, taken=QUIZ.taken;
 
   var lead = round
-    ? 'この時間の小テスト：<b>大問'+round.parts+'つ</b>（クラス全員が同じ問題です）'
+    ? 'この時間の小テスト：<b>大問'+round.parts+'つ</b>（クラス全員が同じ問題・同じ終了時刻です）'
       + (teach&&round.titles&&round.titles.length ? '　<small>'+round.titles.map(esc).join('／')+'</small>' : '')
+      + '<br><span id="quizLeft"></span>'
     : '小テストはまだ始まっていません。';
   lead += '<br><small>次の回に使える大問 <b>'+QUIZ.remain+'</b>／'+QUIZ.total+'本'
        + (QUIZ.tries?'　これまで'+QUIZ.tries+'大問':'')
@@ -1210,14 +1216,47 @@ function renderQuizPanel(){
         + '<br>先生の指示を待ちましょう。';
   }else if(!round){
     msg = teach
-      ? '「開始」を押すと、この回の大問'+Math.min(2,QUIZ.remain)+'つが決まり、クラス全員に同じ問題が出ます。'
+      ? '「開始」を押すと、この回の大問'+Math.min(2,QUIZ.remain)+'つが決まり、'
+        + 'そこから<b>5分</b>、クラス全員に同じ問題が出ます。'
       : '先生が小テストを始めるまで待ちましょう。';
+  }else if(roundLeft()<=0){
+    kind='warn';
+    msg = 'この時間の小テストは終わりました。先生の指示を待ちましょう。';
   }else{
     canStart=true;
     if(round.parts<2) msg='この回は大問1つだけの出題です。';
   }
   document.getElementById('quizStart').disabled=!canStart;
   setMsg('quizMsg', msg, kind, true);
+  startLeftTicker();
+}
+
+/** この回の残り秒数（クラス共通）。始まっていなければ 0 */
+function roundLeft(){
+  if(!(QUIZ && QUIZ.round && QUIZ.round.endsAt)) return 0;
+  return Math.max(0, Math.round((QUIZ.round.endsAt - nowMs())/1000));
+}
+
+var LTICK=null;
+function startLeftTicker(){
+  if(LTICK){ clearInterval(LTICK); LTICK=null; }
+  paintLeft();
+  if(QUIZ && QUIZ.round && QUIZ.round.endsAt) LTICK=setInterval(paintLeft, 1000);
+}
+function paintLeft(){
+  var el=document.getElementById('quizLeft');
+  if(!el){ if(LTICK){ clearInterval(LTICK); LTICK=null; } return; }
+  var left=roundLeft();
+  if(left<=0){
+    el.innerHTML='<b style="color:var(--ng)">この時間の小テストは終わりました。</b>';
+    var b=document.getElementById('quizStart');
+    if(b) b.disabled=true;
+    if(LTICK){ clearInterval(LTICK); LTICK=null; }
+    return;
+  }
+  el.innerHTML='のこり <b'+(left<=60?' style="color:var(--ng)"':'')+'>'+
+    Math.floor(left/60)+'分'+('0'+(left%60)).slice(-2)+'秒</b>'+
+    '　<small>（先生が始めた時刻から5分。あとから入った人も同じ時刻に終わります）</small>';
 }
 
 function setQuiz(on){
@@ -1234,10 +1273,15 @@ function setQuiz(on){
     SETTINGS.quizMode=r.quizMode;
     if(r.quizMode && r.round){
       QUIZ=QUIZ||{};
-      QUIZ.round={id:r.round.id, parts:r.round.count, titles:r.round.titles};
+      QUIZ.round={id:r.round.id, parts:r.round.count, titles:r.round.titles, endsAt:r.round.endsAt||0};
+      syncClock(r);
       QUIZ.remain=r.remain;
       if(!r.reused){
-        alert('小テストを始めました。\n\nこの回の大問（全員同じ）\n'+
+        var e=r.round.endsAt?new Date(r.round.endsAt):null;
+        var hhmm=e?(e.getHours()+':'+('0'+e.getMinutes()).slice(-2)+':'+('0'+e.getSeconds()).slice(-2)):'';
+        alert('小テストを始めました。\n\n'+
+              (hhmm?'終了時刻　'+hhmm+'（ここから5分。クラス全員が同じ時刻に終わります）\n\n':'')+
+              'この回の大問（全員同じ）\n'+
               r.round.titles.map(function(t,i){ return '　'+(i+1)+'つ目　'+t; }).join('\n')+
               '\n\n生徒には「画面を再読み込みして」と伝えてください。');
       }
@@ -1289,11 +1333,12 @@ function startQuiz(){
       document.getElementById('quizStart').disabled=true;
       return;
     }
-    QZ={ sessionId:r.sessionId, limit:r.limitSec||300, startedAt:r.startedAt,
+    QZ={ sessionId:r.sessionId, limit:r.limitSec||300,
          parts:r.parts||2, blur:0, keys:0, done:[] };   // done に大問ごとの結果をためる
     QUIZ=r.status||QUIZ;
+    syncClock(r);                       // クラス共通の終了時刻に合わせる
     openPart(r.stage, r.index||1);
-    startQClock(QZ.limit);
+    startQClock();
     show('quiz');
   });
 }
@@ -1305,7 +1350,8 @@ function openPart(stage, index){
   QZ.partBlur=0; QZ.partKeys=0; paintViolation();
   var lastPart=(index>=(QZ.parts||2));
   document.getElementById('qSub').textContent=
-    index+'つ目　'+stage.qs.length+'問'+(lastPart?'（最後の大問です）':'（このあと続けるか選べます）');
+    index+'つ目　'+stage.qs.length+'問'+(lastPart?'（最後の大問です）':'（このあと続けるか選べます）')+
+    '　／　終了時刻はクラス全員同じです';
   document.getElementById('qSubmit').disabled=false;
   document.getElementById('qSubmit').textContent='解答を確定する';
   document.getElementById('qBody').innerHTML=
@@ -1363,12 +1409,12 @@ function updQProg(){
   document.getElementById('qProg').innerHTML='解答 <b>'+done+'</b>／'+all;
 }
 
-function leftSec(){ return Math.max(0,Math.round((QEND-Date.now())/1000)); }
-function usedSec(){ var u=QZ.limit-leftSec(); return u<0?0:u; }
+function leftSec(){ return Math.max(0,Math.round((QEND-nowMs())/1000)); }
 
+/** 終了時刻（QEND）に向かって数える。sec を渡したときは、そこから sec 秒後 */
 function startQClock(sec){
   stopQClock();
-  QEND=Date.now()+sec*1000;
+  if(sec!=null) QEND=nowMs()+sec*1000;
   tickQ();
   QTICK=setInterval(tickQ,250);
 }
@@ -1385,6 +1431,25 @@ function tickQ(){
   if(left<=0){ stopQClock(); onTimeUp(); }
 }
 function stopQClock(){ if(QTICK){ clearInterval(QTICK); QTICK=null; } }
+
+/* 小テストの時計は、クラス全員で同じ「終了時刻」に向かって進む。
+   先生が「開始」を押した時刻から5分。あとから入った生徒は、その残りだけ。
+   端末の時計はずれていることがあるので、サーバーの時刻との差を覚えておく。 */
+var QSKEW=0;                 // サーバー時刻 − 端末時刻（ミリ秒）
+function syncClock(r){
+  if(!r) return;
+  if(r.serverNow) QSKEW = r.serverNow - Date.now();
+  if(r.endsAt) QEND = r.endsAt;
+}
+function nowMs(){ return Date.now() + QSKEW; }
+
+/** 送信や問題の取り出しのあいだ、時計は止めずに「送信中」だけ知らせる */
+function setQNote(id, text){
+  var n=document.getElementById(id);
+  if(!n) return;
+  if(text){ n.textContent=text; n.classList.remove('hidden'); }
+  else    { n.classList.add('hidden'); }
+}
 
 function onTimeUp(){
   if(!QZ) return;
@@ -1405,6 +1470,7 @@ function submitPart(auto){
   QZ.sent=true;
   document.getElementById('qSubmit').disabled=true;
   document.getElementById('qSubmit').textContent='送信しています…';
+  setQNote('qNote','送信しています。そのままお待ちください。');
   var startedPart=QZ.t0;
   call('submitQuizPart',[{
     email: ME.email, sessionId: QZ.sessionId, index: QZ.index, stageId: QZ.stage.id,
@@ -1416,19 +1482,22 @@ function submitPart(auto){
       QZ.sent=false;
       document.getElementById('qSubmit').disabled=false;
       document.getElementById('qSubmit').textContent='解答を確定する';
+      setQNote('qNote','');
       alert((r&&r.message)||'送信できませんでした。もう一度お試しください。');
       return;
     }
     r.stage=QZ.stage;
     QZ.done.push(r);
     QUIZ=r.status||QUIZ;
-    if(auto || QZ.index>=(QZ.parts||2)){ finishQuiz(false); return; }   // 時間切れ、または最後の大問が終わった
+    setQNote('qNote','');
+    if(auto || QZ.index>=(QZ.parts||2)){ finishQuiz(false); return; }
     paintMid(r);                                            // 続けるか決める
     show('qmid');
   }, function(m){
     QZ.sent=false;
     document.getElementById('qSubmit').disabled=false;
     document.getElementById('qSubmit').textContent='解答を確定する';
+    setQNote('qNote','');
     alert('送信できませんでした。電波のよい場所でもう一度お試しください。'+m);
   });
 }
@@ -1453,12 +1522,25 @@ function finishHere(){ finishQuiz(false); }
 
 function goNextPart(){
   if(!QZ) return;
+  document.getElementById('qmGo').disabled=true;
+  setQNote('qmNote','次の問題を用意しています。');
   // 1つ目はすでに確定済み。ここで初めて2つ目を取りに行く
   call('nextQuizStage',[QZ.done.map(function(d){ return d.stageId; })], function(r){
-    if(!r||!r.ok){ alert((r&&r.message)||'次の問題を出せませんでした。'); return; }
+    setQNote('qmNote','');
+    if(!r||!r.ok){
+      document.getElementById('qmGo').disabled=false;
+      alert((r&&r.message)||'次の問題を出せませんでした。');
+      return;
+    }
+    syncClock(r);
+    if(r.over){ alert('小テストの時間が終わりました。'); finishQuiz(false); return; }
     if(r.noMore){ alert('次に出せる問題がありません。ここで終わります。'); finishQuiz(true); return; }
     openPart(r.stage, QZ.done.length+1);
     show('quiz');
+  }, function(m){
+    setQNote('qmNote','');
+    document.getElementById('qmGo').disabled=false;
+    alert('次の問題を出せませんでした。'+m);
   });
 }
 

@@ -20,7 +20,7 @@ const SPREADSHEET_ID = "1Yuf_jzWZYfQKaYuZV6LN6-RDAODoOLeX-uyn9nYecwU";
 const MASTER_ID      = "1OaMsGfk_-s-BMa_osO3d8hwK04ikP0G34J7TWbs2lJo";
 
 /** index.html 側の CLIENT_VERSION と必ず同じ値にすること */
-const CLIENT_VERSION = 11;
+const CLIENT_VERSION = 13;
 
 const APP_NAME = "古典クエスト";
 
@@ -51,7 +51,8 @@ const SH_ROUND  = PREFIX + "小テスト回";
 const CACHE_KEY   = "kobun_pool_v2";
 const CACHE_SEC   = 21600;              // 問題プールのキャッシュ 6時間
 const TARGET_SEC  = 300;                // 1ステージの目安時間（5分・画面表示用）
-const QUIZ_SEC    = 300;                // 小テストの制限時間（5分）
+const QUIZ_SEC    = 300;                // 小テストの制限時間（5分）。先生が「開始」を押した時刻から数える
+const QUIZ_GRACE  = 45;                 // 締切ぎりぎりに押した解答を受け取るための余裕（秒）
 const QUIZ_COUNT  = 2;                  // 1回の小テストで使う大問の数（クラス全員に同じものを出す）
 
 /* --- 連打・速すぎる解答を成績から外すための目安 ---
@@ -186,8 +187,8 @@ const H_QUIZ   = ["UUID","保存日時","email","氏名","組","番号","回ID",
                   "キー入力回数","不正の疑い"];
 
 /** 小テストの「回」。1回＝クラス全員に同じ大問を出す1コマぶん */
-const H_ROUND  = ["回ID","開始日時","終了日時","状態","ステージID1","ステージ名1",
-                  "ステージID2","ステージ名2","開始した先生"];
+const H_ROUND  = ["回ID","開始日時","終了予定","終了日時","状態","ステージID1","ステージ名1",
+                  "ステージID2","ステージ名2","開始した先生","開始ミリ秒"];
 const ROUND_OPEN = "実施中";
 const ROUND_DONE = "終了";
 
@@ -427,7 +428,7 @@ function onOpen() {
     .addSeparator()
     .addItem("小テスト用の問題を割り当てる（用途列を整える）", "assignQuizUse")
     .addItem("問題プールのキャッシュをクリア", "clearPoolCache")
-    .addItem("集計を再計算", "rebuildTotals")
+    .addItem("集計を今すぐ作り直す", "rebuildTotals")
     .addSeparator()
     .addItem("小テストモードを開始", "quizModeOn")
     .addItem("小テストモードを終了", "quizModeOff")
@@ -457,6 +458,8 @@ function switchQuizMode_(on, byEmail) {
       round = r.round; reused = r.reused;
     } else {
       closed = endRound_();
+      clearMemo_();
+      rebuildTotalsIfDirty_();     // 生徒を待たせずにためておいた集計を、ここで作り直す
     }
     writeConfigFlag_("小テストモード", !!on);
     return { ok: true, quizMode: !!on, round: round, reused: reused, closed: closed,
@@ -475,7 +478,11 @@ function quizModeMessage_(r) {
         : "") +
       "小テストに使える大問は、あと " + r.remain + " 本です。";
   }
+  const end = r.round && r.round.endsAt
+    ? Utilities.formatDate(new Date(r.round.endsAt), "Asia/Tokyo", "H:mm:ss")
+    : "";
   return (r.reused ? "小テストモードを続けています。\n\n" : "小テストモードを開始しました。\n\n") +
+    (end ? "終了時刻　" + end + "（ここから5分。クラス全員が同じ時刻に終わります）\n\n" : "") +
     "この回の大問（クラス全員が同じ問題に取り組みます）\n" +
     r.round.titles.map(function (t, i) { return "　" + (i + 1) + "つ目　" + t; }).join("\n") + "\n\n" +
     "・生徒は画面を再読み込みすると小テストに変わります。\n" +
@@ -607,7 +614,9 @@ function setQuizMode(on) {
     const r = switchQuizMode_(!!on, email);
     if (!r.ok) return r;
     return { ok: true, quizMode: r.quizMode, reused: r.reused, remain: r.remain,
-             round: r.round ? { id: r.round.id, titles: r.round.titles, count: r.round.ids.length } : null,
+             round: r.round ? { id: r.round.id, titles: r.round.titles, count: r.round.ids.length,
+                                endsAt: r.round.endsAt || 0 } : null,
+             serverNow: Date.now(),
              closed: r.closed ? { titles: r.closed.titles } : null };
   } catch (e) {
     return { ok: false, message: String(e.message || e) };
@@ -628,6 +637,7 @@ function timeBlocked_(isTeacher) {
    セッション（自動ログイン）
    ============================================================ */
 function getSession() {
+  clearMemo_();
   try {
     const email = activeEmail_();
 
@@ -865,10 +875,47 @@ function hideAnswers_(stages) {
    1回＝その授業の1コマ。クラス全員が同じ大問2つに取り組む。
    使い終わった大問は、次の回には出ず、練習に回る。
    ============================================================ */
+/* --- 1回の呼び出しのあいだだけ覚えておく（同じシートを何度も読まないため） --- */
+let _memoRounds = null;      // 小テスト回シートの中身
+let _memoQuiz   = null;      // 小テストシートの中身
+let _memoSheet  = {};        // その他のシートの中身（シート名ごと）
+function clearMemo_() { _memoRounds = null; _memoQuiz = null; _memoSheet = {}; }
+
+/** シートを丸ごと1回だけ読む。書き込んだあとは clearMemo_() で捨てること */
+function sheetValues_(name) {
+  if (_memoSheet[name]) return _memoSheet[name];
+  const sh = book_().getSheetByName(name);
+  let out = { map: {}, rows: [] };
+  if (sh && sh.getLastRow() >= 2 && sh.getLastColumn() >= 1) {
+    out = { map: headerMap_(sh),
+            rows: sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues() };
+  }
+  _memoSheet[name] = out;
+  return out;
+}
+
+/** 集計シートは、生徒を待たせないように、あとでまとめて作り直す */
+function markTotalsDirty_() {
+  try { PropertiesService.getScriptProperties().setProperty("totalsDirty", "1"); } catch (e) {}
+}
+function rebuildTotalsIfDirty_() {
+  let dirty = false;
+  try { dirty = (PropertiesService.getScriptProperties().getProperty("totalsDirty") === "1"); } catch (e) {}
+  if (!dirty) return 0;
+  const n = updateTotals_();
+  try { PropertiesService.getScriptProperties().deleteProperty("totalsDirty"); } catch (e) {}
+  return n;
+}
+
 function roundSheet_() { return sheet_(SH_ROUND, H_ROUND); }
 
-/** 回シートの全行を読む（古い順） */
+/** 回シートの全行を読む（古い順）。同じ実行の中では1回だけ読む */
 function roundRows_() {
+  if (_memoRounds) return _memoRounds;
+  _memoRounds = roundRowsFresh_();
+  return _memoRounds;
+}
+function roundRowsFresh_() {
   const sh = book_().getSheetByName(SH_ROUND);
   if (!sh || sh.getLastRow() < 2) return [];
   const m = headerMap_(sh);
@@ -883,8 +930,15 @@ function roundRows_() {
       const sid = c ? String(r[c - 1] || "").trim() : "";
       if (sid) { ids.push(sid); titles.push(m[pair[1]] ? String(r[m[pair[1]] - 1] || "") : ""); }
     });
+    let startMs = m["開始ミリ秒"] ? Number(r[m["開始ミリ秒"] - 1]) : 0;
+    if (!startMs) {
+      // 古い記録には開始ミリ秒がないので、開始日時の文字から読み取る
+      const t = Date.parse(String(r[m["開始日時"] - 1] || "").replace(/\//g, "-").replace(" ", "T") + "+09:00");
+      startMs = isFinite(t) ? t : 0;
+    }
     out.push({ row: i + 2, id: id, state: String(r[m["状態"] - 1] || "").trim(),
                startedAt: String(r[m["開始日時"] - 1] || ""),
+               startMs: startMs, endsAt: startMs ? startMs + QUIZ_SEC * 1000 : 0,
                ids: ids, titles: titles });
   });
   return out;
@@ -932,14 +986,19 @@ function startRound_(byEmail) {
   const use = pool.slice(0, QUIZ_COUNT);
   const sh  = roundSheet_();
   const id  = uuid_();
-  sh.appendRow([
-    id, now_(), "", ROUND_OPEN,
-    use[0] ? use[0].id : "", use[0] ? use[0].title : "",
-    use[1] ? use[1].id : "", use[1] ? use[1].title : "",
-    byEmail || ""
-  ]);
+  const startMs = Date.now();
+  const endsAt  = startMs + QUIZ_SEC * 1000;
+  appendByHeader_(sh, H_ROUND, {
+    "回ID": id, "開始日時": now_(),
+    "終了予定": Utilities.formatDate(new Date(endsAt), "Asia/Tokyo", "yyyy/MM/dd HH:mm:ss"),
+    "終了日時": "", "状態": ROUND_OPEN,
+    "ステージID1": use[0] ? use[0].id : "", "ステージ名1": use[0] ? use[0].title : "",
+    "ステージID2": use[1] ? use[1].id : "", "ステージ名2": use[1] ? use[1].title : "",
+    "開始した先生": byEmail || "", "開始ミリ秒": startMs
+  });
+  clearMemo_();
   return { ok: true, reused: false,
-    round: { id: id, state: ROUND_OPEN, startedAt: now_(),
+    round: { id: id, state: ROUND_OPEN, startedAt: now_(), startMs: startMs, endsAt: endsAt,
              ids: use.map(function (s) { return s.id; }),
              titles: use.map(function (s) { return s.title; }) } };
 }
@@ -960,22 +1019,50 @@ function endRound_() {
   return closed;
 }
 
+/** 小テストシートを、その生徒のぶんだけ整理して返す（同じ実行の中では1回だけ読む） */
+function quizLog_() {
+  if (_memoQuiz) return _memoQuiz;
+  const out = [];
+  const sh = book_().getSheetByName(SH_QUIZ);
+  if (sh && sh.getLastRow() >= 2 && sh.getLastColumn() >= 1) {
+    const m = headerMap_(sh);
+    if (m["email"]) {
+      const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+      rows.forEach(function (r) {
+        const email = String(r[m["email"] - 1] || "").trim().toLowerCase();
+        if (!email) return;
+        out.push({
+          email: email,
+          roundId: m["回ID"] ? String(r[m["回ID"] - 1] || "").trim() : "",
+          stageId: m["ステージID"] ? String(r[m["ステージID"] - 1] || "").trim() : "",
+          index: m["何問目"] ? (Number(r[m["何問目"] - 1]) || 0) : 0,
+          score: m["成績(%)"] ? (Number(r[m["成績(%)"] - 1]) || 0) : 0,
+          at: m["保存日時"] ? String(r[m["保存日時"] - 1] || "") : "",
+          counted: quizCounts_(r, m)
+        });
+      });
+    }
+  }
+  _memoQuiz = out;
+  return out;
+}
+
+/** この回が終わる時刻（ミリ秒）。全員同じ */
+function roundEndsAt_(round) {
+  return (round && round.endsAt) ? round.endsAt : 0;
+}
+/** 締切を過ぎたか。grace は、ぎりぎりの解答を受け取るための余裕（秒） */
+function roundOver_(round, graceSec) {
+  const end = roundEndsAt_(round);
+  if (!end) return false;
+  return Date.now() > end + (graceSec || 0) * 1000;
+}
+
 /** その生徒が、この回の小テストをもう受けたか */
 function roundTakenBy_(email, roundId) {
   const key = String(email || "").toLowerCase();
-  const sh = book_().getSheetByName(SH_QUIZ);
-  if (!sh || sh.getLastRow() < 2) return null;
-  const m = headerMap_(sh);
-  if (!m["回ID"]) return null;
-  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
-  const mine = [];
-  rows.forEach(function (r) {
-    if (String(r[m["email"] - 1]).trim().toLowerCase() !== key) return;
-    if (String(r[m["回ID"] - 1]).trim() !== String(roundId)) return;
-    mine.push({ stageId: String(r[m["ステージID"] - 1] || "").trim(),
-                index: Number(r[m["何問目"] - 1]) || 0,
-                score: Number(r[m["成績(%)"] - 1]) || 0,
-                counted: quizCounts_(r, m) });
+  const mine = quizLog_().filter(function (r) {
+    return r.email === key && r.roundId === String(roundId);
   });
   if (!mine.length) return null;
   const counted = mine.filter(function (x) { return x.counted; });
@@ -1058,25 +1145,21 @@ function quizStatus_(email) {
   const taken = round ? roundTakenBy_(email, round.id) : null;
 
   let best = null, sum = 0, tries = 0, last = null, skipped = 0;
-  const sh = book_().getSheetByName(SH_QUIZ);
-  if (sh && sh.getLastRow() >= 2) {
-    const m = headerMap_(sh);
-    const key = String(email || "").toLowerCase();
-    const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
-    rows.forEach(function (r) {
-      if (String(r[m["email"] - 1]).trim().toLowerCase() !== key) return;
-      if (!quizCounts_(r, m)) { skipped++; return; }
-      tries++;
-      const sc = Number(r[m["成績(%)"] - 1]) || 0;
-      if (best == null || sc > best) best = sc;
-      sum += sc; last = sc;
-    });
-  }
+  const key = String(email || "").toLowerCase();
+  quizLog_().forEach(function (r) {
+    if (r.email !== key) return;
+    if (!r.counted) { skipped++; return; }
+    tries++;
+    if (best == null || r.score > best) best = r.score;
+    sum += r.score; last = r.score;
+  });
 
   const allQuiz = getStages_().filter(function (s) { return s.use === "小テスト"; }).length;
   return {
     round: round ? { id: round.id, parts: round.ids.length,
-                     titles: round.titles, startedAt: round.startedAt } : null,
+                     titles: round.titles, startedAt: round.startedAt,
+                     endsAt: roundEndsAt_(round), over: roundOver_(round, 0) } : null,
+    serverNow: Date.now(),
     taken: taken ? { parts: taken.parts, avg: taken.avg } : null,
     remain: quizStages_().length,      // 次の回に使える大問
     total: allQuiz,                    // 小テスト用として用意してある大問
@@ -1091,6 +1174,7 @@ function quizStatus_(email) {
  * クラス全員が同じ大問に取り組み、1人1回だけ受けられる。
  */
 function startQuiz() {
+  clearMemo_();
   try {
     const email = resolveEmail_(null);
     const me = email ? findByEmail_(email) : null;
@@ -1099,6 +1183,10 @@ function startQuiz() {
     const round = activeRound_();
     if (!round) {
       return { ok: false, message: "いまは小テストの時間ではありません。" };
+    }
+    if (roundOver_(round, 0)) {
+      return { ok: false, over: true,
+        message: "この時間の小テストは、もう終わりました。先生の指示を待ちましょう。" };
     }
     const taken = roundTakenBy_(me.email, round.id);
     if (taken) {
@@ -1117,7 +1205,8 @@ function startQuiz() {
       parts: stages.length,
       stage: hideAnswers_([stages[0]])[0],
       limitSec: QUIZ_SEC,
-      startedAt: new Date().toISOString(),
+      endsAt: roundEndsAt_(round),      // クラス全員で同じ終了時刻
+      serverNow: Date.now(),            // 端末の時計がずれていても合わせられるように
       status: quizStatus_(me.email)
     };
   } catch (e) {
@@ -1127,6 +1216,7 @@ function startQuiz() {
 
 /** 「2つ目に挑戦する」を選んだときに、この回の2つ目を渡す */
 function nextQuizStage(exclude) {
+  clearMemo_();
   try {
     const email = resolveEmail_(null);
     const me = email ? findByEmail_(email) : null;
@@ -1134,12 +1224,16 @@ function nextQuizStage(exclude) {
 
     const round = activeRound_();
     if (!round) return { ok: false, message: "いまは小テストの時間ではありません。" };
+    if (roundOver_(round, 0)) {
+      return { ok: true, over: true, endsAt: roundEndsAt_(round), serverNow: Date.now() };
+    }
 
     const done = {};
     (exclude || []).forEach(function (id) { done[String(id)] = true; });
     const next = roundStages_(round).filter(function (s) { return !done[s.id]; })[0];
     if (!next) return { ok: true, noMore: true };
-    return { ok: true, stage: hideAnswers_([next])[0] };
+    return { ok: true, stage: hideAnswers_([next])[0],
+             endsAt: roundEndsAt_(round), serverNow: Date.now() };
   } catch (e) {
     return { ok: false, message: String(e.message || e) };
   }
@@ -1150,11 +1244,10 @@ function nextQuizStage(exclude) {
  * 記録した時点で、その大問の成績は確定する。
  */
 function submitQuizPart(payload) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(20000); } catch (e) {
-    return { ok: false, message: "混み合っています。少し待ってからもう一度お試しください。" };
-  }
+  // クラス全員がいっせいに送るので、待たせないことを第一にする。
+  // 集計シートの作り直しは後回しにし、二重記録はスクリプトプロパティで防ぐ。
   try {
+    clearMemo_();
     const p = payload || {};
     const email = resolveEmail_(p.email);
     const me = email ? findByEmail_(email) : null;
@@ -1180,7 +1273,9 @@ function submitQuizPart(payload) {
     const secs   = Math.max(0, Math.round(Number(p.seconds) || 0));
     const blur   = Math.max(0, Math.round(Number(p.blur) || 0));
     const keys   = Math.max(0, Math.round(Number(p.keys) || 0));
-    const timeUp = !!p.timeUp;
+    // 押した時点では間に合っていても、保存が遅れることがあるので少し余裕をみる
+    const late   = roundOver_(round, QUIZ_GRACE);
+    const timeUp = !!p.timeUp || late;
     const index  = Math.max(1, Math.round(Number(p.index) || 1));
     const sessionId = round.id;          // 回ID＝その授業の小テスト1回分
 
@@ -1220,7 +1315,10 @@ function submitQuizPart(payload) {
         "フォーカス離脱回数": blur, "キー入力回数": keys,
         "不正の疑い": fair.cheated ? "○" : "", "クライアント版": CLIENT_VERSION
       });
-      updateTotals_();
+      markTotalsDirty_();      // 集計シートは、生徒を待たせないようにあとで作り直す
+      // いま書いた1行を手元の控えにも足す（シートを読み直さずに状況を返すため）
+      quizLog_().push({ email: me.email.toLowerCase(), roundId: sessionId, stageId: sid,
+                        index: index, score: score, at: now_(), counted: fair.include });
     }
 
     const res = {
@@ -1236,8 +1334,6 @@ function submitQuizPart(payload) {
     return res;
   } catch (e) {
     return { ok: false, message: String(e.message || e) };
-  } finally {
-    try { lock.releaseLock(); } catch (e) {}
   }
 }
 
@@ -1257,13 +1353,10 @@ function getProgress_(email) {
   const prog = { best: {}, stats: {}, wrong: [], points: 0, maxPoints: 0, tries: 0, rankName: RANKS[RANKS.length - 1].name };
   Q_TYPES.forEach(function (t) { prog.stats[t] = { c: 0, t: 0 }; });
 
-  const ss = book_();
-
-  const shR = ss.getSheetByName(SH_RESULT);
-  if (shR && shR.getLastRow() >= 2) {
-    const m = headerMap_(shR);
-    const rows = shR.getRange(2, 1, shR.getLastRow() - 1, shR.getLastColumn()).getValues();
-    rows.forEach(function (r) {
+  const vR = sheetValues_(SH_RESULT);
+  if (vR.map["email"]) {
+    const m = vR.map;
+    vR.rows.forEach(function (r) {
       if (String(r[m["email"] - 1]).trim().toLowerCase() !== key) return;
       const sid = String(r[m["ステージID"] - 1]).trim();
       const sc  = Number(r[m["得点"] - 1]) || 0;
@@ -1272,12 +1365,11 @@ function getProgress_(email) {
     });
   }
 
-  const shA = ss.getSheetByName(SH_ANSWER);
-  if (shA && shA.getLastRow() >= 2) {
-    const m = headerMap_(shA);
-    const rows = shA.getRange(2, 1, shA.getLastRow() - 1, shA.getLastColumn()).getValues();
+  const vA = sheetValues_(SH_ANSWER);
+  if (vA.map["email"]) {
+    const m = vA.map;
     const latest = {};
-    rows.forEach(function (r) {
+    vA.rows.forEach(function (r) {
       if (String(r[m["email"] - 1]).trim().toLowerCase() !== key) return;
       const type = String(r[m["設問タイプ"] - 1]).trim();
       const ok   = String(r[m["正誤"] - 1]).trim() === "○";
@@ -1312,10 +1404,11 @@ function maxPoints_() {
    ============================================================ */
 function submitResult(payload) {
   const lock = LockService.getScriptLock();
-  try { lock.waitLock(20000); } catch (e) {
+  try { lock.waitLock(8000); } catch (e) {
     return { ok: false, message: "混み合っています。少し待ってからもう一度お試しください。" };
   }
   try {
+    clearMemo_();
     const p = payload || {};
 
     // 誰が解いたかは、クライアントの申告ではなくログイン中のアカウントで決める
@@ -1384,7 +1477,8 @@ function submitResult(payload) {
       shA.getRange(shA.getLastRow() + 1, 1, answerRows.length, H_ANSWER.length).setValues(answerRows);
     }
 
-    updateTotals_();
+    markTotalsDirty_();        // 集計シートは、生徒を待たせないようにあとで作り直す
+    clearMemo_();              // 書き込んだので、読み直す
 
     const prog = getProgress_(me.email);
     return {
@@ -1403,23 +1497,22 @@ function submitResult(payload) {
 function markOf_(i) { return ["ア", "イ", "ウ", "エ"][i] || "―"; }
 
 function alreadySaved_(sh, dedupe) {
-  if (sh.getLastRow() < 2) return false;
-  const m = headerMap_(sh);
-  const col = m["重複排除キー"];
+  const v = sheetValues_(SH_RESULT);
+  const col = v.map["重複排除キー"];
   if (!col) return false;
-  const vals = sh.getRange(2, col, sh.getLastRow() - 1, 1).getValues();
-  for (let i = 0; i < vals.length; i++) if (String(vals[i][0]) === dedupe) return true;
+  for (let i = 0; i < v.rows.length; i++) {
+    if (String(v.rows[i][col - 1]) === dedupe) return true;
+  }
   return false;
 }
 
 function bestOf_(email, stageId) {
   const key = String(email).toLowerCase();
-  const sh = book_().getSheetByName(SH_RESULT);
-  if (!sh || sh.getLastRow() < 2) return null;
-  const m = headerMap_(sh);
-  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+  const v = sheetValues_(SH_RESULT);
+  const m = v.map;
+  if (!m["email"]) return null;
   let best = null;
-  rows.forEach(function (r) {
+  v.rows.forEach(function (r) {
     if (String(r[m["email"] - 1]).trim().toLowerCase() !== key) return;
     if (String(r[m["ステージID"] - 1]).trim() !== String(stageId)) return;
     const sc = Number(r[m["得点"] - 1]) || 0;
@@ -1432,12 +1525,11 @@ function bestOf_(email, stageId) {
    集計・ランキング
    ============================================================ */
 function collectTotals_() {
-  const sh = book_().getSheetByName(SH_RESULT);
   const agg = {};
-  if (!sh || sh.getLastRow() < 2) return agg;
-  const m = headerMap_(sh);
-  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
-  rows.forEach(function (r) {
+  const v = sheetValues_(SH_RESULT);
+  const m = v.map;
+  if (!m["email"]) return agg;
+  v.rows.forEach(function (r) {
     const email = String(r[m["email"] - 1]).trim().toLowerCase();
     if (!email) return;
     if (!agg[email]) {
@@ -1481,21 +1573,14 @@ function rankedList_() {
 /** 小テストの成績を email ごとに集める */
 function collectQuiz_() {
   const agg = {};
-  const sh = book_().getSheetByName(SH_QUIZ);
-  if (!sh || sh.getLastRow() < 2) return agg;
-  const m = headerMap_(sh);
-  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
-  rows.forEach(function (r) {
-    const email = String(r[m["email"] - 1]).trim().toLowerCase();
-    if (!email) return;
-    if (!agg[email]) agg[email] = { tries: 0, best: null, sum: 0, skipped: 0, last: "" };
-    const a = agg[email];
-    a.last = String(r[m["保存日時"] - 1]);
-    if (!quizCounts_(r, m)) { a.skipped++; return; }
+  quizLog_().forEach(function (r) {
+    if (!agg[r.email]) agg[r.email] = { tries: 0, best: null, sum: 0, skipped: 0, last: "" };
+    const a = agg[r.email];
+    a.last = r.at;
+    if (!r.counted) { a.skipped++; return; }
     a.tries++;
-    const sc = Number(r[m["成績(%)"] - 1]) || 0;
-    if (a.best == null || sc > a.best) a.best = sc;
-    a.sum += sc;
+    if (a.best == null || r.score > a.best) a.best = r.score;
+    a.sum += r.score;
   });
   return agg;
 }
@@ -1537,7 +1622,9 @@ function updateTotals_() {
 }
 
 function rebuildTotals() {
+  clearMemo_();
   const n = updateTotals_();
+  try { PropertiesService.getScriptProperties().deleteProperty("totalsDirty"); } catch (e) {}
   const ui = tryUi_();
   if (ui) ui.alert(APP_NAME, "集計を再計算しました（" + n + "名）。", ui.ButtonSet.OK);
   return n;
@@ -1545,6 +1632,7 @@ function rebuildTotals() {
 
 /** 画面に出すランキング（上位20名＋自分） */
 function getRanking(claimed) {
+  clearMemo_();
   try {
     const email = resolveEmail_(claimed);
     const max = maxPoints_();
@@ -1567,6 +1655,7 @@ function getRanking(claimed) {
 
 /** 自分の解答履歴（新しい順） */
 function getMyHistory(limit, claimed) {
+  clearMemo_();
   try {
     const email = resolveEmail_(claimed);
     const sh = book_().getSheetByName(SH_RESULT);
