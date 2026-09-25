@@ -20,7 +20,7 @@ const SPREADSHEET_ID = "1Yuf_jzWZYfQKaYuZV6LN6-RDAODoOLeX-uyn9nYecwU";
 const MASTER_ID      = "1OaMsGfk_-s-BMa_osO3d8hwK04ikP0G34J7TWbs2lJo";
 
 /** index.html 側の CLIENT_VERSION と必ず同じ値にすること */
-const CLIENT_VERSION = 9;
+const CLIENT_VERSION = 10;
 
 const APP_NAME = "古典クエスト";
 
@@ -46,12 +46,13 @@ const SH_TOTAL  = PREFIX + "集計";
 const SH_ISSUE  = PREFIX + "疑義報告";
 const SH_CONFIG = PREFIX + "設定";
 const SH_QUIZ   = PREFIX + "小テスト";
+const SH_ROUND  = PREFIX + "小テスト回";
 
 const CACHE_KEY   = "kobun_pool_v1";
 const CACHE_SEC   = 21600;              // 問題プールのキャッシュ 6時間
 const TARGET_SEC  = 300;                // 1ステージの目安時間（5分・画面表示用）
 const QUIZ_SEC    = 300;                // 小テストの制限時間（5分）
-const QUIZ_COUNT  = 2;                  // 小テストで出す大問の数（5分でこの数に挑戦する）
+const QUIZ_COUNT  = 2;                  // 1回の小テストで使う大問の数（クラス全員に同じものを出す）
 
 /* --- 連打・速すぎる解答を成績から外すための目安 ---
  * 「速すぎる」かつ「正答率が高い」回だけを成績に入れません。
@@ -116,6 +117,31 @@ function sheet_(name, headers) {
   }
   return sh;
 }
+/**
+ * 見出し名で1行追加する。既存シートに無い見出しは右端に足すので、
+ * あとから列が増えても、前からある列がずれない。
+ */
+function appendByHeader_(sh, headers, obj) {
+  let m = headerMap_(sh);
+  const missing = headers.filter(function (h) { return !m[h]; });
+  if (missing.length) {
+    const from = sh.getLastColumn() + 1;
+    const style = sh.getRange(1, 1);
+    sh.getRange(1, from, 1, missing.length).setValues([missing])
+      .setFontWeight("bold")
+      .setBackground(style.getBackground())
+      .setFontColor(style.getFontColor());
+    m = headerMap_(sh);
+  }
+  const width = sh.getLastColumn();
+  const row = new Array(width).fill("");
+  Object.keys(obj).forEach(function (k) {
+    const c = m[k];
+    if (c) row[c - 1] = obj[k];
+  });
+  sh.appendRow(row);
+}
+
 function headerMap_(sh) {
   const last = sh.getLastColumn();
   if (last < 1) return {};
@@ -156,7 +182,14 @@ const H_TOTAL  = ["順位","email","氏名","組","番号","累計得点","満�
 const H_QUIZ   = ["UUID","保存日時","email","氏名","組","番号","回ID","何問目",
                   "成績(%)","成績に反映","除外理由","ステージID","ステージ名",
                   "問題数","正答数","所要時間(秒)","1問あたり(秒)","解答間隔の中央値(秒)","時間切れ",
-                  "誤答問題ID","正答問題ID","フォーカス離脱回数","クライアント版"];
+                  "誤答問題ID","正答問題ID","フォーカス離脱回数","クライアント版",
+                  "キー入力回数","不正の疑い"];
+
+/** 小テストの「回」。1回＝クラス全員に同じ大問を出す1コマぶん */
+const H_ROUND  = ["回ID","開始日時","終了日時","状態","ステージID1","ステージ名1",
+                  "ステージID2","ステージ名2","開始した先生"];
+const ROUND_OPEN = "実施中";
+const ROUND_DONE = "終了";
 
 const H_ISSUE  = ["UUID","報告日時","email","氏名","結果UUID","問題ID","設問文",
                   "選択肢ア","選択肢イ","選択肢ウ","選択肢エ","正解","生徒の回答",
@@ -354,6 +387,7 @@ function setupSheets() {
   sheet_(SH_TOTAL,  H_TOTAL);
   sheet_(SH_ISSUE,  H_ISSUE);
   sheet_(SH_QUIZ,   H_QUIZ);
+  sheet_(SH_ROUND,  H_ROUND);
 
   const ss = book_();
   if (!ss.getSheetByName(SH_ROSTER)) sheet_(SH_ROSTER, H_ROSTER);
@@ -407,19 +441,61 @@ function onOpen() {
 function quizModeOn()  { toggleQuizFromMenu_(true); }
 function quizModeOff() { toggleQuizFromMenu_(false); }
 function toggleQuizFromMenu_(on) {
+  const ui = tryUi_();
+  const r = switchQuizMode_(on, "");
+  const msg = r.ok ? quizModeMessage_(r) : ("できませんでした。\n" + r.message);
+  if (ui) ui.alert(APP_NAME, msg, ui.ButtonSet.OK); else Logger.log(msg);
+}
+
+/** 小テストモードの開始／終了に共通の処理 */
+function switchQuizMode_(on, byEmail) {
+  try {
+    let round = null, reused = false, closed = null;
+    if (on) {
+      const r = startRound_(byEmail);
+      if (!r.ok) return r;
+      round = r.round; reused = r.reused;
+    } else {
+      closed = endRound_();
+    }
+    writeConfigFlag_("小テストモード", !!on);
+    return { ok: true, quizMode: !!on, round: round, reused: reused, closed: closed,
+             remain: quizStages_().length };
+  } catch (e) {
+    return { ok: false, message: String(e.message || e) };
+  }
+}
+
+function quizModeMessage_(r) {
+  if (!r.quizMode) {
+    return "小テストモードを終了しました。生徒は通常の練習に戻ります。\n\n" +
+      (r.closed
+        ? "この回で使った大問（" + r.closed.titles.join("／") + "）は、\n" +
+          "これから練習でも解けるようになります。\n\n"
+        : "") +
+      "小テストに使える大問は、あと " + r.remain + " 本です。";
+  }
+  return (r.reused ? "小テストモードを続けています。\n\n" : "小テストモードを開始しました。\n\n") +
+    "この回の大問（クラス全員が同じ問題に取り組みます）\n" +
+    r.round.titles.map(function (t, i) { return "　" + (i + 1) + "つ目　" + t; }).join("\n") + "\n\n" +
+    "・生徒は画面を再読み込みすると小テストに変わります。\n" +
+    "・1人1回だけです。途中でやめても受け直せません。\n" +
+    "・終わったら必ず「小テストモードを終了」を実行してください。\n" +
+    "　終了すると、この2本は次の回には出ず、練習で解けるようになります。\n\n" +
+    "次の回に使える大問は、残り " + Math.max(0, r.remain) + " 本です。";
+}
+
+/** 設定シートの1行を書き換える（無ければ足す） */
+function writeConfigFlag_(key, value) {
   const ss = book_();
   let sh = ss.getSheetByName(SH_CONFIG);
   if (!sh) { setupSheets(); sh = ss.getSheetByName(SH_CONFIG); }
   const last = Math.max(sh.getLastRow(), 1);
   const rows = sh.getRange(1, 1, last, 1).getValues();
   let at = 0;
-  rows.forEach(function (r, i) { if (String(r[0]).trim() === "小テストモード") at = i + 1; });
-  if (!at) { at = last + 1; sh.getRange(at, 1).setValue("小テストモード").setFontWeight("bold"); }
-  sh.getRange(at, 2).setValue(!!on);
-  const ui = tryUi_();
-  if (ui) ui.alert(APP_NAME, on
-    ? "小テストモードを開始しました。\n生徒の画面は小テストに切り替わります（再読み込みが必要です）。\n終わったら必ず「小テストモードを終了」を実行してください。"
-    : "小テストモードを終了しました。生徒は通常の練習に戻ります。", ui.ButtonSet.OK);
+  rows.forEach(function (r, i) { if (String(r[0]).trim() === key) at = i + 1; });
+  if (!at) { at = last + 1; sh.getRange(at, 1).setValue(key).setFontWeight("bold"); }
+  sh.getRange(at, 2).setValue(value);
 }
 
 /** 用途列が無い・空の問題マスターに、練習／小テストの既定を書き込む */
@@ -523,21 +599,16 @@ function readConfig_() {
   return cfg;
 }
 
-/** 小テストモードの切り替え（教員のみ） */
+/** 小テストモードの切り替え（教員のみ）。開始すると、その回の大問2つが決まる */
 function setQuizMode(on) {
   try {
     const email = resolveEmail_(null);
     if (!email || !isTeacher_(email)) return { ok: false, message: "先生のアカウントでのみ切り替えられます。" };
-    const ss = book_();
-    let sh = ss.getSheetByName(SH_CONFIG);
-    if (!sh) { setupSheets(); sh = ss.getSheetByName(SH_CONFIG); }
-    const last = Math.max(sh.getLastRow(), 1);
-    const rows = sh.getRange(1, 1, last, 2).getValues();
-    let at = 0;
-    rows.forEach(function (r, i) { if (String(r[0]).trim() === "小テストモード") at = i + 1; });
-    if (!at) { at = last + 1; sh.getRange(at, 1).setValue("小テストモード").setFontWeight("bold"); }
-    sh.getRange(at, 2).setValue(!!on);
-    return { ok: true, quizMode: !!on };
+    const r = switchQuizMode_(!!on, email);
+    if (!r.ok) return r;
+    return { ok: true, quizMode: r.quizMode, reused: r.reused, remain: r.remain,
+             round: r.round ? { id: r.round.id, titles: r.round.titles, count: r.round.ids.length } : null,
+             closed: r.closed ? { titles: r.closed.titles } : null };
   } catch (e) {
     return { ok: false, message: String(e.message || e) };
   }
@@ -722,13 +793,29 @@ function loadPool_() {
   return usable;
 }
 
-/** 練習で出すステージ（問題マスターの用途が「練習」のもの） */
+/**
+ * 練習で出すステージ。
+ * 用途が「練習」のものに加えて、小テストで一度使い終わった大問も練習に回る。
+ */
 function practiceStages_() {
-  return getStages_().filter(function (s) { return s.use !== "小テスト"; });
+  const opened = finishedQuizIds_();
+  return getStages_().filter(function (s) {
+    return s.use !== "小テスト" || opened[s.id];
+  });
 }
-/** 小テストで出すステージ */
+/** 小テストにまだ使っていない大問（次の回に出せるもの） */
 function quizStages_() {
-  return getStages_().filter(function (s) { return s.use === "小テスト"; });
+  const used = usedQuizIds_();
+  return getStages_().filter(function (s) {
+    return s.use === "小テスト" && !used[s.id];
+  });
+}
+/** 回で指定された大問を、順番どおりに取り出す */
+function roundStages_(round) {
+  const by = {};
+  getStages_().forEach(function (s) { by[s.id] = s; });
+  return (round.ids || []).map(function (id) { return by[id]; })
+                          .filter(function (s) { return !!s; });
 }
 /** 採点前に画面へ渡す用。正解と解説を落とす */
 function hideAnswers_(stages) {
@@ -745,24 +832,133 @@ function hideAnswers_(stages) {
 }
 
 /* ============================================================
-   小テスト
+   小テストの「回」
+   1回＝その授業の1コマ。クラス全員が同じ大問2つに取り組む。
+   使い終わった大問は、次の回には出ず、練習に回る。
    ============================================================ */
-/** その生徒が小テストですでに出題されたステージID */
-function quizServedIds_(email) {
-  const key = String(email || "").toLowerCase();
-  const done = {};
-  const sh = book_().getSheetByName(SH_QUIZ);
-  if (!sh || sh.getLastRow() < 2) return done;
+function roundSheet_() { return sheet_(SH_ROUND, H_ROUND); }
+
+/** 回シートの全行を読む（古い順） */
+function roundRows_() {
+  const sh = book_().getSheetByName(SH_ROUND);
+  if (!sh || sh.getLastRow() < 2) return [];
   const m = headerMap_(sh);
   const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
-  rows.forEach(function (r) {
-    if (String(r[m["email"] - 1]).trim().toLowerCase() !== key) return;
-    const id = String(r[m["ステージID"] - 1]).trim();
-    if (id) done[id] = true;
+  const out = [];
+  rows.forEach(function (r, i) {
+    const id = String(r[m["回ID"] - 1] || "").trim();
+    if (!id) return;
+    const ids = [], titles = [];
+    [["ステージID1", "ステージ名1"], ["ステージID2", "ステージ名2"]].forEach(function (pair) {
+      const c = m[pair[0]];
+      const sid = c ? String(r[c - 1] || "").trim() : "";
+      if (sid) { ids.push(sid); titles.push(m[pair[1]] ? String(r[m[pair[1]] - 1] || "") : ""); }
+    });
+    out.push({ row: i + 2, id: id, state: String(r[m["状態"] - 1] || "").trim(),
+               startedAt: String(r[m["開始日時"] - 1] || ""),
+               ids: ids, titles: titles });
   });
-  return done;
+  return out;
 }
 
+/** いま実施中の回（無ければ null） */
+function activeRound_() {
+  const rows = roundRows_();
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i].state === ROUND_OPEN) return rows[i];
+  }
+  return null;
+}
+
+/** これまでの回で使った大問ID（実施中の回も含む＝次の回には出さない） */
+function usedQuizIds_() {
+  const d = {};
+  roundRows_().forEach(function (r) { r.ids.forEach(function (id) { d[id] = true; }); });
+  return d;
+}
+
+/** 終わった回で使った大問ID（＝練習に出してよいもの） */
+function finishedQuizIds_() {
+  const d = {};
+  roundRows_().forEach(function (r) {
+    if (r.state === ROUND_DONE) r.ids.forEach(function (id) { d[id] = true; });
+  });
+  return d;
+}
+
+/** 新しい回を始める。未使用の大問から QUIZ_COUNT 本を選んで固定する */
+function startRound_(byEmail) {
+  const open = activeRound_();
+  if (open) return { ok: true, round: open, reused: true };
+
+  const pool = quizStages_().slice();
+  if (!pool.length) {
+    return { ok: false, message: "小テストに使える大問が残っていません。\n" +
+      "問題マスターの「用途」列に「小テスト」の大問を足してください。" };
+  }
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+  }
+  const use = pool.slice(0, QUIZ_COUNT);
+  const sh  = roundSheet_();
+  const id  = uuid_();
+  sh.appendRow([
+    id, now_(), "", ROUND_OPEN,
+    use[0] ? use[0].id : "", use[0] ? use[0].title : "",
+    use[1] ? use[1].id : "", use[1] ? use[1].title : "",
+    byEmail || ""
+  ]);
+  return { ok: true, reused: false,
+    round: { id: id, state: ROUND_OPEN, startedAt: now_(),
+             ids: use.map(function (s) { return s.id; }),
+             titles: use.map(function (s) { return s.title; }) } };
+}
+
+/** 実施中の回を終わらせる。使った大問はここで練習に回る */
+function endRound_() {
+  const sh = book_().getSheetByName(SH_ROUND);
+  if (!sh || sh.getLastRow() < 2) return null;
+  const m = headerMap_(sh);
+  const rows = roundRows_();
+  let closed = null;
+  rows.forEach(function (r) {
+    if (r.state !== ROUND_OPEN) return;
+    sh.getRange(r.row, m["状態"]).setValue(ROUND_DONE);
+    sh.getRange(r.row, m["終了日時"]).setValue(now_());
+    closed = r;
+  });
+  return closed;
+}
+
+/** その生徒が、この回の小テストをもう受けたか */
+function roundTakenBy_(email, roundId) {
+  const key = String(email || "").toLowerCase();
+  const sh = book_().getSheetByName(SH_QUIZ);
+  if (!sh || sh.getLastRow() < 2) return null;
+  const m = headerMap_(sh);
+  if (!m["回ID"]) return null;
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+  const mine = [];
+  rows.forEach(function (r) {
+    if (String(r[m["email"] - 1]).trim().toLowerCase() !== key) return;
+    if (String(r[m["回ID"] - 1]).trim() !== String(roundId)) return;
+    mine.push({ stageId: String(r[m["ステージID"] - 1] || "").trim(),
+                index: Number(r[m["何問目"] - 1]) || 0,
+                score: Number(r[m["成績(%)"] - 1]) || 0,
+                counted: quizCounts_(r, m) });
+  });
+  if (!mine.length) return null;
+  const counted = mine.filter(function (x) { return x.counted; });
+  const avg = counted.length
+      ? Math.round(counted.reduce(function (a, x) { return a + x.score; }, 0) / counted.length)
+      : null;
+  return { parts: mine.length, avg: avg, ids: mine.map(function (x) { return x.stageId; }) };
+}
+
+/* ============================================================
+   小テスト
+   ============================================================ */
 /** 解答の速さを測る。stamps は { 問題ID: 開始からのミリ秒 } */
 function paceOf_(stamps, secs, total) {
   const ms = [];
@@ -793,8 +989,19 @@ function paceOf_(stamps, secs, total) {
            effSec: Math.round(effSec * 10) / 10 };
 }
 
-/** 成績に入れてよい回かどうかを判定する */
-function fairnessOf_(pace, score, answered, total) {
+/**
+ * 成績に入れてよい大問かどうかを判定する。
+ * ・ほかの画面に移った／キーボードを使った → 不正あつかい（成績に入れない）
+ * ・速すぎる、かつ正答率が高い → 成績に入れない
+ */
+function fairnessOf_(pace, score, answered, total, blur, keys) {
+  const cheat = [];
+  if (blur > 0) cheat.push("ほかの画面に移りました（" + blur + "回）");
+  if (keys > 0) cheat.push("キーボードを使いました（" + keys + "回）");
+  if (cheat.length) {
+    return { include: false, cheated: true, reason: cheat.join("・") };
+  }
+
   const reasons = [];
   // 未解答が多い回は、そもそも速くて当然なので対象にしない
   const fastPerQ = (answered >= 2) && (pace.perQ < FAIR_MIN_SEC_PER_Q);
@@ -803,9 +1010,9 @@ function fairnessOf_(pace, score, answered, total) {
   if (burst)    reasons.push("解答間隔の中央値" + pace.medGap + "秒");
 
   if ((fastPerQ || burst) && score >= FAIR_SUSPECT_RATE) {
-    return { include: false, reason: "速すぎます（" + reasons.join("・") + "）" };
+    return { include: false, cheated: false, reason: "速すぎます（" + reasons.join("・") + "）" };
   }
-  return { include: true, reason: "" };
+  return { include: true, cheated: false, reason: "" };
 }
 
 /** 記録の1行を成績に入れてよいか。先生が「×」に書き換えた行は外れる */
@@ -816,12 +1023,10 @@ function quizCounts_(row, m) {
   return v !== "×" && v !== "x" && v.toUpperCase() !== "FALSE";
 }
 
-/** 小テストの状況（残りの問題数・最高正答率） */
+/** 小テストの状況（この回のこと＋これまでの成績） */
 function quizStatus_(email) {
-  const done = quizServedIds_(email);
-  const pool = quizStages_();
-  let remain = 0;
-  pool.forEach(function (s) { if (!done[s.id]) remain++; });
+  const round = activeRound_();
+  const taken = round ? roundTakenBy_(email, round.id) : null;
 
   let best = null, sum = 0, tries = 0, last = null, skipped = 0;
   const sh = book_().getSheetByName(SH_QUIZ);
@@ -838,24 +1043,23 @@ function quizStatus_(email) {
       sum += sc; last = sc;
     });
   }
-  return { remain: remain, total: pool.length, tries: tries, skipped: skipped,
-           best: best, avg: tries ? Math.round(sum / tries) : null, last: last,
-           limitSec: QUIZ_SEC, maxParts: QUIZ_COUNT };
-}
 
-/** まだ出していない大問から1本ランダムに選ぶ（正解は含めない） */
-function pickQuizStage_(email, exclude) {
-  const done = quizServedIds_(email);
-  (exclude || []).forEach(function (id) { done[id] = true; });
-  const pool = quizStages_().filter(function (s) { return !done[s.id]; });
-  if (!pool.length) return null;
-  return pool[Math.floor(Math.random() * pool.length)];
+  const allQuiz = getStages_().filter(function (s) { return s.use === "小テスト"; }).length;
+  return {
+    round: round ? { id: round.id, parts: round.ids.length,
+                     titles: round.titles, startedAt: round.startedAt } : null,
+    taken: taken ? { parts: taken.parts, avg: taken.avg } : null,
+    remain: quizStages_().length,      // 次の回に使える大問
+    total: allQuiz,                    // 小テスト用として用意してある大問
+    tries: tries, skipped: skipped, best: best,
+    avg: tries ? Math.round(sum / tries) : null, last: last,
+    limitSec: QUIZ_SEC, maxParts: QUIZ_COUNT
+  };
 }
 
 /**
- * 小テストを始める。まず1問目（大問1つ）だけを返す。
- * 2問目は「2つ目に挑戦する」を選んだときに初めて渡すので、
- * 先に読まれてしまうことがない。
+ * 小テストを始める。いま実施中の回で決まっている1つ目を返す。
+ * クラス全員が同じ大問に取り組み、1人1回だけ受けられる。
  */
 function startQuiz() {
   try {
@@ -863,24 +1067,26 @@ function startQuiz() {
     const me = email ? findByEmail_(email) : null;
     if (!me) return { ok: false, message: "ログイン状態が確認できません。ページを再読み込みしてください。" };
 
-    const cfg = readConfig_();
-    if (!cfg.quizMode && !me.teacher) {
+    const round = activeRound_();
+    if (!round) {
       return { ok: false, message: "いまは小テストの時間ではありません。" };
     }
-
-    const st = pickQuizStage_(me.email, []);
-    if (!st) {
-      const none = (quizStages_().length === 0);
-      return { ok: false, remain: 0, noPool: none,
-        message: none
-          ? "小テスト用の問題がまだ設定されていません。先生にお知らせください。"
-          : "小テストで出せる問題が、もうありません。先生にお知らせください。" };
+    const taken = roundTakenBy_(me.email, round.id);
+    if (taken) {
+      return { ok: false, taken: true,
+        message: "この時間の小テストは、すでに受けています。" +
+          (taken.avg != null ? "（成績 " + taken.avg + "％）" : "") };
+    }
+    const stages = roundStages_(round);
+    if (!stages.length) {
+      return { ok: false, message: "この回の問題が読み込めませんでした。先生にお知らせください。" };
     }
     return {
       ok: true,
-      sessionId: uuid_(),
+      sessionId: round.id,
       index: 1,
-      stage: hideAnswers_([st])[0],
+      parts: stages.length,
+      stage: hideAnswers_([stages[0]])[0],
       limitSec: QUIZ_SEC,
       startedAt: new Date().toISOString(),
       status: quizStatus_(me.email)
@@ -890,17 +1096,21 @@ function startQuiz() {
   }
 }
 
-/** 「2つ目に挑戦する」を選んだときに、次の大問を渡す */
+/** 「2つ目に挑戦する」を選んだときに、この回の2つ目を渡す */
 function nextQuizStage(exclude) {
   try {
     const email = resolveEmail_(null);
     const me = email ? findByEmail_(email) : null;
     if (!me) return { ok: false, message: "ログイン状態が確認できません。ページを再読み込みしてください。" };
-    const cfg = readConfig_();
-    if (!cfg.quizMode && !me.teacher) return { ok: false, message: "いまは小テストの時間ではありません。" };
-    const nx = pickQuizStage_(me.email, exclude || []);
-    if (!nx) return { ok: true, noMore: true };
-    return { ok: true, stage: hideAnswers_([nx])[0] };
+
+    const round = activeRound_();
+    if (!round) return { ok: false, message: "いまは小テストの時間ではありません。" };
+
+    const done = {};
+    (exclude || []).forEach(function (id) { done[String(id)] = true; });
+    const next = roundStages_(round).filter(function (s) { return !done[s.id]; })[0];
+    if (!next) return { ok: true, noMore: true };
+    return { ok: true, stage: hideAnswers_([next])[0] };
   } catch (e) {
     return { ok: false, message: String(e.message || e) };
   }
@@ -922,16 +1132,28 @@ function submitQuizPart(payload) {
     if (!me) return { ok: false, message: "ログイン状態が確認できません。ページを再読み込みしてください。" };
 
     const sid = String(p.stageId || "");
+    const round = activeRound_();
+    if (!round) return { ok: false, message: "いまは小テストの時間ではありません。" };
+    if (round.ids.indexOf(sid) < 0) {
+      return { ok: false, message: "この回の問題ではありません。ページを再読み込みしてください。" };
+    }
     let stage = null;
-    quizStages_().forEach(function (s) { if (s.id === sid) stage = s; });
+    roundStages_(round).forEach(function (s) { if (s.id === sid) stage = s; });
     if (!stage) return { ok: false, message: "問題が見つかりません。もう一度やり直してください。" };
+
+    // 同じ回の同じ大問は、1人1回だけ
+    const already = roundTakenBy_(me.email, round.id);
+    if (already && already.ids.indexOf(sid) >= 0) {
+      return { ok: false, taken: true, message: "この大問は、すでに提出しています。" };
+    }
 
     const picks  = p.picks || {};
     const secs   = Math.max(0, Math.round(Number(p.seconds) || 0));
     const blur   = Math.max(0, Math.round(Number(p.blur) || 0));
+    const keys   = Math.max(0, Math.round(Number(p.keys) || 0));
     const timeUp = !!p.timeUp;
     const index  = Math.max(1, Math.round(Number(p.index) || 1));
-    const sessionId = String(p.sessionId || "");
+    const sessionId = round.id;          // 回ID＝その授業の小テスト1回分
 
     let total = 0, correct = 0;
     const detail = [], wrongIds = [], rightIds = [];
@@ -953,24 +1175,30 @@ function submitQuizPart(payload) {
       return picks[k] != null && picks[k] !== "";
     }).length;
     const pace = paceOf_(p.stamps, secs, total);
-    const fair = fairnessOf_(pace, score, answered, total);
+    const fair = fairnessOf_(pace, score, answered, total, blur, keys);
 
     const sh = sheet_(SH_QUIZ, H_QUIZ);
     const dedupe = [me.email, sessionId, sid, String(index)].join("|");
     if (!alreadyQuizSaved_(sh, dedupe)) {
-      sh.appendRow([
-        uuid_(), now_(), me.email, me.name, me.klass, me.no, sessionId, index,
-        score, fair.include ? "○" : "×", fair.reason, sid, stage.title,
-        total, correct, secs, pace.perQ, pace.medGap == null ? "" : pace.medGap,
-        timeUp ? "○" : "", wrongIds.join(","), rightIds.join(","), blur, CLIENT_VERSION
-      ]);
+      appendByHeader_(sh, H_QUIZ, {
+        "UUID": uuid_(), "保存日時": now_(), "email": me.email, "氏名": me.name,
+        "組": me.klass, "番号": me.no, "回ID": sessionId, "何問目": index,
+        "成績(%)": score, "成績に反映": fair.include ? "○" : "×", "除外理由": fair.reason,
+        "ステージID": sid, "ステージ名": stage.title,
+        "問題数": total, "正答数": correct, "所要時間(秒)": secs,
+        "1問あたり(秒)": pace.perQ, "解答間隔の中央値(秒)": pace.medGap == null ? "" : pace.medGap,
+        "時間切れ": timeUp ? "○" : "", "誤答問題ID": wrongIds.join(","), "正答問題ID": rightIds.join(","),
+        "フォーカス離脱回数": blur, "キー入力回数": keys,
+        "不正の疑い": fair.cheated ? "○" : "", "クライアント版": CLIENT_VERSION
+      });
       updateTotals_();
     }
 
     const res = {
       ok: true, index: index, stageId: sid, title: stage.title, src: stage.src,
       total: total, correct: correct, score: score,
-      counted: fair.include, reason: fair.reason, pace: pace,
+      counted: fair.include, cheated: !!fair.cheated, reason: fair.reason, pace: pace,
+      blur: blur, keys: keys,
       timeUp: timeUp, seconds: secs, detail: detail,
       status: quizStatus_(me.email)
     };
@@ -1372,13 +1600,17 @@ function showExcludedQuiz() {
   const out = [];
   rows.forEach(function (r, i) {
     if (quizCounts_(r, m)) return;
-    out.push((i + 2) + "行目　" + String(r[m["氏名"] - 1] || r[m["email"] - 1]) +
+    const cheat = m["不正の疑い"] && String(r[m["不正の疑い"] - 1]).trim() === "○";
+    out.push((i + 2) + "行目　" + (cheat ? "【不正】" : "【速すぎ】") +
+             String(r[m["氏名"] - 1] || r[m["email"] - 1]) +
              "　" + String(r[m["ステージ名"] - 1] || "") +
              "　成績" + r[m["成績(%)"] - 1] + "％　" + String(r[m["除外理由"] - 1] || ""));
   });
   ui.alert(APP_NAME + "　成績に入れなかった小テスト",
     out.length ? (out.length + "件\n\n" + out.slice(0, 30).join("\n") +
-      "\n\n※ 問題ないと判断したら、その行の「成績に反映」を ○ に書き換えてください。次の集計から数えられます。")
+      "\n\n※【不正】＝解答中にほかの画面に移った、またはキーボードを使った回です。\n" +
+      "　　成績には入りませんが、記録は残ります。0点として扱うかは先生がお決めください。\n" +
+      "※ 問題ないと判断したら、その行の「成績に反映」を ○ に書き換えてください。次の集計から数えられます。")
       : "ありません。",
     ui.ButtonSet.OK);
 }

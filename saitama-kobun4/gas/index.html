@@ -377,12 +377,14 @@
         <b>制限時間は5分。まず大問1つを解きます。</b>
         <span>解き終わったら、<b>その成績で終えるか、2つ目にも挑戦するか</b>を選べます。</span>
         <span>2つ目に進むと、<b>1つ目と2つ目の両方が成績として記録されます</b>。</span>
+        <span><b>受けられるのは1人1回だけ</b>です。やり直しはできません。</span>
+        <span><b>ほかの画面に移る・キーボードを使う</b>と、その大問は成績に入りません。</span>
       </div>
       <div class="msg" id="quizMsg"></div>
       <div class="toolrow" style="margin-top:16px">
         <button class="btn primary" id="quizStart" onclick="startQuiz()">小テストを始める</button>
       </div>
-      <p class="hint" style="margin-top:14px">・制限時間は<b>5分</b>。0になると自動で提出されます。<br>・答えていない問題は<b>不正解</b>になります。<br>・一度出た問題は、二度と小テストには出ません。</p>
+      <p class="hint" style="margin-top:14px">・制限時間は<b>5分</b>。0になると自動で提出されます。<br>・答えていない問題は<b>不正解</b>になります。<br>・この時間の問題は<b>クラス全員同じ</b>です。<br>・一度小テストに使った大問は、次の小テストには出ません（練習では解けるようになります）。</p>
     </div>
   </section>
 
@@ -474,7 +476,8 @@
     <span class="qprog" id="qProg"></span>
     <span class="countdown" id="qClock">5:00</span>
   </div>
-  <div class="quizbar">この画面を閉じたり、ほかのページに移ったりしないでください。答えていない問題は不正解になります。</div>
+  <div class="quizbar">この画面を閉じたり、ほかのページに移ったりしないでください。<b>ほかの画面に移る・キーボードを使う</b>と、その大問は成績に入りません。答えていない問題は不正解になります。</div>
+  <div class="msg err hidden" id="qWarn"></div>
   <div id="qBody"></div>
   <div class="actions">
     <button class="btn primary" id="qSubmit" onclick="submitPart(false)">解答を確定する</button>
@@ -554,7 +557,7 @@
    古典クエスト ― クライアント側
    ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
    ============================================================ */
-var CLIENT_VERSION = 9;
+var CLIENT_VERSION = 10;
 
 var MARK  = ['ア','イ','ウ','エ'];
 var TYPES = ['仮名遣い','主語・指示語','内容理解','要旨・話し合い'];
@@ -634,8 +637,18 @@ window.addEventListener('load', function(){
   });
   window.addEventListener('blur', function(){
     if(CUR!=null && !GRADED) BLUR++;
-    if(QZ && !QZ.sent) QZ.blur++;
+    noteViolation('blur');
   });
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden) noteViolation('blur');
+  });
+  // 小テスト中のキーボード操作は不正あつかい（解答はボタンを押すだけで足りる）
+  document.addEventListener('keydown', function(ev){
+    if(!quizAnswering()) return;
+    if(ev.key==='Shift'||ev.key==='Control'||ev.key==='Alt'||ev.key==='Meta') return;
+    ev.preventDefault();
+    noteViolation('key');
+  }, true);
   buildRepKinds();
   bootSession();
 });
@@ -1109,49 +1122,111 @@ function renderQuizPanel(){
   if(hero){
     if(!hero.dataset.normal) hero.dataset.normal=hero.innerHTML;
     hero.innerHTML = lock
-      ? 'いまは<b>小テストの時間</b>です。制限時間は<b>5分</b>。答えていない問題は不正解になります。'+
-        'よく読まずに連打した回は成績に入りません。終わったら先生の指示を待ちましょう。'
+      ? 'いまは<b>小テストの時間</b>です。制限時間は<b>5分</b>、受けられるのは<b>1人1回</b>だけ。'+
+        '答えていない問題は不正解になります。ほかの画面に移る・キーボードを使う・よく読まずに連打する、'+
+        'のいずれかがあった大問は成績に入りません。終わったら先生の指示を待ちましょう。'
       : hero.dataset.normal;
   }
 
   if(!quizOn()) return;
-  if(!QUIZ){ QUIZ={remain:0,total:0,tries:0,best:null,avg:null,maxParts:2}; }
-
-  var lead='残り<b>'+QUIZ.remain+'</b>／'+QUIZ.total+'本'+
-           (QUIZ.tries?'　これまで'+QUIZ.tries+'大問':'')+
-           (QUIZ.best!=null?'　最高成績 <b>'+QUIZ.best+'％</b>':'')+
-           (QUIZ.avg!=null?'　平均 '+QUIZ.avg+'％':'')+
-           (QUIZ.skipped?'　<span style="color:var(--ng)">成績に入らなかった大問 '+QUIZ.skipped+'</span>':'');
-  document.getElementById('quizLead').innerHTML=lead;
-
-  var one=(QUIZ.remain===1);
-  document.getElementById('quizStart').disabled=(QUIZ.remain<1);
+  if(!QUIZ){ QUIZ={remain:0,total:0,tries:0,best:null,avg:null,maxParts:2,round:null,taken:null}; }
 
   var teach=!!(ME && ME.teacher);
-  var msg='', kind='warn';
+  var round=QUIZ.round, taken=QUIZ.taken;
+
+  var lead = round
+    ? 'この時間の小テスト：<b>大問'+round.parts+'つ</b>（クラス全員が同じ問題です）'
+      + (teach&&round.titles&&round.titles.length ? '　<small>'+round.titles.map(esc).join('／')+'</small>' : '')
+    : '小テストはまだ始まっていません。';
+  lead += '<br><small>次の回に使える大問 <b>'+QUIZ.remain+'</b>／'+QUIZ.total+'本'
+       + (QUIZ.tries?'　これまで'+QUIZ.tries+'大問':'')
+       + (QUIZ.best!=null?'　最高成績 <b>'+QUIZ.best+'％</b>':'')
+       + (QUIZ.avg!=null?'　平均 '+QUIZ.avg+'％':'')
+       + (QUIZ.skipped?'　<span style="color:var(--ng)">成績に入らなかった大問 '+QUIZ.skipped+'</span>':'')
+       + '</small>';
+  document.getElementById('quizLead').innerHTML=lead;
+
+  var msg='', kind='warn', canStart=false;
   if(QUIZ.total<1){
-    // 在庫切れではなく、小テスト用の大問がそもそも登録されていない
     kind='err';
     msg = '<b>小テスト用の問題が、まだ設定されていません。</b>'
         + (teach
            ? '<br>集計スプレッドシートのメニュー「⚙ 古典クエスト管理」→'
              + '<b>「小テスト用の問題を割り当てる（用途列を整える）」</b>を実行してください。'
-             + '<br><small>問題マスターの「本文」シートに「用途」列を作り、練習5本／小テスト5本に振り分けます。</small>'
            : '<br>先生にお知らせください。');
-  }else if(QUIZ.remain<1){
-    msg='小テストで出せる問題が、もうありません。先生にお知らせください。';
-  }else if(one){
-    msg='残りが1本なので、今回は大問1つだけの出題になります。';
+  }else if(taken){
+    kind='ok';
+    msg = '<b>この時間の小テストは、受け終わりました。</b>'
+        + (taken.avg!=null ? '　成績 <b>'+taken.avg+'％</b>（大問'+taken.parts+'つ）' : '')
+        + '<br>先生の指示を待ちましょう。';
+  }else if(!round){
+    msg = teach
+      ? '「開始」を押すと、この回の大問'+Math.min(2,QUIZ.remain)+'つが決まり、クラス全員に同じ問題が出ます。'
+      : '先生が小テストを始めるまで待ちましょう。';
+  }else{
+    canStart=true;
+    if(round.parts<2) msg='この回は大問1つだけの出題です。';
   }
+  document.getElementById('quizStart').disabled=!canStart;
   setMsg('quizMsg', msg, kind, true);
 }
 
 function setQuiz(on){
+  if(on && !(QUIZ && QUIZ.round)){
+    var left=(QUIZ&&QUIZ.remain!=null)?QUIZ.remain:0;
+    if(left<1){ alert('小テストに使える大問が残っていません。\n問題マスターの「用途」列に「小テスト」の大問を足してください。'); return; }
+    var use=Math.min(2,left);
+    if(!confirm('小テストを始めます。\n\nこの回で大問'+use+'つを使います（残り'+left+'本）。\n'+
+                'クラス全員が同じ問題に取り組み、1人1回だけ受けられます。\n'+
+                '「終了」を押すと、この'+use+'本は次の回には出ず、練習で解けるようになります。\n\nよろしいですか。')) return;
+  }
   call('setQuizMode',[!!on], function(r){
     if(!r||!r.ok){ alert((r&&r.message)||'切り替えられませんでした。'); return; }
     SETTINGS.quizMode=r.quizMode;
+    if(r.quizMode && r.round){
+      QUIZ=QUIZ||{};
+      QUIZ.round={id:r.round.id, parts:r.round.count, titles:r.round.titles};
+      QUIZ.remain=r.remain;
+      if(!r.reused){
+        alert('小テストを始めました。\n\nこの回の大問（全員同じ）\n'+
+              r.round.titles.map(function(t,i){ return '　'+(i+1)+'つ目　'+t; }).join('\n')+
+              '\n\n生徒には「画面を再読み込みして」と伝えてください。');
+      }
+    }else if(!r.quizMode){
+      if(QUIZ){ QUIZ.round=null; QUIZ.taken=null; QUIZ.remain=r.remain; }
+      if(r.closed && r.closed.titles && r.closed.titles.length){
+        alert('小テストを終了しました。\n\n使った大問（'+r.closed.titles.join('／')+'）は、\n'+
+              'これから練習でも解けるようになります。\n\n'+
+              '※生徒の画面に反映するには、再読み込みが必要です。');
+      }
+    }
     renderQuizPanel();
   });
+}
+
+/* ---------- 不正（ほかの画面・キーボード）の監視 ---------- */
+/** いま小テストを解答中か（判断画面や結果画面では数えない） */
+function quizAnswering(){
+  var el=document.getElementById('quiz');
+  return !!(QZ && !QZ.sent && el && !el.classList.contains('hidden'));
+}
+
+function noteViolation(kind){
+  if(!quizAnswering()) return;
+  if(kind==='key'){ QZ.keys=(QZ.keys||0)+1; QZ.partKeys=(QZ.partKeys||0)+1; }
+  else            { QZ.blur=(QZ.blur||0)+1; QZ.partBlur=(QZ.partBlur||0)+1; }
+  paintViolation();
+}
+
+function paintViolation(){
+  if(!document.getElementById('qWarn')) return;
+  var b=(QZ&&QZ.partBlur)||0, k=(QZ&&QZ.partKeys)||0;
+  if(!b && !k){ setMsg('qWarn','','err',true); return; }
+  var what=[];
+  if(b) what.push('ほかの画面に移りました（'+b+'回）');
+  if(k) what.push('キーボードを使いました（'+k+'回）');
+  setMsg('qWarn','<b>この大問は成績に入りません。</b>　'+what.join('・')+
+    '<br><small>そのまま最後まで解いてください。記録は先生に残ります。</small>','err',true);
 }
 
 /* ---------- 実施 ---------- */
@@ -1161,12 +1236,12 @@ function startQuiz(){
   setMsg('quizMsg','');
   call('startQuiz',[], function(r){
     if(!r||!r.ok){
-      setMsg('quizMsg',(r&&r.message)||'始められませんでした。');
-      if(r&&r.remain!=null){ QUIZ.remain=r.remain; renderQuizPanel(); }
+      setMsg('quizMsg',(r&&r.message)||'始められませんでした。', r&&r.taken?'ok':'err');
+      document.getElementById('quizStart').disabled=true;
       return;
     }
     QZ={ sessionId:r.sessionId, limit:r.limitSec||300, startedAt:r.startedAt,
-         blur:0, done:[] };       // done に大問ごとの結果をためる
+         parts:r.parts||2, blur:0, keys:0, done:[] };   // done に大問ごとの結果をためる
     QUIZ=r.status||QUIZ;
     openPart(r.stage, r.index||1);
     startQClock(QZ.limit);
@@ -1178,8 +1253,10 @@ function startQuiz(){
 function openPart(stage, index){
   QZ.stage=stage; QZ.index=index;
   QZ.picks={}; QZ.stamps={}; QZ.t0=Date.now(); QZ.sent=false;
+  QZ.partBlur=0; QZ.partKeys=0; paintViolation();
+  var lastPart=(index>=(QZ.parts||2));
   document.getElementById('qSub').textContent=
-    index+'つ目　'+stage.qs.length+'問'+(index===1?'（このあと続けるか選べます）':'（最後の大問です）');
+    index+'つ目　'+stage.qs.length+'問'+(lastPart?'（最後の大問です）':'（このあと続けるか選べます）');
   document.getElementById('qSubmit').disabled=false;
   document.getElementById('qSubmit').textContent='解答を確定する';
   document.getElementById('qBody').innerHTML=
@@ -1284,7 +1361,7 @@ function submitPart(auto){
     email: ME.email, sessionId: QZ.sessionId, index: QZ.index, stageId: QZ.stage.id,
     picks: QZ.picks, stamps: QZ.stamps,
     seconds: Math.round((Date.now()-startedPart)/1000),
-    blur: QZ.blur||0, timeUp: !!auto
+    blur: QZ.partBlur||0, keys: QZ.partKeys||0, timeUp: !!auto
   }], function(r){
     if(!r||!r.ok){
       QZ.sent=false;
@@ -1296,7 +1373,7 @@ function submitPart(auto){
     r.stage=QZ.stage;
     QZ.done.push(r);
     QUIZ=r.status||QUIZ;
-    if(auto || QZ.index>=2){ finishQuiz(false); return; }   // 時間切れ、または2つ目が終わった
+    if(auto || QZ.index>=(QZ.parts||2)){ finishQuiz(false); return; }   // 時間切れ、または最後の大問が終わった
     paintMid(r);                                            // 続けるか決める
     show('qmid');
   }, function(m){
@@ -1379,9 +1456,12 @@ function paintQuizResult(parts, noMore){
 
   var bad=parts.filter(function(x){ return x.counted===false; });
   if(bad.length){
+    var cheat=bad.some(function(x){ return x.cheated; });
     setMsg('qSaveMsg','<b>成績に入らなかった大問があります。</b>　'+
       esc(bad[0].reason||'解答が速すぎます。')+
-      '　問題文と選択肢をきちんと読んでから答えましょう。（記録は先生に残ります）','err',true);
+      (cheat ? '　小テスト中は、ほかの画面に移ったりキーボードを使ったりしないでください。'
+             : '　問題文と選択肢をきちんと読んでから答えましょう。')+
+      '（記録は先生に残ります）','err',true);
   }else if(noMore){
     setMsg('qSaveMsg','出せる問題がなくなったので、ここで終わりです。','warn');
   }else{
