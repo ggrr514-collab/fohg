@@ -554,7 +554,7 @@
    古典クエスト ― クライアント側
    ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
    ============================================================ */
-var CLIENT_VERSION = 7;
+var CLIENT_VERSION = 8;
 
 var MARK  = ['ア','イ','ウ','エ'];
 var TYPES = ['仮名遣い','主語・指示語','内容理解','要旨・話し合い'];
@@ -568,16 +568,35 @@ var LAST=null;                 // 直近の採点結果（疑義報告に使う�
 var REP={qid:null, mine:-1, kind:KINDS[0]};
 
 /* ---------- サーバー呼び出し ---------- */
-function call(fn, args, onOk, onErr){
-  showLoading(true);
-  var runner = google.script.run
-    .withSuccessHandler(function(r){ showLoading(false); onOk && onOk(r); })
-    .withFailureHandler(function(e){
-      showLoading(false);
-      var m = (e && e.message) ? e.message : String(e);
-      if(onErr) onErr(m); else alert('通信に失敗しました。\n' + m);
-    });
-  runner[fn].apply(runner, args || []);
+var CALL_TIMEOUT_MS = 30000;      // これだけ待っても返事がなければ、あきらめて知らせる
+
+function call(fn, args, onOk, onErr, msg){
+  showLoading(true, msg || '通信しています…');
+  var done = false, timer = null;
+  function finish(){ if(timer){ clearTimeout(timer); timer=null; } done=true; showLoading(false); }
+  function fail(m){
+    if(done) return;
+    finish();
+    if(onErr) onErr(m); else alert('通信に失敗しました。\n' + m);
+  }
+  try{
+    var runner = google.script.run
+      .withSuccessHandler(function(r){ if(done) return; finish(); onOk && onOk(r); })
+      .withFailureHandler(function(e){ fail((e && e.message) ? e.message : String(e)); });
+    if(typeof runner[fn] !== 'function'){
+      throw new Error('サーバー側に「' + fn + '」がありません。\n' +
+                      'Code.gs を貼り直して、「新バージョン」でデプロイし直してください。');
+    }
+    // 返事が来ないまま固まらないようにする（別アカウントのログインが混ざると起きる）
+    timer = setTimeout(function(){
+      fail('サーバーから返事がありません（' + fn + '）。\n\n' +
+           '学校のアカウント以外でも Google にログインしていると、この状態になることがあります。\n' +
+           'ページを再読み込みするか、学校のアカウントだけでログインし直してください。');
+    }, CALL_TIMEOUT_MS);
+    runner[fn].apply(runner, args || []);
+  }catch(err){
+    fail(String((err && err.message) || err));
+  }
 }
 function showLoading(on, msg){
   var el=document.getElementById('loading');
@@ -622,7 +641,6 @@ window.addEventListener('load', function(){
 });
 
 function bootSession(){
-  showLoading(true, 'ログイン情報を確認しています…');
   call('getSession', [], function(r){
     if(!r || !r.ok){ gateError((r&&r.message)||'読み込みに失敗しました。'); return; }
     SESSION=r;
@@ -650,7 +668,7 @@ function bootSession(){
       }
     }
     show('gate');
-  }, function(m){ gateError('通信に失敗しました。'+m); });
+  }, function(m){ gateError('通信に失敗しました。'+m); }, 'ログイン情報を確認しています…');
 }
 
 function gateError(msg){
