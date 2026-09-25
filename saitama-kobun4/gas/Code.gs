@@ -48,7 +48,7 @@ const SH_CONFIG = PREFIX + "設定";
 const SH_QUIZ   = PREFIX + "小テスト";
 const SH_ROUND  = PREFIX + "小テスト回";
 
-const CACHE_KEY   = "kobun_pool_v1";
+const CACHE_KEY   = "kobun_pool_v2";
 const CACHE_SEC   = 21600;              // 問題プールのキャッシュ 6時間
 const TARGET_SEC  = 300;                // 1ステージの目安時間（5分・画面表示用）
 const QUIZ_SEC    = 300;                // 小テストの制限時間（5分）
@@ -729,10 +729,27 @@ function sessionFor_(me) {
    ============================================================ */
 function getStages_() {
   const cache = CacheService.getScriptCache();
+  let pool = null;
   const hit = cache.get(CACHE_KEY);
-  if (hit) { try { return JSON.parse(hit); } catch (e) {} }
-  const pool = loadPool_();
-  try { cache.put(CACHE_KEY, JSON.stringify(pool), CACHE_SEC); } catch (e) {}
+  if (hit) { try { pool = JSON.parse(hit); } catch (e) { pool = null; } }
+  if (!pool) {
+    pool = loadPool_();
+    try { cache.put(CACHE_KEY, JSON.stringify(pool), CACHE_SEC); } catch (e) {}
+  }
+  return withScenes_(pool);
+}
+
+/**
+ * 図解データを、キャッシュの外で毎回つけ直す。
+ * こうしておくと、Scenes.gs を書き換えたときに
+ * キャッシュを消さなくてもすぐ反映される。
+ */
+function withScenes_(pool) {
+  const has = (typeof scenesOf_ === "function");     // Scenes.gs を貼っていなくても動くように
+  pool.forEach(function (s) {
+    if (!s.scenes && has) s.scenes = scenesOf_(s.id);   // 問題マスターの「図解」列があればそちらが残る
+    if (!s.scenes) s.scenes = null;
+  });
   return pool;
 }
 
@@ -767,7 +784,7 @@ function loadPool_() {
       ord: Number(pick(row, tMap, "表示順")) || 9999, qs: []
     };
     // 登場人物とできごとの図解。問題マスターの「図解」列があればそちらを優先する
-    st.scenes = parseScenes_(pick(row, tMap, "図解")) || scenesOf_(id);
+    st.scenes = parseScenes_(pick(row, tMap, "図解")) || null;
     stages.push(st); byId[id] = st;
   });
 
@@ -1678,6 +1695,14 @@ function testConnection() {
     pool.forEach(function (s) { if (s.use === "小テスト") nq++; else np++; });
     out.push("問題マスター: " + master_().getName() + " / " + pool.length + "ステージ・" + n + "問");
     out.push("  用途の内訳 … 練習 " + np + "ステージ / 小テスト " + nq + "ステージ");
+    if (typeof scenesOf_ !== "function") {
+      out.push("  図解: Scenes.gs が見つかりません（採点後の「登場人物とできごと」が出ません）");
+    } else {
+      let ns = 0;
+      withScenes_(pool).forEach(function (s) { if (s.scenes) ns++; });
+      out.push("  図解: " + ns + "／" + pool.length + "ステージに用意されています" +
+               (ns < pool.length ? "（足りない分は Scenes.gs に本文IDを追加してください）" : ""));
+    }
     out.push("  小テストモード: " + (readConfig_().quizMode ? "ON" : "OFF"));
   } catch (e) { out.push("問題マスター: NG " + e.message); }
   Logger.log(out.join("\n"));
