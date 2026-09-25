@@ -432,6 +432,8 @@
     <span class="sp"></span>
     <span>小テストモード</span>
     <span class="switch"><button id="qmOn" onclick="setQuiz(true)">開始</button><button id="qmOff" class="on" onclick="setQuiz(false)">終了</button></span>
+    <button class="btn sm" id="qmAgain" onclick="setQuiz(true,true)">前と同じ問題で開始</button>
+    <button class="btn sm" id="qmPub" onclick="publishQuiz()">練習に出す</button>
   </div>
 
   <section class="panel hidden" id="quizPanel">
@@ -631,7 +633,7 @@
    古典クエスト ― クライアント側
    ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
    ============================================================ */
-var CLIENT_VERSION = 15;
+var CLIENT_VERSION = 16;
 
 var MARK  = ['ア','イ','ウ','エ'];
 var TYPES = ['仮名遣い','主語・指示語','内容理解','要旨・話し合い'];
@@ -1283,6 +1285,17 @@ function renderQuizPanel(){
   // 先生用トグル
   var tb=document.getElementById('teachBar');
   tb.classList.toggle('hidden', !(ME && ME.teacher));
+  var again=document.getElementById('qmAgain'), pub=document.getElementById('qmPub');
+  if(again){
+    var hasLast=!!(QUIZ && QUIZ.lastTitles && QUIZ.lastTitles.length);
+    again.classList.toggle('hidden', !hasLast || quizOn());
+    again.title=hasLast?('前の問題：'+QUIZ.lastTitles.join('／')):'';
+  }
+  if(pub){
+    var n=(QUIZ&&QUIZ.pending)||0;
+    pub.classList.toggle('hidden', n<1 || quizOn());
+    pub.textContent='練習に出す（'+n+'回ぶん）';
+  }
   document.getElementById('qmOn').classList.toggle('on', quizOn());
   document.getElementById('qmOff').classList.toggle('on', !quizOn());
 
@@ -1322,7 +1335,11 @@ function renderQuizPanel(){
       + (teach&&round.titles&&round.titles.length ? '　<small>'+round.titles.map(esc).join('／')+'</small>' : '')
       + '<br><span id="quizLeft"></span>'
     : '小テストはまだ始まっていません。';
-  lead += '<br><small>次の回に使える大問 <b>'+QUIZ.remain+'</b>／'+QUIZ.total+'本'
+  if(teach && round && QUIZ.takenCount!=null){
+    lead += '　<small>受けた人 <b>'+QUIZ.takenCount+'</b>人</small>';
+  }
+  lead += '<br><small>新しく使える大問 <b>'+QUIZ.remain+'</b>／'+QUIZ.total+'本'
+       + (teach&&QUIZ.pending?'　<b>練習に未公開 '+QUIZ.pending+'回</b>':'')
        + (QUIZ.tries?'　これまで'+QUIZ.tries+'大問':'')
        + (QUIZ.best!=null?'　最高成績 <b>'+QUIZ.best+'％</b>':'')
        + (QUIZ.avg!=null?'　平均 '+QUIZ.avg+'％':'')
@@ -1351,6 +1368,10 @@ function renderQuizPanel(){
   }else if(roundLeft()<=0){
     kind='warn';
     msg = 'この時間の小テストは終わりました。先生の指示を待ちましょう。';
+  }else if(round.left===0 && !teach){
+    // 別のクラスの回で、すでに同じ問題を解いている
+    kind='ok';
+    msg = '<b>この小テストの問題は、すでに解きました。</b><br>先生の指示を待ちましょう。';
   }else{
     canStart=true;
     if(round.parts<2) msg='この回は大問1つだけの出題です。';
@@ -1388,41 +1409,76 @@ function paintLeft(){
     '　<small>（先生が始めた時刻から5分。あとから入った人も同じ時刻に終わります）</small>';
 }
 
-function setQuiz(on){
+function setQuiz(on, again){
   if(on && !(QUIZ && QUIZ.round)){
     var left=(QUIZ&&QUIZ.remain!=null)?QUIZ.remain:0;
-    if(left<1){ alert('小テストに使える大問が残っていません。\n問題マスターの「用途」列に「小テスト」の大問を足してください。'); return; }
-    var use=Math.min(2,left);
-    if(!confirm('小テストを始めます。\n\nこの回で大問'+use+'つを使います（残り'+left+'本）。\n'+
-                'クラス全員が同じ問題に取り組み、1人1回だけ受けられます。\n'+
-                '「終了」を押すと、この'+use+'本は次の回には出ず、練習で解けるようになります。\n\nよろしいですか。')) return;
+    var last=(QUIZ&&QUIZ.lastTitles)?QUIZ.lastTitles:[];
+    if(again){
+      if(!last.length){ alert('前に実施した小テストが見つかりません。'); return; }
+      if(!confirm('前と同じ問題でもう一度実施します（別のクラス用）。\n\n'+
+                  last.map(function(t,i){ return '　'+(i+1)+'つ目　'+t; }).join('\n')+
+                  '\n\n一度その問題を解いた生徒には出ません。\n\nよろしいですか。')) return;
+    }else{
+      if(left<1){
+        alert('新しく使える大問が残っていません。\n\n'+
+              '前と同じ問題でよければ「前と同じ問題で開始」を押してください。\n'+
+              '新しい問題を足すときは、問題マスターの「用途」列に「小テスト」の行を追加してください。');
+        return;
+      }
+      var use=Math.min(2,left);
+      if(!confirm('新しい問題で小テストを始めます。\n\n'+
+                  'この回で大問'+use+'つを使います（新しく使える大問は残り'+left+'本）。\n'+
+                  'クラス全員が同じ問題に取り組み、1人1回だけ受けられます。\n\n'+
+                  '※終了しても練習には出ません。ほかのクラスでも同じ問題で実施できます。\n\nよろしいですか。')) return;
+    }
   }
-  call('setQuizMode',[!!on], function(r){
+  var klass = on ? (prompt('どのクラスの小テストですか。（記録用。空欄でもかまいません）\n例）３年１組','')||'') : '';
+
+  call('setQuizMode',[!!on, {reuse: !!again, klass: klass}], function(r){
     if(!r||!r.ok){ alert((r&&r.message)||'切り替えられませんでした。'); return; }
     SETTINGS.quizMode=r.quizMode;
     if(r.quizMode && r.round){
       QUIZ=QUIZ||{};
       QUIZ.round={id:r.round.id, parts:r.round.count, titles:r.round.titles, endsAt:r.round.endsAt||0};
+      QUIZ.remain=r.remain; QUIZ.pending=r.pending; QUIZ.lastTitles=r.lastTitles||[];
+      QUIZ.taken=null; QUIZ.takenCount=0;
       syncClock(r);
-      QUIZ.remain=r.remain;
       if(!r.reused){
         var e=r.round.endsAt?new Date(r.round.endsAt):null;
         var hhmm=e?(e.getHours()+':'+('0'+e.getMinutes()).slice(-2)+':'+('0'+e.getSeconds()).slice(-2)):'';
-        alert('小テストを始めました。\n\n'+
+        alert((r.again?'前と同じ問題で小テストを始めました。':'小テストを始めました。')+'\n\n'+
               (hhmm?'終了時刻　'+hhmm+'（ここから5分。クラス全員が同じ時刻に終わります）\n\n':'')+
               'この回の大問（全員同じ）\n'+
               r.round.titles.map(function(t,i){ return '　'+(i+1)+'つ目　'+t; }).join('\n')+
               '\n\n生徒には「画面を再読み込みして」と伝えてください。');
       }
     }else if(!r.quizMode){
-      if(QUIZ){ QUIZ.round=null; QUIZ.taken=null; QUIZ.remain=r.remain; }
+      if(QUIZ){ QUIZ.round=null; QUIZ.taken=null; QUIZ.remain=r.remain;
+                QUIZ.pending=r.pending; QUIZ.lastTitles=r.lastTitles||[]; }
       if(r.closed && r.closed.titles && r.closed.titles.length){
-        alert('小テストを終了しました。\n\n使った大問（'+r.closed.titles.join('／')+'）は、\n'+
-              'これから練習でも解けるようになります。\n\n'+
-              '※生徒の画面に反映するには、再読み込みが必要です。');
+        alert('小テストを終了しました。\n\n'+
+              'この回の大問（'+r.closed.titles.join('／')+'）は、\n'+
+              '<まだ練習には出ません>。ほかのクラスでも同じ問題で実施できます。\n\n'+
+              '・別のクラスで実施 →「前と同じ問題で開始」\n'+
+              '・すべてのクラスが終わった →「練習に出す」');
       }
     }
     renderQuizPanel();
+  });
+}
+
+/** すべてのクラスが終わったあと、小テストの問題を練習に出す */
+function publishQuiz(){
+  var n=(QUIZ&&QUIZ.pending)||0;
+  if(n<1){ alert('練習に出せる小テストがありません。\n（実施中の回は、先に「終了」してください）'); return; }
+  if(!confirm('終わった小テスト'+n+'回ぶんの大問を、練習でも解けるようにします。\n\n'+
+              'すべてのクラスで実施し終えてから実行してください。\n'+
+              '公開すると、生徒は本文も答えも見られるようになります。\n\nよろしいですか。')) return;
+  call('publishQuizRounds',[], function(r){
+    if(!r||!r.ok){ alert((r&&r.message)||'公開できませんでした。'); return; }
+    alert('練習に公開しました。\n\n'+r.titles.map(function(t){ return '・'+t; }).join('\n')+
+          '\n\n画面を再読み込みすると、練習の一覧に出ます。');
+    bootSession();
   });
 }
 

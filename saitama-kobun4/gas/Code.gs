@@ -20,7 +20,7 @@ const SPREADSHEET_ID = "1Yuf_jzWZYfQKaYuZV6LN6-RDAODoOLeX-uyn9nYecwU";
 const MASTER_ID      = "1OaMsGfk_-s-BMa_osO3d8hwK04ikP0G34J7TWbs2lJo";
 
 /** index.html 側の CLIENT_VERSION と必ず同じ値にすること */
-const CLIENT_VERSION = 15;
+const CLIENT_VERSION = 16;
 
 const APP_NAME = "古典クエスト";
 
@@ -197,8 +197,9 @@ const H_QUIZ   = ["UUID","保存日時","email","氏名","組","番号","回ID",
                   "キー入力回数","不正の疑い"];
 
 /** 小テストの「回」。1回＝クラス全員に同じ大問を出す1コマぶん */
-const H_ROUND  = ["回ID","開始日時","終了予定","終了日時","状態","ステージID1","ステージ名1",
-                  "ステージID2","ステージ名2","開始した先生","開始ミリ秒"];
+const H_ROUND  = ["回ID","開始日時","終了予定","終了日時","状態","クラス",
+                  "ステージID1","ステージ名1","ステージID2","ステージ名2",
+                  "練習に公開","開始した先生","開始ミリ秒"];
 const ROUND_OPEN = "実施中";
 const ROUND_DONE = "終了";
 
@@ -461,6 +462,9 @@ function onOpen() {
     .addSeparator()
     .addItem("小テストモードを開始", "quizModeOn")
     .addItem("小テストモードを終了", "quizModeOff")
+    .addItem("前と同じ問題で小テストを開始（別のクラス用）", "quizModeOnAgain")
+    .addSeparator()
+    .addItem("小テストの問題を練習に出す（全クラス終了後）", "publishQuizStages")
     .addSeparator()
     .addItem("疑義報告サマリを表示", "showIssueSummary")
     .addSeparator()
@@ -468,32 +472,40 @@ function onOpen() {
     .addToUi();
 }
 
-function quizModeOn()  { toggleQuizFromMenu_(true); }
-function quizModeOff() { toggleQuizFromMenu_(false); }
-function toggleQuizFromMenu_(on) {
+function quizModeOn()      { toggleQuizFromMenu_(true,  false); }
+function quizModeOnAgain() { toggleQuizFromMenu_(true,  true); }
+function quizModeOff()     { toggleQuizFromMenu_(false, false); }
+function toggleQuizFromMenu_(on, reuse) {
   const ui = tryUi_();
-  const r = switchQuizMode_(on, "");
+  let klass = "";
+  if (on && ui) {
+    const res = ui.prompt(APP_NAME, "どのクラスの小テストですか。（記録用。空欄でもかまいません）\n例）３年１組",
+                          ui.ButtonSet.OK_CANCEL);
+    if (res.getSelectedButton() !== ui.Button.OK) return;
+    klass = res.getResponseText();
+  }
+  const r = switchQuizMode_(on, "", { reuse: reuse, klass: klass });
   const msg = r.ok ? quizModeMessage_(r) : ("できませんでした。\n" + r.message);
   if (ui) ui.alert(APP_NAME, msg, ui.ButtonSet.OK); else Logger.log(msg);
 }
 
 /** 小テストモードの開始／終了に共通の処理 */
-function switchQuizMode_(on, byEmail) {
+function switchQuizMode_(on, byEmail, opt) {
   try {
-    let round = null, reused = false, closed = null;
+    const o = opt || {};
+    let round = null, reused = false, again = false, closed = null;
     if (on) {
-      const r = startRound_(byEmail);
+      const r = startRound_(byEmail, o.reuse, o.klass);
       if (!r.ok) return r;
-      round = r.round; reused = r.reused;
+      round = r.round; reused = r.reused; again = !!r.again;
     } else {
       closed = endRound_();
       clearMemo_();
-      clearProgressCache_();       // 練習に出る本数が変わるので、覚えていた進捗を捨てる
       rebuildTotalsIfDirty_();     // 生徒を待たせずにためておいた集計を、ここで作り直す
     }
     writeConfigFlag_("小テストモード", !!on);
-    return { ok: true, quizMode: !!on, round: round, reused: reused, closed: closed,
-             remain: quizStages_().length };
+    return { ok: true, quizMode: !!on, round: round, reused: reused, again: again, closed: closed,
+             remain: quizStages_().length, pending: unpublishedRounds_().length };
   } catch (e) {
     return { ok: false, message: String(e.message || e) };
   }
@@ -503,23 +515,28 @@ function quizModeMessage_(r) {
   if (!r.quizMode) {
     return "小テストモードを終了しました。生徒は通常の練習に戻ります。\n\n" +
       (r.closed
-        ? "この回で使った大問（" + r.closed.titles.join("／") + "）は、\n" +
-          "これから練習でも解けるようになります。\n\n"
+        ? "この回の大問（" + r.closed.titles.join("／") + "）は、\n" +
+          "まだ練習には出ません。ほかのクラスでも同じ問題で実施できます。\n\n" +
+          "・別のクラスで実施 → メニュー「前と同じ問題で小テストを開始」\n" +
+          "・すべてのクラスが終わった → メニュー「小テストの問題を練習に出す」\n\n"
         : "") +
-      "小テストに使える大問は、あと " + r.remain + " 本です。";
+      "まだ練習に出していない回：" + r.pending + "　／　新しく使える大問：あと " + r.remain + " 本";
   }
   const end = r.round && r.round.endsAt
     ? Utilities.formatDate(new Date(r.round.endsAt), "Asia/Tokyo", "H:mm:ss")
     : "";
-  return (r.reused ? "小テストモードを続けています。\n\n" : "小テストモードを開始しました。\n\n") +
+  return (r.reused ? "小テストモードを続けています。\n\n"
+                   : (r.again ? "前と同じ問題で小テストを開始しました。\n\n"
+                              : "小テストモードを開始しました。\n\n")) +
     (end ? "終了時刻　" + end + "（ここから5分。クラス全員が同じ時刻に終わります）\n\n" : "") +
     "この回の大問（クラス全員が同じ問題に取り組みます）\n" +
     r.round.titles.map(function (t, i) { return "　" + (i + 1) + "つ目　" + t; }).join("\n") + "\n\n" +
     "・生徒は画面を再読み込みすると小テストに変わります。\n" +
     "・1人1回だけです。途中でやめても受け直せません。\n" +
     "・終わったら必ず「小テストモードを終了」を実行してください。\n" +
-    "　終了すると、この2本は次の回には出ず、練習で解けるようになります。\n\n" +
-    "次の回に使える大問は、残り " + Math.max(0, r.remain) + " 本です。";
+    "・終了しても、この問題は**練習には出ません**。ほかのクラスでも同じ問題で実施できます。\n" +
+    "　すべてのクラスが終わったら、メニュー「小テストの問題を練習に出す」を実行してください。\n\n" +
+    "新しく使える大問は、残り " + Math.max(0, r.remain) + " 本です。";
 }
 
 /** 設定シートの1行を書き換える（無ければ足す） */
@@ -640,17 +657,22 @@ function readConfig_() {
 }
 
 /** 小テストモードの切り替え（教員のみ）。開始すると、その回の大問2つが決まる */
-function setQuizMode(on) {
+function setQuizMode(on, opt) {
   try {
     const email = resolveEmail_(null);
     if (!email || !isTeacher_(email)) return { ok: false, message: "先生のアカウントでのみ切り替えられます。" };
-    const r = switchQuizMode_(!!on, email);
+    const r = switchQuizMode_(!!on, email, opt || {});
     if (!r.ok) return r;
-    return { ok: true, quizMode: r.quizMode, reused: r.reused, remain: r.remain,
+    return { ok: true, quizMode: r.quizMode, reused: r.reused, again: r.again,
+             remain: r.remain, pending: r.pending,
              round: r.round ? { id: r.round.id, titles: r.round.titles, count: r.round.ids.length,
                                 endsAt: r.round.endsAt || 0 } : null,
              serverNow: Date.now(),
-             closed: r.closed ? { titles: r.closed.titles } : null };
+             closed: r.closed ? { titles: r.closed.titles } : null,
+             lastTitles: (function () {
+               const p = lastRound_();
+               return p ? p.titles : [];
+             })() };
   } catch (e) {
     return { ok: false, message: String(e.message || e) };
   }
@@ -970,8 +992,11 @@ function roundRowsFresh_() {
       const t = Date.parse(String(r[m["開始日時"] - 1] || "").replace(/\//g, "-").replace(" ", "T") + "+09:00");
       startMs = isFinite(t) ? t : 0;
     }
+    const pub = m["練習に公開"] ? String(r[m["練習に公開"] - 1] || "").trim() : "";
     out.push({ row: i + 2, id: id, state: String(r[m["状態"] - 1] || "").trim(),
                startedAt: String(r[m["開始日時"] - 1] || ""),
+               klass: m["クラス"] ? String(r[m["クラス"] - 1] || "").trim() : "",
+               published: (pub === "○" || pub === "o" || pub.toUpperCase() === "TRUE"),
                startMs: startMs, endsAt: startMs ? startMs + QUIZ_SEC * 1000 : 0,
                ids: ids, titles: titles });
   });
@@ -994,30 +1019,66 @@ function usedQuizIds_() {
   return d;
 }
 
-/** 終わった回で使った大問ID（＝練習に出してよいもの） */
+/**
+ * 練習に出してよい大問ID。
+ * 「終了した」だけでは出さない。先生が明示的に「練習に公開」したものだけ。
+ * こうしないと、次のクラスが小テストの前に本文と答えを見てしまう。
+ */
 function finishedQuizIds_() {
   const d = {};
   roundRows_().forEach(function (r) {
-    if (r.state === ROUND_DONE) r.ids.forEach(function (id) { d[id] = true; });
+    if (r.published) r.ids.forEach(function (id) { d[id] = true; });
   });
   return d;
 }
 
-/** 新しい回を始める。未使用の大問から QUIZ_COUNT 本を選んで固定する */
-function startRound_(byEmail) {
-  const open = activeRound_();
-  if (open) return { ok: true, round: open, reused: true };
+/** まだ練習に公開していない、終わった回（新しい順） */
+function unpublishedRounds_() {
+  return roundRows_().filter(function (r) {
+    return !r.published && r.ids.length;
+  }).reverse();
+}
 
-  const pool = quizStages_().slice();
-  if (!pool.length) {
-    return { ok: false, message: "小テストに使える大問が残っていません。\n" +
-      "問題マスターの「用途」列に「小テスト」の大問を足してください。" };
+/** 同じ問題でもう一度実施するための、直近の回 */
+function lastRound_() {
+  const rows = roundRows_();
+  return rows.length ? rows[rows.length - 1] : null;
+}
+
+/**
+ * 回を始める。
+ * reuse を指定すると、前と同じ大問でもう一度実施する（別のクラス用）。
+ * 指定がなければ、まだ小テストに使っていない大問から選ぶ。
+ */
+function startRound_(byEmail, reuse, klass) {
+  const open = activeRound_();
+  if (open) return { ok: true, round: open, reused: true, again: false };
+
+  let use = null, again = false;
+  if (reuse) {
+    const prev = lastRound_();
+    if (!prev || !prev.ids.length) {
+      return { ok: false, message: "前に実施した小テストが見つかりません。" };
+    }
+    const by = {};
+    getStages_().forEach(function (st) { by[st.id] = st; });
+    use = prev.ids.map(function (id) { return by[id]; }).filter(function (x) { return !!x; });
+    if (!use.length) return { ok: false, message: "前に実施した大問が読み込めませんでした。" };
+    again = true;
+  } else {
+    const pool = quizStages_().slice();
+    if (!pool.length) {
+      return { ok: false, message: "小テストに使える大問が残っていません。\n" +
+        "前と同じ問題でよければ「前と同じ問題で実施」を選んでください。\n" +
+        "新しい問題を足すときは、問題マスターの「用途」列に「小テスト」の行を追加してください。" };
+    }
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+    }
+    use = pool.slice(0, QUIZ_COUNT);
   }
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
-  }
-  const use = pool.slice(0, QUIZ_COUNT);
+
   const sh  = roundSheet_();
   const id  = uuid_();
   const startMs = Date.now();
@@ -1025,16 +1086,94 @@ function startRound_(byEmail) {
   appendByHeader_(sh, H_ROUND, {
     "回ID": id, "開始日時": now_(),
     "終了予定": Utilities.formatDate(new Date(endsAt), "Asia/Tokyo", "yyyy/MM/dd HH:mm:ss"),
-    "終了日時": "", "状態": ROUND_OPEN,
+    "終了日時": "", "状態": ROUND_OPEN, "クラス": String(klass || ""),
     "ステージID1": use[0] ? use[0].id : "", "ステージ名1": use[0] ? use[0].title : "",
     "ステージID2": use[1] ? use[1].id : "", "ステージ名2": use[1] ? use[1].title : "",
-    "開始した先生": byEmail || "", "開始ミリ秒": startMs
+    "練習に公開": "", "開始した先生": byEmail || "", "開始ミリ秒": startMs
   });
   clearMemo_();
-  return { ok: true, reused: false,
+  return { ok: true, reused: false, again: again,
     round: { id: id, state: ROUND_OPEN, startedAt: now_(), startMs: startMs, endsAt: endsAt,
+             published: false, klass: String(klass || ""),
              ids: use.map(function (s) { return s.id; }),
              titles: use.map(function (s) { return s.title; }) } };
+}
+
+/* ============================================================
+   練習への公開（すべてのクラスが終わってから）
+   ============================================================ */
+/** 指定した回（省略時は終了済みで未公開のものすべて）を練習に出す */
+function publishRounds_(roundIds) {
+  const sh = book_().getSheetByName(SH_ROUND);
+  if (!sh || sh.getLastRow() < 2) return { ok: false, message: "小テストの記録がありません。" };
+  let m = headerMap_(sh);
+  if (!m["練習に公開"]) {
+    // 古いシートには列が無いので足す
+    const col = sh.getLastColumn() + 1;
+    sh.getRange(1, col).setValue("練習に公開").setFontWeight("bold");
+    m = headerMap_(sh);
+  }
+  const want = {};
+  (roundIds || []).forEach(function (id) { want[String(id)] = true; });
+
+  const titles = [], ids = [];
+  roundRows_().forEach(function (r) {
+    if (r.published) return;
+    if (r.state !== ROUND_DONE) return;                 // 実施中の回は公開しない
+    if (roundIds && roundIds.length && !want[r.id]) return;
+    sh.getRange(r.row, m["練習に公開"]).setValue("○");
+    r.ids.forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
+    r.titles.forEach(function (t) { if (t && titles.indexOf(t) < 0) titles.push(t); });
+  });
+  clearMemo_();
+  clearProgressCache_();          // 練習の本数が変わるので、覚えていた進捗を捨てる
+  return { ok: true, ids: ids, titles: titles };
+}
+
+/** 画面（先生）から、終わった小テストの問題を練習に出す */
+function publishQuizRounds() {
+  try {
+    clearMemo_();
+    const email = resolveEmail_(null);
+    if (!email || !isTeacher_(email)) return { ok: false, message: "先生のアカウントでのみ実行できます。" };
+    const pend = unpublishedRounds_().filter(function (r) { return r.state === ROUND_DONE; });
+    if (!pend.length) {
+      return { ok: false, message: "練習に出せる小テストがありません。（実施中の回は先に終了してください）" };
+    }
+    return publishRounds_(null);
+  } catch (e) {
+    return { ok: false, message: String(e.message || e) };
+  }
+}
+
+/** メニュー：小テストの問題を練習に出す */
+function publishQuizStages() {
+  const ui = tryUi_();
+  const pend = unpublishedRounds_().filter(function (r) { return r.state === ROUND_DONE; });
+  if (!pend.length) {
+    const msg = "練習に公開できる小テストがありません。\n\n" +
+      "（実施が終わっていない回は公開できません。先に「小テストモードを終了」してください）";
+    if (ui) ui.alert(APP_NAME, msg, ui.ButtonSet.OK); else Logger.log(msg);
+    return;
+  }
+  const list = pend.map(function (r) {
+    return "・" + r.startedAt + (r.klass ? "（" + r.klass + "）" : "") + "　" + r.titles.join("／");
+  }).join("\n");
+
+  if (ui) {
+    const ans = ui.alert(APP_NAME + "　小テストの問題を練習に出す",
+      "次の回で使った大問を、練習でも解けるようにします。\n\n" + list +
+      "\n\n**すべてのクラスで実施し終えてから**実行してください。\n" +
+      "公開すると、生徒は本文も答えも見られるようになります。\n\n公開しますか。",
+      ui.ButtonSet.YES_NO);
+    if (ans !== ui.Button.YES) return;
+  }
+  const r = publishRounds_(null);
+  const done = r.ok
+    ? "練習に公開しました。\n\n" + r.titles.map(function (t) { return "・" + t; }).join("\n") +
+      "\n\n生徒は画面を再読み込みすると、練習の一覧に出ます。"
+    : "公開できませんでした。\n" + r.message;
+  if (ui) ui.alert(APP_NAME, done, ui.ButtonSet.OK); else Logger.log(done);
 }
 
 /** 実施中の回を終わらせる。使った大問はここで練習に回る */
@@ -1098,6 +1237,22 @@ function roundOver_(round, graceSec) {
   const end = roundEndsAt_(round);
   if (!end) return false;
   return Date.now() > end + (graceSec || 0) * 1000;
+}
+
+/** その生徒が、これまでに小テストで解いた大問ID（回をまたいで見る） */
+function studentQuizStageIds_(email) {
+  const key = String(email || "").toLowerCase();
+  const d = {};
+  quizLog_().forEach(function (r) {
+    if (r.email === key && r.stageId) d[r.stageId] = true;
+  });
+  return d;
+}
+
+/** この回で、その生徒にまだ出していない大問 */
+function roundStagesFor_(round, email) {
+  const done = studentQuizStageIds_(email);
+  return roundStages_(round).filter(function (st) { return !done[st.id]; });
 }
 
 /** その生徒が、この回の小テストをもう受けたか */
@@ -1208,9 +1363,20 @@ function quizStatus_(email) {
   });
 
   const allQuiz = getStages_().filter(function (s) { return s.use === "小テスト"; }).length;
+  let takenCount = 0;
+  if (round) {
+    const seen = {};
+    quizLog_().forEach(function (r) {
+      if (r.roundId === round.id && !seen[r.email]) { seen[r.email] = true; takenCount++; }
+    });
+  }
   return {
+    takenCount: takenCount,
+    pending: unpublishedRounds_().filter(function (r) { return r.state === ROUND_DONE; }).length,
     round: round ? { id: round.id, parts: round.ids.length,
                      titles: round.titles, startedAt: round.startedAt,
+                     // その生徒にまだ出せる大問の数（別クラスで解いた分は出さない）
+                     left: roundStagesFor_(round, email).length,
                      endsAt: roundEndsAt_(round), over: roundOver_(round, 0) } : null,
     serverNow: Date.now(),
     taken: taken ? { parts: taken.parts, avg: taken.avg } : null,
@@ -1247,8 +1413,14 @@ function startQuiz() {
         message: "この時間の小テストは、すでに受けています。" +
           (taken.avg != null ? "（成績 " + taken.avg + "％）" : "") };
     }
-    const stages = roundStages_(round);
+    // 別のクラスの回で解いた大問は、二度と出さない
+    const stages = roundStagesFor_(round, me.email);
     if (!stages.length) {
+      const all = roundStages_(round);
+      if (all.length) {
+        return { ok: false, taken: true,
+          message: "この小テストの問題は、すでに解いたことがあります。先生の指示を待ちましょう。" };
+      }
       return { ok: false, message: "この回の問題が読み込めませんでした。先生にお知らせください。" };
     }
     return {
@@ -1283,7 +1455,7 @@ function nextQuizStage(exclude) {
 
     const done = {};
     (exclude || []).forEach(function (id) { done[String(id)] = true; });
-    const next = roundStages_(round).filter(function (s) { return !done[s.id]; })[0];
+    const next = roundStagesFor_(round, me.email).filter(function (s) { return !done[s.id]; })[0];
     if (!next) return { ok: true, noMore: true };
     return { ok: true, stage: hideAnswers_([next])[0],
              endsAt: roundEndsAt_(round), serverNow: Date.now() };
@@ -1316,9 +1488,8 @@ function submitQuizPart(payload) {
     roundStages_(round).forEach(function (s) { if (s.id === sid) stage = s; });
     if (!stage) return { ok: false, message: "問題が見つかりません。もう一度やり直してください。" };
 
-    // 同じ回の同じ大問は、1人1回だけ
-    const already = roundTakenBy_(me.email, round.id);
-    if (already && already.ids.indexOf(sid) >= 0) {
+    // 同じ大問は、回をまたいでも1人1回だけ
+    if (studentQuizStageIds_(me.email)[sid]) {
       return { ok: false, taken: true, message: "この大問は、すでに提出しています。" };
     }
 
