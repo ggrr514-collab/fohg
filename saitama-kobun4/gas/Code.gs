@@ -20,7 +20,7 @@ const SPREADSHEET_ID = "1Yuf_jzWZYfQKaYuZV6LN6-RDAODoOLeX-uyn9nYecwU";
 const MASTER_ID      = "1OaMsGfk_-s-BMa_osO3d8hwK04ikP0G34J7TWbs2lJo";
 
 /** index.html 側の CLIENT_VERSION と必ず同じ値にすること */
-const CLIENT_VERSION = 6;
+const CLIENT_VERSION = 7;
 
 const APP_NAME = "古典クエスト";
 
@@ -151,12 +151,11 @@ const H_ANSWER = ["UUID","結果UUID","保存日時","email","氏名","組","番
 
 const H_TOTAL  = ["順位","email","氏名","組","番号","累計得点","満点","挑戦回数","クリアステージ数","満点ステージ数",
                   "平均正答率(%)","最高得点","最速タイム(秒)","称号",
-                  "小テスト回数","小テスト最高成績(%)","小テスト平均成績(%)","成績に入れなかった回","最終挑戦日時"];
+                  "小テスト・解いた大問数","小テスト最高成績(%)","小テスト平均成績(%)","成績に入れなかった大問数","最終挑戦日時"];
 
-const H_QUIZ   = ["UUID","保存日時","email","氏名","組","番号",
-                  "成績(%)","成績に反映","除外理由","採用した大問","大問ごとの正答率","出題ステージID",
-                  "大問数","問題数","正答数","全体正答率(%)",
-                  "所要時間(秒)","1問あたり(秒)","解答間隔の中央値(秒)","時間切れ",
+const H_QUIZ   = ["UUID","保存日時","email","氏名","組","番号","回ID","何問目",
+                  "成績(%)","成績に反映","除外理由","ステージID","ステージ名",
+                  "問題数","正答数","所要時間(秒)","1問あたり(秒)","解答間隔の中央値(秒)","時間切れ",
                   "誤答問題ID","正答問題ID","フォーカス離脱回数","クライアント版"];
 
 const H_ISSUE  = ["UUID","報告日時","email","氏名","結果UUID","問題ID","設問文",
@@ -680,9 +679,8 @@ function quizServedIds_(email) {
   const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
   rows.forEach(function (r) {
     if (String(r[m["email"] - 1]).trim().toLowerCase() !== key) return;
-    String(r[m["出題ステージID"] - 1]).split(",").forEach(function (id) {
-      id = id.trim(); if (id) done[id] = true;
-    });
+    const id = String(r[m["ステージID"] - 1]).trim();
+    if (id) done[id] = true;
   });
   return done;
 }
@@ -764,15 +762,24 @@ function quizStatus_(email) {
   }
   return { remain: remain, total: pool.length, tries: tries, skipped: skipped,
            best: best, avg: tries ? Math.round(sum / tries) : null, last: last,
-           limitSec: QUIZ_SEC, count: Math.min(QUIZ_COUNT, remain) };
+           limitSec: QUIZ_SEC, maxParts: QUIZ_COUNT };
 }
 
-/** 小テストを始める。未出題のステージからランダムに count 本返す（正解は含めない） */
-function startQuiz(count) {
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(20000); } catch (e) {
-    return { ok: false, message: "混み合っています。少し待ってからもう一度お試しください。" };
-  }
+/** まだ出していない大問から1本ランダムに選ぶ（正解は含めない） */
+function pickQuizStage_(email, exclude) {
+  const done = quizServedIds_(email);
+  (exclude || []).forEach(function (id) { done[id] = true; });
+  const pool = quizStages_().filter(function (s) { return !done[s.id]; });
+  if (!pool.length) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/**
+ * 小テストを始める。まず1問目（大問1つ）だけを返す。
+ * 2問目は「2つ目に挑戦する」を選んだときに初めて渡すので、
+ * 先に読まれてしまうことがない。
+ */
+function startQuiz() {
   try {
     const email = resolveEmail_(null);
     const me = email ? findByEmail_(email) : null;
@@ -783,36 +790,46 @@ function startQuiz(count) {
       return { ok: false, message: "いまは小テストの時間ではありません。" };
     }
 
-    const done = quizServedIds_(me.email);
-    const pool = quizStages_().filter(function (s) { return !done[s.id]; });
-    if (pool.length < 1) {
+    const st = pickQuizStage_(me.email, []);
+    if (!st) {
       return { ok: false, remain: 0,
         message: "小テストで出せる問題が、もうありません。先生にお知らせください。" };
     }
-    // 5分で大問2つに挑戦する。残りが1本しかないときは1本だけ出す。
-    const n = Math.min(QUIZ_COUNT, pool.length);
-
-    // ランダムに n 本選ぶ
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
-    }
-    const picked = pool.slice(0, n);
-
     return {
-      ok: true, stages: hideAnswers_(picked), count: n,
-      limitSec: QUIZ_SEC, startedAt: new Date().toISOString(),
+      ok: true,
+      sessionId: uuid_(),
+      index: 1,
+      stage: hideAnswers_([st])[0],
+      limitSec: QUIZ_SEC,
+      startedAt: new Date().toISOString(),
       status: quizStatus_(me.email)
     };
   } catch (e) {
     return { ok: false, message: String(e.message || e) };
-  } finally {
-    try { lock.releaseLock(); } catch (e) {}
   }
 }
 
-/** 小テストの採点と記録。未回答は不正解として数える */
-function submitQuiz(payload) {
+/** 「2つ目に挑戦する」を選んだときに、次の大問を渡す */
+function nextQuizStage(exclude) {
+  try {
+    const email = resolveEmail_(null);
+    const me = email ? findByEmail_(email) : null;
+    if (!me) return { ok: false, message: "ログイン状態が確認できません。ページを再読み込みしてください。" };
+    const cfg = readConfig_();
+    if (!cfg.quizMode && !me.teacher) return { ok: false, message: "いまは小テストの時間ではありません。" };
+    const nx = pickQuizStage_(me.email, exclude || []);
+    if (!nx) return { ok: true, noMore: true };
+    return { ok: true, stage: hideAnswers_([nx])[0] };
+  } catch (e) {
+    return { ok: false, message: String(e.message || e) };
+  }
+}
+
+/**
+ * 大問1つ分を採点して記録する。
+ * 記録した時点で、その大問の成績は確定する。
+ */
+function submitQuizPart(payload) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(20000); } catch (e) {
     return { ok: false, message: "混み合っています。少し待ってからもう一度お試しください。" };
@@ -823,43 +840,32 @@ function submitQuiz(payload) {
     const me = email ? findByEmail_(email) : null;
     if (!me) return { ok: false, message: "ログイン状態が確認できません。ページを再読み込みしてください。" };
 
-    const ids = (p.stageIds || []).map(function (x) { return String(x); });
-    if (!ids.length) return { ok: false, message: "出題された問題がわかりません。もう一度やり直してください。" };
+    const sid = String(p.stageId || "");
+    let stage = null;
+    quizStages_().forEach(function (s) { if (s.id === sid) stage = s; });
+    if (!stage) return { ok: false, message: "問題が見つかりません。もう一度やり直してください。" };
 
-    const all = quizStages_(), byId = {};
-    all.forEach(function (s) { byId[s.id] = s; });
-
-    const picks = p.picks || {};           // { 問題ID: 0〜3 }
-    const secs  = Math.max(0, Math.round(Number(p.seconds) || 0));
-    const blur  = Math.max(0, Math.round(Number(p.blur) || 0));
+    const picks  = p.picks || {};
+    const secs   = Math.max(0, Math.round(Number(p.seconds) || 0));
+    const blur   = Math.max(0, Math.round(Number(p.blur) || 0));
     const timeUp = !!p.timeUp;
+    const index  = Math.max(1, Math.round(Number(p.index) || 1));
+    const sessionId = String(p.sessionId || "");
 
     let total = 0, correct = 0;
-    const detail = [], wrongIds = [], rightIds = [], parts = [];
-    ids.forEach(function (sid) {
-      const st = byId[sid];
-      if (!st) return;
-      let n = 0, c = 0;
-      st.qs.forEach(function (q) {
-        total++; n++;
-        const raw = picks[q.id];
-        const mine = (raw == null || raw === "") ? -1 : Number(raw);   // 未回答は不正解
-        const ok = (mine === q.a);
-        if (ok) { correct++; c++; rightIds.push(q.id); } else { wrongIds.push(q.id); }
-        detail.push({ stageId: sid, id: q.id, n: q.n, type: q.type,
-                      mine: mine, a: q.a, ok: ok, exp: q.exp, opts: q.opts });
-      });
-      parts.push({ id: sid, title: st.title, src: st.src,
-                   n: n, correct: c, rate: n ? Math.round(c / n * 100) : 0 });
+    const detail = [], wrongIds = [], rightIds = [];
+    stage.qs.forEach(function (q) {
+      total++;
+      const raw = picks[q.id];
+      const mine = (raw == null || raw === "") ? -1 : Number(raw);   // 未回答は不正解
+      const ok = (mine === q.a);
+      if (ok) { correct++; rightIds.push(q.id); } else { wrongIds.push(q.id); }
+      detail.push({ stageId: sid, id: q.id, n: q.n, type: q.type,
+                    mine: mine, a: q.a, ok: ok, exp: q.exp, opts: q.opts });
     });
     if (!total) return { ok: false, message: "問題が見つかりませんでした。" };
 
-    // 2つのうち正答率の高いほうを、その回の成績とする
-    let bestPart = parts[0];
-    parts.forEach(function (x) { if (x.rate > bestPart.rate) bestPart = x; });
-    const score = bestPart.rate;
-
-    const rate = Math.round(correct / total * 100);
+    const score = Math.round(correct / total * 100);
 
     // 連打・速すぎる解答は成績に入れない
     const answered = Object.keys(picks).filter(function (k) {
@@ -867,38 +873,28 @@ function submitQuiz(payload) {
     }).length;
     const pace = paceOf_(p.stamps, secs, total);
     const fair = fairnessOf_(pace, score, answered, total);
-    const uuid = uuid_();
-    const dedupe = [me.email, ids.join(","), String(p.startedAt || "")].join("|");
+
     const sh = sheet_(SH_QUIZ, H_QUIZ);
-    if (alreadyQuizSaved_(sh, dedupe)) {
-      return { ok: true, duplicated: true, total: total, correct: correct, rate: rate,
-               score: score, parts: parts, bestId: bestPart.id,
-               counted: fair.include, reason: fair.reason, pace: pace,
-               detail: detail, status: quizStatus_(me.email) };
+    const dedupe = [me.email, sessionId, sid, String(index)].join("|");
+    if (!alreadyQuizSaved_(sh, dedupe)) {
+      sh.appendRow([
+        uuid_(), now_(), me.email, me.name, me.klass, me.no, sessionId, index,
+        score, fair.include ? "○" : "×", fair.reason, sid, stage.title,
+        total, correct, secs, pace.perQ, pace.medGap == null ? "" : pace.medGap,
+        timeUp ? "○" : "", wrongIds.join(","), rightIds.join(","), blur, CLIENT_VERSION
+      ]);
+      updateTotals_();
     }
 
-    sh.appendRow([
-      uuid, now_(), me.email, me.name, me.klass, me.no,
-      score, fair.include ? "○" : "×", fair.reason, bestPart.id,
-      parts.map(function (x) { return x.id + ":" + x.rate + "%"; }).join(" / "),
-      ids.join(","),
-      ids.length, total, correct, rate,
-      secs, pace.perQ, pace.medGap == null ? "" : pace.medGap, timeUp ? "○" : "",
-      wrongIds.join(","), rightIds.join(","),
-      blur, CLIENT_VERSION
-    ]);
-    // 重複排除キーは最終列に持たせる（見出しが無くても追記できるよう別管理）
-    PropertiesService.getScriptProperties().setProperty("quizdedupe_" + Utilities.base64EncodeWebSafe(dedupe).slice(0, 80), "1");
-
-    updateTotals_();
-    const status = quizStatus_(me.email);
-    return {
-      ok: true, uuid: uuid, total: total, correct: correct, rate: rate,
-      score: score, parts: parts, bestId: bestPart.id,
+    const res = {
+      ok: true, index: index, stageId: sid, title: stage.title, src: stage.src,
+      total: total, correct: correct, score: score,
       counted: fair.include, reason: fair.reason, pace: pace,
-      timeUp: timeUp, seconds: secs, detail: detail, status: status,
-      isBest: fair.include && (status.best === score)
+      timeUp: timeUp, seconds: secs, detail: detail,
+      status: quizStatus_(me.email)
     };
+
+    return res;
   } catch (e) {
     return { ok: false, message: String(e.message || e) };
   } finally {
@@ -908,7 +904,10 @@ function submitQuiz(payload) {
 
 function alreadyQuizSaved_(sh, dedupe) {
   const key = "quizdedupe_" + Utilities.base64EncodeWebSafe(dedupe).slice(0, 80);
-  return PropertiesService.getScriptProperties().getProperty(key) === "1";
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty(key) === "1") return true;
+  props.setProperty(key, "1");
+  return false;
 }
 
 /* ============================================================
@@ -1293,6 +1292,7 @@ function showExcludedQuiz() {
   rows.forEach(function (r, i) {
     if (quizCounts_(r, m)) return;
     out.push((i + 2) + "行目　" + String(r[m["氏名"] - 1] || r[m["email"] - 1]) +
+             "　" + String(r[m["ステージ名"] - 1] || "") +
              "　成績" + r[m["成績(%)"] - 1] + "％　" + String(r[m["除外理由"] - 1] || ""));
   });
   ui.alert(APP_NAME + "　成績に入れなかった小テスト",

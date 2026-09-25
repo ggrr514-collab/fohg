@@ -374,8 +374,9 @@
     <div class="pad">
       <p class="hint" id="quizLead" style="margin:0 0 14px"></p>
       <div class="rule">
-        <b>5分間で、大問2つに挑戦します。</b>
-        <span>2つのうち、<b>正答率の高いほうが今日の成績</b>になります。</span>
+        <b>制限時間は5分。まず大問1つを解きます。</b>
+        <span>解き終わったら、<b>その成績で終えるか、2つ目にも挑戦するか</b>を選べます。</span>
+        <span>2つ目に進むと、<b>1つ目と2つ目の両方が成績として記録されます</b>。</span>
       </div>
       <div class="msg" id="quizMsg"></div>
       <div class="toolrow" style="margin-top:16px">
@@ -476,15 +477,41 @@
   <div class="quizbar">この画面を閉じたり、ほかのページに移ったりしないでください。答えていない問題は不正解になります。</div>
   <div id="qBody"></div>
   <div class="actions">
-    <button class="btn primary" id="qSubmit" onclick="submitQuiz(false)">提出する</button>
+    <button class="btn primary" id="qSubmit" onclick="submitPart(false)">解答を確定する</button>
   </div>
+</main>
+
+<!-- ============ QUIZ 中間（続けるか決める） ============ -->
+<main id="qmid" class="wrap hidden">
+  <div class="playhead">
+    <h2 class="mincho" id="qmTitle">1つ目の結果</h2>
+    <span class="spacer"></span>
+    <span class="countdown" id="qmClock">5:00</span>
+  </div>
+  <div class="scorecard">
+    <div class="ribbon" id="qmRibbon">1つ目の正答率</div>
+    <div class="bigrate" id="qmRate">0<small>％</small></div>
+    <p class="meta" id="qmMeta"></p>
+  </div>
+  <div class="msg" id="qmMsg"></div>
+  <div class="picker" style="margin-top:18px">
+    <button class="pick" onclick="finishHere()">
+      <h4>ここで終える</h4>
+      <p>いまの正答率が、今日の成績になります。</p>
+    </button>
+    <button class="pick" id="qmGo" onclick="goNextPart()">
+      <h4>2つ目にも挑戦する</h4>
+      <p>残り時間で、もう1つの大問を解きます。<br><b>1つ目と2つ目の両方が成績になります。</b></p>
+    </button>
+  </div>
+  <p class="hint" style="margin-top:14px">2つ目をいいかげんに解くと、平均成績が下がります。残り時間と相談して決めましょう。</p>
 </main>
 
 <!-- ============ QUIZ RESULT ============ -->
 <main id="qresult" class="wrap hidden">
   <div class="playhead"><h2 class="mincho">小テスト　結果</h2></div>
   <div class="scorecard">
-    <div class="ribbon">今日の成績</div>
+    <div class="ribbon" id="qRibbon">今日の成績</div>
     <div class="bigrate" id="qRate">0<small>％</small></div>
     <div class="parts" id="qParts"></div>
     <p class="msg2 mincho" id="qMsg" style="margin:10px 0 0; font-size:14px; color:#3a4555"></p>
@@ -527,7 +554,7 @@
    古典クエスト ― クライアント側
    ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
    ============================================================ */
-var CLIENT_VERSION = 6;
+var CLIENT_VERSION = 7;
 
 var MARK  = ['ア','イ','ウ','エ'];
 var TYPES = ['仮名遣い','主語・指示語','内容理解','要旨・話し合い'];
@@ -565,11 +592,13 @@ function setMsg(id, text, cls, asHtml){
 
 /* ---------- 画面切り替え ---------- */
 function show(id){
-  ['gate','home','play','result','review','quiz','qresult'].forEach(function(s){
+  ['gate','home','play','result','review','quiz','qmid','qresult'].forEach(function(s){
     document.getElementById(s).classList.toggle('hidden', s!==id);
   });
-  document.getElementById('siteHeader').classList.toggle('hidden', id==='gate');
-  if(id!=='quiz') stopQClock();
+  // 小テストの最中は、ヘッダーの「ステージ一覧」で抜け出せないようにする
+  var locked = (id==='quiz' || id==='qmid') && !!QZ;
+  document.getElementById('siteHeader').classList.toggle('hidden', id==='gate' || locked);
+  if(id!=='quiz' && id!=='qmid') stopQClock();
   window.scrollTo(0,0);
 }
 function goHome(){ stopTimer(); renderHome(); show('home'); }
@@ -1068,13 +1097,13 @@ function renderQuizPanel(){
   }
 
   if(!quizOn()) return;
-  if(!QUIZ){ QUIZ={remain:0,total:0,tries:0,best:null,avg:null,count:2}; }
+  if(!QUIZ){ QUIZ={remain:0,total:0,tries:0,best:null,avg:null,maxParts:2}; }
 
   var lead='残り<b>'+QUIZ.remain+'</b>／'+QUIZ.total+'本'+
-           (QUIZ.tries?'　これまで'+QUIZ.tries+'回':'')+
+           (QUIZ.tries?'　これまで'+QUIZ.tries+'大問':'')+
            (QUIZ.best!=null?'　最高成績 <b>'+QUIZ.best+'％</b>':'')+
            (QUIZ.avg!=null?'　平均 '+QUIZ.avg+'％':'')+
-           (QUIZ.skipped?'　<span style="color:var(--ng)">成績に入らなかった回 '+QUIZ.skipped+'</span>':'');
+           (QUIZ.skipped?'　<span style="color:var(--ng)">成績に入らなかった大問 '+QUIZ.skipped+'</span>':'');
   document.getElementById('quizLead').innerHTML=lead;
 
   var one=(QUIZ.remain===1);
@@ -1099,46 +1128,52 @@ var QTICK=null, QEND=0;
 function startQuiz(){
   setMsg('quizMsg','');
   call('startQuiz',[], function(r){
-    if(!r||!r.ok){ setMsg('quizMsg',(r&&r.message)||'始められませんでした。'); if(r&&r.remain!=null){ QUIZ.remain=r.remain; renderQuizPanel(); } return; }
-    QZ={stages:r.stages, count:r.count, startedAt:r.startedAt, picks:{}, stamps:{},
-        blur:0, limit:r.limitSec||300, t0:Date.now()};
+    if(!r||!r.ok){
+      setMsg('quizMsg',(r&&r.message)||'始められませんでした。');
+      if(r&&r.remain!=null){ QUIZ.remain=r.remain; renderQuizPanel(); }
+      return;
+    }
+    QZ={ sessionId:r.sessionId, limit:r.limitSec||300, startedAt:r.startedAt,
+         blur:0, done:[] };       // done に大問ごとの結果をためる
     QUIZ=r.status||QUIZ;
-    paintQuiz();
+    openPart(r.stage, r.index||1);
     startQClock(QZ.limit);
     show('quiz');
   });
 }
 
-function paintQuiz(){
+/** 大問1つを画面に出す */
+function openPart(stage, index){
+  QZ.stage=stage; QZ.index=index;
+  QZ.picks={}; QZ.stamps={}; QZ.t0=Date.now(); QZ.sent=false;
   document.getElementById('qSub').textContent=
-    (QZ.count>1 ? '大問'+QZ.count+'つ・'+totalQs()+'問／5分　※よいほうが成績になります'
-                : '大問1つ・'+totalQs()+'問／5分');
+    index+'つ目　'+stage.qs.length+'問'+(index===1?'（このあと続けるか選べます）':'（最後の大問です）');
   document.getElementById('qSubmit').disabled=false;
-  document.getElementById('qSubmit').textContent='提出する';
-  document.getElementById('qBody').innerHTML=QZ.stages.map(function(st,si){
-    return '<div class="qsec"><h3>第'+(si+1)+'問　'+esc(st.title)+'<small>（'+esc(st.src)+'より）</small></h3>'+
-      '<div class="maegaki"><span class="lab">（前書き）</span>'+st.intro+'</div>'+
-      '<div class="honbun tate" id="qh'+si+'">'+st.honbun+'</div>'+
-      '<div class="toolrow">'+
-        '<button class="btn sm on" onclick="qTate('+si+',true,this)">縦書き</button>'+
-        '<button class="btn sm" onclick="qTate('+si+',false,this)">横書き</button>'+
-      '</div>'+
-      '<div class="chu"><span class="lab">（注）</span>'+st.chu+'</div>'+
-      st.qs.map(function(q){
-        return '<div class="q">'+
-          '<div class="qhead"><span class="qno">'+esc(q.n)+'</span><span class="tag">'+esc(q.type)+'</span>'+
-          '<span class="pt">'+(q.pt||3)+'点</span></div>'+
-          '<p class="qtext">'+q.q+'</p>'+
-          (q.talk?'<div class="talk">'+q.talk+'</div>':'')+
-          (q.blank?'<div class="blankline">'+q.blank+'</div>':'')+
-          '<div class="opts">'+q.opts.map(function(o,oi){
-            return '<button class="opt" id="qo_'+q.id+'_'+oi+'" onclick="qPick(\''+q.id+'\','+oi+')">'+
-                   '<span class="mk">'+MARK[oi]+'</span><span>'+esc(o)+'</span></button>';
-          }).join('')+'</div></div>';
-      }).join('')+'</div>';
-  }).join('');
-  QZ.stages.forEach(function(_,si){ var h=document.getElementById('qh'+si); h.scrollLeft=h.scrollWidth; });
+  document.getElementById('qSubmit').textContent='解答を確定する';
+  document.getElementById('qBody').innerHTML=
+    '<div class="qsec"><h3>'+index+'つ目　'+esc(stage.title)+'<small>（'+esc(stage.src)+'より）</small></h3>'+
+    '<div class="maegaki"><span class="lab">（前書き）</span>'+stage.intro+'</div>'+
+    '<div class="honbun tate" id="qh0">'+stage.honbun+'</div>'+
+    '<div class="toolrow">'+
+      '<button class="btn sm on" onclick="qTate(0,true,this)">縦書き</button>'+
+      '<button class="btn sm" onclick="qTate(0,false,this)">横書き</button>'+
+    '</div>'+
+    '<div class="chu"><span class="lab">（注）</span>'+stage.chu+'</div>'+
+    stage.qs.map(function(q){
+      return '<div class="q">'+
+        '<div class="qhead"><span class="qno">'+esc(q.n)+'</span><span class="tag">'+esc(q.type)+'</span>'+
+        '<span class="pt">'+(q.pt||3)+'点</span></div>'+
+        '<p class="qtext">'+q.q+'</p>'+
+        (q.talk?'<div class="talk">'+q.talk+'</div>':'')+
+        (q.blank?'<div class="blankline">'+q.blank+'</div>':'')+
+        '<div class="opts">'+q.opts.map(function(o,oi){
+          return '<button class="opt" id="qo_'+q.id+'_'+oi+'" onclick="qPick(\''+q.id+'\','+oi+')">'+
+                 '<span class="mk">'+MARK[oi]+'</span><span>'+esc(o)+'</span></button>';
+        }).join('')+'</div></div>';
+    }).join('')+'</div>';
+  var h=document.getElementById('qh0'); h.scrollLeft=h.scrollWidth;
   updQProg();
+  window.scrollTo(0,0);
 }
 
 function qTate(si,v,btn){
@@ -1149,14 +1184,14 @@ function qTate(si,v,btn){
   if(v) h.scrollLeft=h.scrollWidth;
 }
 
-function totalQs(){ var n=0; QZ.stages.forEach(function(s){ n+=s.qs.length; }); return n; }
+function totalQs(){ return QZ.stage ? QZ.stage.qs.length : 0; }
 
 function qPick(qid,oi){
   if(!QZ || QZ.sent) return;
   QZ.picks[qid]=oi;
   QZ.stamps[qid]=Date.now()-QZ.t0;     // 連打かどうかを見るため、押した時刻を残す
-  var st=null,q=null;
-  QZ.stages.forEach(function(s){ s.qs.forEach(function(x){ if(x.id===qid){ st=s; q=x; } }); });
+  var q=null;
+  QZ.stage.qs.forEach(function(x){ if(x.id===qid) q=x; });
   if(!q) return;
   q.opts.forEach(function(_,k){
     var b=document.getElementById('qo_'+qid+'_'+k);
@@ -1170,103 +1205,163 @@ function updQProg(){
   document.getElementById('qProg').innerHTML='解答 <b>'+done+'</b>／'+all;
 }
 
+function leftSec(){ return Math.max(0,Math.round((QEND-Date.now())/1000)); }
+function usedSec(){ var u=QZ.limit-leftSec(); return u<0?0:u; }
+
 function startQClock(sec){
   stopQClock();
   QEND=Date.now()+sec*1000;
-  var el=document.getElementById('qClock');
-  function tick(){
-    var left=Math.max(0,Math.round((QEND-Date.now())/1000));
-    el.textContent=Math.floor(left/60)+':'+('0'+(left%60)).slice(-2);
+  tickQ();
+  QTICK=setInterval(tickQ,250);
+}
+function tickQ(){
+  var left=leftSec();
+  var txt=Math.floor(left/60)+':'+('0'+(left%60)).slice(-2);
+  ['qClock','qmClock'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(!el) return;
+    el.textContent=txt;
     el.classList.toggle('warn', left<=60 && left>20);
     el.classList.toggle('danger', left<=20);
-    if(left<=0){ stopQClock(); submitQuiz(true); }
-  }
-  tick();
-  QTICK=setInterval(tick,250);
+  });
+  if(left<=0){ stopQClock(); onTimeUp(); }
 }
 function stopQClock(){ if(QTICK){ clearInterval(QTICK); QTICK=null; } }
 
-function submitQuiz(auto){
+function onTimeUp(){
+  if(!QZ) return;
+  if(!document.getElementById('quiz').classList.contains('hidden')){
+    submitPart(true);                 // 解答中だった大問を、そのまま確定
+  }else{
+    finishHere();                     // 判断画面で止まっていたら、そこまでで終了
+  }
+}
+
+/* ---------- 大問1つ分を確定する ---------- */
+function submitPart(auto){
   if(!QZ || QZ.sent) return;
   if(!auto){
     var left=totalQs()-Object.keys(QZ.picks).length;
-    var msg = left>0
-      ? 'まだ'+left+'問が未解答です。未解答は不正解になります。提出しますか。'
-      : '提出します。よろしいですか。';
-    if(!confirm(msg)) return;
+    if(left>0 && !confirm('まだ'+left+'問が未解答です。未解答は不正解になります。確定しますか。')) return;
   }
-  QZ.sent=true; stopQClock();
+  QZ.sent=true;
   document.getElementById('qSubmit').disabled=true;
-  document.getElementById('qSubmit').textContent='提出しています…';
-  var secs=Math.round((QZ.limit*1000-(QEND-Date.now()))/1000);
-  if(secs<0) secs=0; if(secs>QZ.limit) secs=QZ.limit;
-  call('submitQuiz',[{
-    email: ME.email,
-    stageIds: QZ.stages.map(function(s){ return s.id; }),
-    picks: QZ.picks, stamps: QZ.stamps, seconds: secs, blur: QZ.blur,
-    timeUp: !!auto, startedAt: QZ.startedAt
+  document.getElementById('qSubmit').textContent='送信しています…';
+  var startedPart=QZ.t0;
+  call('submitQuizPart',[{
+    email: ME.email, sessionId: QZ.sessionId, index: QZ.index, stageId: QZ.stage.id,
+    picks: QZ.picks, stamps: QZ.stamps,
+    seconds: Math.round((Date.now()-startedPart)/1000),
+    blur: QZ.blur||0, timeUp: !!auto
   }], function(r){
     if(!r||!r.ok){
       QZ.sent=false;
       document.getElementById('qSubmit').disabled=false;
-      document.getElementById('qSubmit').textContent='提出する';
-      alert((r&&r.message)||'提出できませんでした。もう一度お試しください。');
+      document.getElementById('qSubmit').textContent='解答を確定する';
+      alert((r&&r.message)||'送信できませんでした。もう一度お試しください。');
       return;
     }
+    r.stage=QZ.stage;
+    QZ.done.push(r);
     QUIZ=r.status||QUIZ;
-    paintQuizResult(r, auto);
-    show('qresult');
+    if(auto || QZ.index>=2){ finishQuiz(false); return; }   // 時間切れ、または2つ目が終わった
+    paintMid(r);                                            // 続けるか決める
+    show('qmid');
   }, function(m){
     QZ.sent=false;
     document.getElementById('qSubmit').disabled=false;
-    document.getElementById('qSubmit').textContent='提出する';
-    alert('提出できませんでした。電波のよい場所でもう一度お試しください。'+m);
+    document.getElementById('qSubmit').textContent='解答を確定する';
+    alert('送信できませんでした。電波のよい場所でもう一度お試しください。'+m);
   });
 }
 
-function paintQuizResult(r, auto){
-  var score=(r.score!=null)?r.score:r.rate;
-  document.getElementById('qRate').innerHTML=score+'<small>％</small>';
+/* ---------- 中間：続けるか決める ---------- */
+function paintMid(r){
+  document.getElementById('qmTitle').textContent=r.index+'つ目の結果';
+  document.getElementById('qmRibbon').textContent=r.index+'つ目の正答率';
+  document.getElementById('qmRate').innerHTML=r.score+'<small>％</small>';
+  document.getElementById('qmMeta').textContent=
+    esc(r.title)+'　'+r.correct+'／'+r.total+'問正解'+
+    (r.counted===false?'　※この大問は成績に入りません':'');
+  var left=leftSec();
+  var warn = (r.counted===false)
+      ? '<b>いまの大問は成績に入りません。</b>　'+esc(r.reason||'解答が速すぎます。')
+      : (left<90 ? '残り時間は'+Math.floor(left/60)+'分'+(left%60)+'秒です。2つ目に進むなら急ぎましょう。' : '');
+  setMsg('qmMsg', warn, (r.counted===false)?'err':'warn', true);
+  document.getElementById('qmGo').disabled=(left<=5);
+}
 
-  // 大問ごとの正答率。採用されたほうに印を付ける
-  var parts=r.parts||[];
+function finishHere(){ finishQuiz(false); }
+
+function goNextPart(){
+  if(!QZ) return;
+  // 1つ目はすでに確定済み。ここで初めて2つ目を取りに行く
+  call('nextQuizStage',[QZ.done.map(function(d){ return d.stageId; })], function(r){
+    if(!r||!r.ok){ alert((r&&r.message)||'次の問題を出せませんでした。'); return; }
+    if(r.noMore){ alert('次に出せる問題がありません。ここで終わります。'); finishQuiz(true); return; }
+    openPart(r.stage, QZ.done.length+1);
+    show('quiz');
+  });
+}
+
+function finishQuiz(noMore){
+  stopQClock();
+  paintQuizResult(QZ.done, noMore);
+  show('qresult');
+}
+
+function paintQuizResult(parts, noMore){
+  var counted=parts.filter(function(x){ return x.counted!==false; });
+  var avg = counted.length
+      ? Math.round(counted.reduce(function(a,x){ return a+x.score; },0)/counted.length)
+      : 0;
+
+  document.getElementById('qRibbon').textContent =
+    (parts.length>1) ? '今日の成績（2つの平均）' : '今日の成績';
+  document.getElementById('qRate').innerHTML = counted.length
+      ? avg+'<small>％</small>' : '<small>記録なし</small>';
+  document.getElementById('qRate').style.opacity = counted.length ? '' : '.5';
+
   document.getElementById('qParts').innerHTML=parts.map(function(x,i){
-    var best=(x.id===r.bestId);
-    return '<div class="part'+(best?' best':'')+'">'+
-      '<div class="t">第'+(i+1)+'問　'+esc(x.title)+'</div>'+
-      '<div class="r">'+x.rate+'<small>％</small>　<small>'+x.correct+'/'+x.n+'問</small></div>'+
-      (best&&parts.length>1?'<span class="badge">こちらを成績にしました</span>':'')+
-      '</div>';
+    var out=(x.counted===false);
+    return '<div class="part'+(out?'':' best')+'">'+
+      '<div class="t">'+(i+1)+'つ目　'+esc(x.title)+'</div>'+
+      '<div class="r">'+x.score+'<small>％</small>　<small>'+x.correct+'/'+x.total+'問</small></div>'+
+      '<span class="badge"'+(out?' style="color:var(--ng)"':'')+'>'+
+        (out?'成績に入りません':'成績として記録')+'</span></div>';
   }).join('');
 
-  var msg = score===100 ? '全問正解。みごとです。'
-          : score>=75  ? '合格ライン。取りこぼした問題の根拠を本文で確かめましょう。'
-          : score>=50  ? 'あと一歩。解説を読んで、傍線部の根拠をたどり直しましょう。'
-                       : '本文の前書きと注をよりどころに、もう一度読み方を確かめましょう。';
+  var msg = !counted.length ? '次は、問題文と選択肢をきちんと読んでから答えましょう。'
+          : avg===100 ? '全問正解。みごとです。'
+          : avg>=75   ? '合格ライン。取りこぼした問題の根拠を本文で確かめましょう。'
+          : avg>=50   ? 'あと一歩。解説を読んで、傍線部の根拠をたどり直しましょう。'
+                      : '本文の前書きと注をよりどころに、もう一度読み方を確かめましょう。';
   document.getElementById('qMsg').textContent=msg;
-  document.getElementById('qMeta').textContent=
-    '全体では '+r.correct+'／'+r.total+'問正解（'+r.rate+'％）　／　解答時間 '+
-    Math.floor(r.seconds/60)+'分'+(r.seconds%60)+'秒'+(r.timeUp?'（時間切れ）':'')+
-    (QUIZ&&QUIZ.best!=null?'　／　これまでの最高成績 '+QUIZ.best+'％':'')+
-    (r.isBest&&QUIZ&&QUIZ.tries>1?'（更新）':'');
-  if(r.counted===false){
-    setMsg('qSaveMsg',
-      '<b>この回は成績に入りません。</b>　'+esc(r.reason||'解答が速すぎます。')+
-      '　問題文と選択肢をきちんと読んでから答えましょう。（記録は先生に残ります）', 'err', true);
-  }else{
-    setMsg('qSaveMsg', r.duplicated?'この回はすでに記録されています。':'', 'warn');
-  }
-  document.getElementById('qRate').style.opacity = (r.counted===false) ? '.4' : '';
-  var rib=document.querySelector('#qresult .ribbon');
-  if(rib) rib.textContent = (r.counted===false) ? '成績に入りません' : '今日の成績';
 
-  var byStage={};
-  (r.detail||[]).forEach(function(d){ (byStage[d.stageId]=byStage[d.stageId]||[]).push(d); });
-  document.getElementById('qReview').innerHTML=QZ.stages.map(function(st,si){
-    var ds=byStage[st.id]||[];
-    return '<div class="qsec"><h3>第'+(si+1)+'問　'+esc(st.title)+'<small>（'+esc(st.src)+'より）</small></h3>'+
-      ds.map(function(d){
-        var q=null; st.qs.forEach(function(x){ if(x.id===d.id) q=x; });
+  var used=parts.reduce(function(a,x){ return a+(x.seconds||0); },0);
+  document.getElementById('qMeta').textContent=
+    '大問'+parts.length+'つ　／　解答時間 '+Math.floor(used/60)+'分'+(used%60)+'秒'+
+    (parts.some(function(x){return x.timeUp;})?'（時間切れ）':'')+
+    (QUIZ&&QUIZ.best!=null?'　／　これまでの最高成績 '+QUIZ.best+'％':'')+
+    (QUIZ&&QUIZ.avg!=null?'　／　平均 '+QUIZ.avg+'％':'');
+
+  var bad=parts.filter(function(x){ return x.counted===false; });
+  if(bad.length){
+    setMsg('qSaveMsg','<b>成績に入らなかった大問があります。</b>　'+
+      esc(bad[0].reason||'解答が速すぎます。')+
+      '　問題文と選択肢をきちんと読んでから答えましょう。（記録は先生に残ります）','err',true);
+  }else if(noMore){
+    setMsg('qSaveMsg','出せる問題がなくなったので、ここで終わりです。','warn');
+  }else{
+    setMsg('qSaveMsg','','warn');
+  }
+
+  // 解説（大問ごと）
+  document.getElementById('qReview').innerHTML=parts.map(function(x,i){
+    var st=x.stage||{qs:[]};
+    return '<div class="qsec"><h3>'+(i+1)+'つ目　'+esc(x.title)+'<small>（'+esc(x.src||'')+'より）</small></h3>'+
+      (x.detail||[]).map(function(d){
+        var q=null; (st.qs||[]).forEach(function(y){ if(y.id===d.id) q=y; });
         if(!q) return '';
         return '<div class="q"><div class="qhead"><span class="qno">'+esc(d.n)+'</span><span class="tag">'+esc(d.type)+'</span>'+
           '<span class="pt" style="color:'+(d.ok?'var(--ok)':'var(--ng)')+';font-weight:700">'+
