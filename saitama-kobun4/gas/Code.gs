@@ -20,7 +20,7 @@ const SPREADSHEET_ID = "1Yuf_jzWZYfQKaYuZV6LN6-RDAODoOLeX-uyn9nYecwU";
 const MASTER_ID      = "1OaMsGfk_-s-BMa_osO3d8hwK04ikP0G34J7TWbs2lJo";
 
 /** index.html 側の CLIENT_VERSION と必ず同じ値にすること */
-const CLIENT_VERSION = 13;
+const CLIENT_VERSION = 14;
 
 const APP_NAME = "古典クエスト";
 
@@ -288,28 +288,43 @@ function rosterCols_(sh) {
 }
 
 /** 名簿を email で引く。無ければ null */
+/* 名簿は毎回読むと重いので、しばらく覚えておく（登録があれば捨てる） */
+const ROSTER_CACHE_KEY = "kobun_roster_v1";
+
+function rosterMap_() {
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get(ROSTER_CACHE_KEY);
+  if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+
+  const map = {};
+  const sh = rosterSheet_();
+  if (sh.getLastRow() >= 2) {
+    const c = rosterCols_(sh);
+    if (c.email) {
+      const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+      function cell(row, col) { return col ? String(row[col - 1] == null ? "" : row[col - 1]).trim() : ""; }
+      rows.forEach(function (row, i) {
+        const e = cell(row, c.email).toLowerCase();
+        if (!e) return;
+        if (!map[e]) map[e] = { email: e, name: cell(row, c.name), klass: cell(row, c.klass),
+                                no: cell(row, c.no), row: i + 2 };
+      });
+    }
+  }
+  try { cache.put(ROSTER_CACHE_KEY, JSON.stringify(map), CACHE_SEC); } catch (e) {}
+  return map;
+}
+function clearRosterCache_() {
+  try { CacheService.getScriptCache().remove(ROSTER_CACHE_KEY); } catch (e) {}
+}
+
 function findByEmail_(email) {
   const e = String(email || "").trim().toLowerCase();
   if (!e) return null;
-  const sh = rosterSheet_();
-  if (sh.getLastRow() < 2) return null;
-  const c = rosterCols_(sh);
-  if (!c.email) return null;
-  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
-  function cell(row, col) { return col ? String(row[col - 1] == null ? "" : row[col - 1]).trim() : ""; }
-  for (let i = 0; i < rows.length; i++) {
-    if (cell(rows[i], c.email).toLowerCase() === e) {
-      return {
-        email: e,
-        name:  cell(rows[i], c.name),
-        klass: cell(rows[i], c.klass),
-        no:    cell(rows[i], c.no),
-        row:   i + 2,
-        teacher: isTeacher_(e)
-      };
-    }
-  }
-  return null;
+  const hit = rosterMap_()[e];
+  if (!hit) return null;
+  return { email: e, name: hit.name, klass: hit.klass, no: hit.no, row: hit.row,
+           teacher: isTeacher_(e) };
 }
 
 /** 氏名の表記ゆれを吸収して比べるためのキー（空白を除く） */
@@ -357,6 +372,7 @@ function upsertRoster_(email, name, klass, no) {
       put(hit, c.email, email);
       if (klass) put(hit, c.klass, klass);
       if (no)    put(hit, c.no,    no);
+      clearRosterCache_();
       return findByEmail_(email);
     }
   }
@@ -370,6 +386,7 @@ function upsertRoster_(email, name, klass, no) {
   if (c.klass) row[c.klass - 1] = klass;
   if (c.no)    row[c.no    - 1] = no;
   sh.getRange(sh.getLastRow() + 1, 1, 1, width).setValues([row]);
+  clearRosterCache_();
   return findByEmail_(email);
 }
 
@@ -427,7 +444,7 @@ function onOpen() {
     .addItem("初回セットアップ（必要なシートを生成）", "setupSheets")
     .addSeparator()
     .addItem("小テスト用の問題を割り当てる（用途列を整える）", "assignQuizUse")
-    .addItem("問題プールのキャッシュをクリア", "clearPoolCache")
+    .addItem("読み込みをやり直す（キャッシュをクリア）", "clearPoolCache")
     .addItem("集計を今すぐ作り直す", "rebuildTotals")
     .addSeparator()
     .addItem("小テストモードを開始", "quizModeOn")
@@ -459,6 +476,7 @@ function switchQuizMode_(on, byEmail) {
     } else {
       closed = endRound_();
       clearMemo_();
+      clearProgressCache_();       // 練習に出る本数が変わるので、覚えていた進捗を捨てる
       rebuildTotalsIfDirty_();     // 生徒を待たせずにためておいた集計を、ここで作り直す
     }
     writeConfigFlag_("小テストモード", !!on);
@@ -576,6 +594,7 @@ function assignQuizUse_() {
     sh.getRange(2, col, last - 1, 1).setValues(uses);
 
     CacheService.getScriptCache().remove(CACHE_KEY);
+    clearProgressCache_();
     return { ok: true, filled: filled, practice: practice, quiz: quiz, unknown: unknown };
   } catch (e) {
     return { ok: false, message: String(e.message || e) };
@@ -584,8 +603,10 @@ function assignQuizUse_() {
 
 function clearPoolCache() {
   CacheService.getScriptCache().remove(CACHE_KEY);
+  clearRosterCache_();
+  clearProgressCache_();
   const ui = tryUi_();
-  if (ui) ui.alert(APP_NAME, "問題プールのキャッシュをクリアしました。次回出題から最新の問題マスターが読み込まれます。", ui.ButtonSet.OK);
+  if (ui) ui.alert(APP_NAME, "キャッシュをクリアしました。\n\n問題マスター・名簿・生徒の進捗を、次のアクセスから読み直します。\nシートを手で書き換えたあとは、これを実行してください。", ui.ButtonSet.OK);
 }
 
 /* ============================================================
@@ -729,7 +750,7 @@ function sessionFor_(me) {
     settings: { classBonus: cfg.classBonus, timeFree: cfg.timeFree, quizMode: cfg.quizMode },
     blocked: timeBlocked_(me.teacher),
     stages: practiceStages_(),          // 小テスト用の本文は画面に渡さない
-    progress: getProgress_(me.email),
+    progress: progressOf_(me.email),
     quiz: quizStatus_(me.email)
   };
 }
@@ -1027,7 +1048,12 @@ function quizLog_() {
   if (sh && sh.getLastRow() >= 2 && sh.getLastColumn() >= 1) {
     const m = headerMap_(sh);
     if (m["email"]) {
-      const rows = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+      // いるのは前のほうの列だけなので、そこまでで読み止める
+      let need = 1;
+      ["保存日時", "email", "回ID", "何問目", "成績(%)", "成績に反映", "ステージID"].forEach(function (h) {
+        if (m[h] && m[h] > need) need = m[h];
+      });
+      const rows = sh.getRange(2, 1, sh.getLastRow() - 1, need).getValues();
       rows.forEach(function (r) {
         const email = String(r[m["email"] - 1] || "").trim().toLowerCase();
         if (!email) return;
@@ -1338,17 +1364,133 @@ function submitQuizPart(payload) {
 }
 
 function alreadyQuizSaved_(sh, dedupe) {
-  const key = "quizdedupe_" + Utilities.base64EncodeWebSafe(dedupe).slice(0, 80);
-  const props = PropertiesService.getScriptProperties();
-  if (props.getProperty(key) === "1") return true;
-  props.setProperty(key, "1");
-  return false;
+  return markOnce_("qdup_", dedupe);
 }
 
 /* ============================================================
    進捗
    ============================================================ */
+/* 進捗（自己ベスト・タイプ別正誤・まちがえた問題）は、
+   結果シートと解答履歴シートを全部読まないと出せない。
+   毎回読むと人数ぶん重くなるので、生徒ごとに覚えておき、
+   解くたびに「足し算」で更新する。 */
+function progressEpoch_() {
+  try {
+    const v = PropertiesService.getScriptProperties().getProperty("progEpoch");
+    return v || "1";
+  } catch (e) { return "1"; }
+}
+function clearProgressCache_() {
+  // 生徒ごとのキーを消して回るかわりに、世代番号を1つ進める
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const v = Number(props.getProperty("progEpoch") || "1") + 1;
+    props.setProperty("progEpoch", String(v));
+  } catch (e) {}
+}
+function progKey_(email) {
+  return "prog" + progressEpoch_() + "_" +
+         Utilities.base64EncodeWebSafe(String(email || "").toLowerCase()).slice(0, 80);
+}
+
+/**
+ * 覚えてあるものがあれば使う。無ければシートから作って覚える。
+ * どのみちシートを全部読むので、そのとき「全員ぶん」まとめて作って覚えておく。
+ * こうすると、クラスで最初の1人だけが読み込み、あとの人は読まずに済む。
+ */
+function progressCoreCached_(email) {
+  const cache = CacheService.getScriptCache();
+  const key = progKey_(email);
+  const hit = cache.get(key);
+  let core = null;
+  if (hit) { try { core = JSON.parse(hit); } catch (e) { core = null; } }
+  if (!core) {
+    const all = progressAllCores_();
+    core = all[String(email || "").toLowerCase()] || emptyCore_();
+    const put = {};
+    Object.keys(all).forEach(function (e) { put[progKey_(e)] = JSON.stringify(all[e]); });
+    put[key] = JSON.stringify(core);          // 名簿にいない人のぶんも覚えておく
+    try { cache.putAll(put, CACHE_SEC); } catch (e) {
+      try { cache.put(key, JSON.stringify(core), CACHE_SEC); } catch (e2) {}
+    }
+  }
+  if (!core.best)  core.best  = {};
+  if (!core.stats) core.stats = {};
+  if (!core.wrong) core.wrong = [];
+  if (!core.tries) core.tries = 0;
+  return core;
+}
+function progressOf_(email) { return finishProgress_(progressCoreCached_(email)); }
+function saveProgressCore_(email, core) {
+  try { CacheService.getScriptCache().put(progKey_(email), JSON.stringify(core), CACHE_SEC); } catch (e) {}
+}
+
+/** 満点・累計・称号は、そのつど計算し直す（練習の本数が増えると変わるため） */
+function finishProgress_(core) {
+  const prog = { best: core.best || {}, stats: core.stats || {}, wrong: core.wrong || [],
+                 tries: core.tries || 0, points: 0, maxPoints: 0, rankName: "" };
+  Q_TYPES.forEach(function (t) { if (!prog.stats[t]) prog.stats[t] = { c: 0, t: 0 }; });
+  Object.keys(prog.best).forEach(function (sid) { prog.points += prog.best[sid]; });
+  prog.maxPoints = maxPoints_();
+  prog.rankName = rankName_(prog.points, prog.maxPoints);
+  return prog;
+}
+
+function emptyCore_() {
+  const stats = {};
+  Q_TYPES.forEach(function (t) { stats[t] = { c: 0, t: 0 }; });
+  return { best: {}, stats: stats, wrong: [], tries: 0 };
+}
+
+/** 結果シートと解答履歴シートを1回ずつ読んで、全員ぶんの進捗を作る */
+function progressAllCores_() {
+  const all = {};
+  function core(e) {
+    if (!all[e]) all[e] = emptyCore_();
+    return all[e];
+  }
+
+  const vR = sheetValues_(SH_RESULT);
+  if (vR.map["email"]) {
+    const m = vR.map;
+    vR.rows.forEach(function (r) {
+      const e = String(r[m["email"] - 1] || "").trim().toLowerCase();
+      if (!e) return;
+      const c = core(e);
+      const sid = String(r[m["ステージID"] - 1] || "").trim();
+      const sc = Number(r[m["得点"] - 1]) || 0;
+      if (c.best[sid] == null || sc > c.best[sid]) c.best[sid] = sc;
+      c.tries++;
+    });
+  }
+
+  const vA = sheetValues_(SH_ANSWER);
+  if (vA.map["email"]) {
+    const m = vA.map;
+    const latest = {};                       // email → 問題ID → 正誤（最後の解答）
+    vA.rows.forEach(function (r) {
+      const e = String(r[m["email"] - 1] || "").trim().toLowerCase();
+      if (!e) return;
+      const c = core(e);
+      const type = String(r[m["設問タイプ"] - 1] || "").trim();
+      const ok = String(r[m["正誤"] - 1] || "").trim() === "○";
+      if (c.stats[type]) { c.stats[type].t++; if (ok) c.stats[type].c++; }
+      if (!latest[e]) latest[e] = {};
+      latest[e][String(r[m["問題ID"] - 1] || "").trim()] = ok;
+    });
+    Object.keys(latest).forEach(function (e) {
+      const c = core(e);
+      Object.keys(latest[e]).forEach(function (qid) { if (!latest[e][qid]) c.wrong.push(qid); });
+    });
+  }
+  return all;
+}
+
 function getProgress_(email) {
+  return finishProgress_(progressCore_(email));
+}
+
+function progressCore_(email) {
   const key = String(email || "").toLowerCase();
   const prog = { best: {}, stats: {}, wrong: [], points: 0, maxPoints: 0, tries: 0, rankName: RANKS[RANKS.length - 1].name };
   Q_TYPES.forEach(function (t) { prog.stats[t] = { c: 0, t: 0 }; });
@@ -1379,11 +1521,7 @@ function getProgress_(email) {
     Object.keys(latest).forEach(function (qid) { if (!latest[qid]) prog.wrong.push(qid); });
   }
 
-  // 累計得点は「ステージごとの自己ベストの合計」。解き直しても水増しされない。
-  Object.keys(prog.best).forEach(function (sid) { prog.points += prog.best[sid]; });
-  prog.maxPoints = maxPoints_();
-  prog.rankName = rankName_(prog.points, prog.maxPoints);
-  return prog;
+  return { best: prog.best, stats: prog.stats, wrong: prog.wrong, tries: prog.tries };
 }
 
 function rankName_(points, maxPoints) {
@@ -1460,7 +1598,7 @@ function submitResult(payload) {
     if (dedupe && alreadySaved_(shR, dedupe)) {
       return { ok: true, duplicated: true, score: score, fullScore: fullScore, correct: correct, rate: rate,
                isBest: false, prevBest: bestOf_(me.email, stage.id), detail: detail,
-               progress: getProgress_(me.email), resultUuid: resultUuid };
+               progress: progressOf_(me.email), resultUuid: resultUuid };
     }
 
     const prevBest = bestOf_(me.email, stage.id);
@@ -1478,9 +1616,22 @@ function submitResult(payload) {
     }
 
     markTotalsDirty_();        // 集計シートは、生徒を待たせないようにあとで作り直す
-    clearMemo_();              // 書き込んだので、読み直す
 
-    const prog = getProgress_(me.email);
+    // 進捗は、シートを読み直さずに「いま解いたぶん」を足して更新する
+    const core = progressCoreCached_(me.email);
+    core.tries += 1;
+    if (core.best[stage.id] == null || score > core.best[stage.id]) core.best[stage.id] = score;
+    stage.qs.forEach(function (q, i) {
+      const ok = detail[i].ok;
+      if (!core.stats[q.type]) core.stats[q.type] = { c: 0, t: 0 };
+      core.stats[q.type].t += 1;
+      if (ok) core.stats[q.type].c += 1;
+      const at = core.wrong.indexOf(q.id);
+      if (ok && at >= 0) core.wrong.splice(at, 1);      // 直した問題は復習から外す
+      if (!ok && at < 0) core.wrong.push(q.id);
+    });
+    saveProgressCore_(me.email, core);
+    const prog = finishProgress_(core);
     return {
       ok: true, resultUuid: resultUuid,
       score: score, fullScore: fullScore, correct: correct, rate: rate,
@@ -1496,29 +1647,26 @@ function submitResult(payload) {
 
 function markOf_(i) { return ["ア", "イ", "ウ", "エ"][i] || "―"; }
 
-function alreadySaved_(sh, dedupe) {
-  const v = sheetValues_(SH_RESULT);
-  const col = v.map["重複排除キー"];
-  if (!col) return false;
-  for (let i = 0; i < v.rows.length; i++) {
-    if (String(v.rows[i][col - 1]) === dedupe) return true;
-  }
+/* 二重送信の見張りは、貯め込まないようにキャッシュで行う。
+   スクリプトプロパティは全体で500KBまでなので、増え続ける用途には向かない。 */
+function markOnce_(prefix, dedupe) {
+  const key = prefix + Utilities.base64EncodeWebSafe(String(dedupe)).slice(0, 100);
+  const cache = CacheService.getScriptCache();
+  try {
+    if (cache.get(key)) return true;
+    cache.put(key, "1", CACHE_SEC);
+  } catch (e) {}
   return false;
 }
 
+function alreadySaved_(sh, dedupe) {
+  return markOnce_("dup_", dedupe);
+}
+
 function bestOf_(email, stageId) {
-  const key = String(email).toLowerCase();
-  const v = sheetValues_(SH_RESULT);
-  const m = v.map;
-  if (!m["email"]) return null;
-  let best = null;
-  v.rows.forEach(function (r) {
-    if (String(r[m["email"] - 1]).trim().toLowerCase() !== key) return;
-    if (String(r[m["ステージID"] - 1]).trim() !== String(stageId)) return;
-    const sc = Number(r[m["得点"] - 1]) || 0;
-    if (best == null || sc > best) best = sc;
-  });
-  return best;
+  const core = progressCoreCached_(email);
+  const v = core.best[String(stageId)];
+  return (v == null) ? null : v;
 }
 
 /* ============================================================
@@ -1623,6 +1771,7 @@ function updateTotals_() {
 
 function rebuildTotals() {
   clearMemo_();
+  clearProgressCache_();
   const n = updateTotals_();
   try { PropertiesService.getScriptProperties().deleteProperty("totalsDirty"); } catch (e) {}
   const ui = tryUi_();

@@ -607,11 +607,19 @@
    古典クエスト ― クライアント側
    ★ Code.gs の CLIENT_VERSION と必ず同じ値にすること
    ============================================================ */
-var CLIENT_VERSION = 13;
+var CLIENT_VERSION = 14;
 
 var MARK  = ['ア','イ','ウ','エ'];
 var TYPES = ['仮名遣い','主語・指示語','内容理解','要旨・話し合い'];
 var KINDS = ['正解が複数ある','正解が選択肢にない','読みや表記の誤り','その他'];
+/* 称号の目安。Code.gs の RANKS と必ず同じにすること */
+var RANKS = [[0.90,'古典マスター'],[0.70,'古典の師範'],[0.50,'助動詞の達人'],
+             [0.30,'仮名遣い名人'],[0.10,'説話の読み手'],[0,'古文の旅人']];
+function rankNameOf(points, maxPoints){
+  var r = maxPoints>0 ? points/maxPoints : 0;
+  for(var i=0;i<RANKS.length;i++) if(r>=RANKS[i][0]) return RANKS[i][1];
+  return RANKS[RANKS.length-1][1];
+}
 
 var ME=null, STAGES=[], PROG=null, SETTINGS={}, BLOCKED='', SESSION=null;
 var QUIZ=null;                 // 小テストの状況（残数・最高正答率）
@@ -964,29 +972,99 @@ function grade(){
   if(GRADED) return;
   var st=STAGES[CUR];
   var secs=Math.floor((Date.now()-T0)/1000);
-  document.getElementById('gradeBtn').disabled=true;
-  document.getElementById('gradeBtn').textContent='記録しています…';
+
+  // 練習は答えも解説も画面側が持っているので、採点はその場でできる。
+  // 先に結果を出しておいて、記録は裏で送る。待ち時間が要らない。
+  var local=gradeLocally(st);
+  GRADED=true; stopTimer();
+  LAST=local;
+  paintPlay(local);
+  paintResult(local, secs);
+  show('result');
+  setMsg('saveMsg','記録しています…','warn');
 
   call('submitResult',[{
     email: ME.email, stageId: st.id, picks: PICKS,
     seconds: secs, blur: BLUR, startedAt: STARTED
   }], function(r){
     if(!r || !r.ok){
-      document.getElementById('gradeBtn').disabled=false;
-      document.getElementById('gradeBtn').textContent='採点して記録する';
-      alert((r&&r.message)||'記録できませんでした。もう一度お試しください。');
+      setMsg('saveMsg','<b>記録できませんでした。</b>　'+esc((r&&r.message)||'')+
+        '　<button class="btn sm" onclick="retrySave('+secs+')">もう一度送る</button>','err',true);
       return;
     }
-    GRADED=true; stopTimer();
+    // サーバーの採点で答え合わせをし直し、累計や称号を本物に入れ替える
     PROG=r.progress; LAST=r;
     document.getElementById('rankChip').textContent=PROG.rankName+'（'+(PROG.points||0)+'点）';
-    paintPlay(r);
     paintResult(r, secs);
-    show('result');
+    setMsg('saveMsg', r.duplicated ? 'この回はすでに記録されています（二重送信を防ぎました）。' : '', 'warn');
   }, function(m){
-    document.getElementById('gradeBtn').disabled=false;
-    document.getElementById('gradeBtn').textContent='採点して記録する';
-    alert('記録できませんでした。電波のよい場所でもう一度お試しください。\n'+m);
+    setMsg('saveMsg','<b>記録できませんでした。</b>　電波のよい場所で'+
+      '<button class="btn sm" onclick="retrySave('+secs+')">もう一度送る</button>','err',true);
+  });
+}
+
+/** 画面側で採点する。サーバーの返事と同じ形にそろえる */
+function gradeLocally(st){
+  var score=0, full=0, correct=0, detail=[];
+  st.qs.forEach(function(q,i){
+    var mine=(PICKS[i]==null)?-1:PICKS[i];
+    var ok=(mine===q.a);
+    full+=(q.pt||3);
+    if(ok){ score+=(q.pt||3); correct++; }
+    detail.push({id:q.id, mine:mine, a:q.a, ok:ok});
+  });
+  var prevBest=(PROG && PROG.best && PROG.best[st.id]!=null) ? PROG.best[st.id] : null;
+  var isBest=(prevBest==null||score>prevBest);
+
+  // 累計や称号も、サーバーの返事を待たずに見込みで進めておく。
+  // 返事が来たら本物に入れ替わるが、数字が飛び跳ねて見えないようにするため。
+  if(PROG){
+    if(isBest){
+      PROG.points=(PROG.points||0)+score-(prevBest||0);
+      if(!PROG.best) PROG.best={};
+      PROG.best[st.id]=score;
+    }
+    PROG.tries=(PROG.tries||0)+1;
+    st.qs.forEach(function(q,i){
+      if(!PROG.stats) PROG.stats={};
+      if(!PROG.stats[q.type]) PROG.stats[q.type]={c:0,t:0};
+      PROG.stats[q.type].t++;
+      if(detail[i].ok) PROG.stats[q.type].c++;
+      if(PROG.wrong){
+        var at=PROG.wrong.indexOf(q.id);
+        if(detail[i].ok && at>=0) PROG.wrong.splice(at,1);
+        if(!detail[i].ok && at<0) PROG.wrong.push(q.id);
+      }
+    });
+    PROG.rankName=rankNameOf(PROG.points||0, PROG.maxPoints||0);
+    document.getElementById('rankChip').textContent=PROG.rankName+'（'+(PROG.points||0)+'点）';
+  }
+
+  return { ok:true, local:true, score:score, fullScore:full, correct:correct,
+           rate: full?Math.round(score/full*100):0,
+           isBest:isBest, prevBest:(prevBest==null?null:prevBest),
+           detail:detail, progress:PROG, rankName:(PROG&&PROG.rankName)||'' };
+}
+
+function retrySave(secs){
+  var st=STAGES[CUR];
+  setMsg('saveMsg','記録しています…','warn');
+  call('submitResult',[{
+    email: ME.email, stageId: st.id, picks: PICKS,
+    seconds: secs, blur: BLUR, startedAt: STARTED
+  }], function(r){
+    if(!r || !r.ok){
+      setMsg('saveMsg','<b>まだ記録できていません。</b>　'+esc((r&&r.message)||'')+
+        '　<button class="btn sm" onclick="retrySave('+secs+')">もう一度送る</button>','err',true);
+      return;
+    }
+    PROG=r.progress; LAST=r;
+    document.getElementById('rankChip').textContent=PROG.rankName+'（'+(PROG.points||0)+'点）';
+    paintResult(r, secs);
+    setMsg('saveMsg','記録しました。','ok');
+  }, function(m){
+    setMsg('saveMsg','<b>まだ記録できていません。</b>　'+
+      '<button class="btn sm" onclick="retrySave('+secs+')">もう一度送る</button>','err',true);
   });
 }
 
@@ -1024,12 +1102,12 @@ function paintResult(r, secs){
                        : '現代語訳→本文→設問の順で読み直すのがおすすめです。';
   document.getElementById('rMsg').textContent=msg;
 
+  var myBest=(PROG && PROG.best && PROG.best[st.id]!=null) ? PROG.best[st.id] : r.score;
   document.getElementById('rMeta').textContent=
-    '解答時間 '+Math.floor(secs/60)+'分'+(secs%60)+'秒　／　自己最高 '+(PROG.best[st.id])+'/'+r.fullScore+'点'+
+    '解答時間 '+Math.floor(secs/60)+'分'+(secs%60)+'秒　／　自己最高 '+myBest+'/'+r.fullScore+'点'+
     (r.isBest && r.prevBest!=null ? '（自己ベスト更新）' : (r.isBest?'（初クリア）':''))+
     '　／　累計 '+(PROG.points||0)+'/'+(PROG.maxPoints||0)+'点・'+PROG.rankName;
 
-  setMsg('saveMsg', r.duplicated ? 'この回はすでに記録されています（二重送信を防ぎました）。' : '', 'warn');
   document.getElementById('rYakuBody').innerHTML=st.yaku;
   document.getElementById('rYaku').open=false;
 
@@ -1448,7 +1526,7 @@ function setQNote(id, text){
   var n=document.getElementById(id);
   if(!n) return;
   if(text){ n.textContent=text; n.classList.remove('hidden'); }
-  else    { n.classList.add('hidden'); }
+  else    { n.textContent=''; n.classList.add('hidden'); }
 }
 
 function onTimeUp(){
