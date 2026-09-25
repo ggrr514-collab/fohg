@@ -3,56 +3,52 @@
  * ――「素顔同盟」（すやまたけし）／「私」（三崎亜記）を批判的に読む
  *
  * 単元のまとめは【グループディスカッション】。評価は二つを合わせて出す。
- *   (1) 生徒がまとめた記述（論題1〜3＋見直し）　← このスクリプトがAI一次採点する
- *   (2) 当日の発言　← 教員用「協議見取り」シートで教師が観察して評価する
- * AIは(2)を判定できないので、H列のAI評価は【記述だけを見た暫定値】である。
- * 教師は「協議見取り」H列（条件②の判定）と合わせて、J列で最終評価を確定する。
- *   ステップ1：生徒のワークシートを集めて「回答入力」に転記
- *   ステップ2：批評文をAIが採点（思考・判断・表現 S/A/B/C/D）
- *   ステップ3：AI評価とコメントを生徒のワークシートに返却
+ *   (1) 生徒がまとめた記述（論題1〜3 ＋ 聞いて考えたこと3本）← このスクリプトがAI一次採点
+ *   (2) 当日の発言 ← 教員用「協議見取り」シートで教師が観察して評価する
+ * AIは(2)を判定できないので、K列のAI評価は【記述だけを見た暫定値】である。
+ * 教師は「協議見取り」H列（条件②の判定）と合わせて、M列で最終評価を確定する。
+ *
+ * ★生徒シートへの自動返却は行わない。生徒シートの「AIの評価と自分の評価」欄を
+ *   廃止したため、書き戻す先が無い。評価は口頭または紙で返すこと。
  *
  * 【使う前の準備】
  *   1. 拡張機能 → Apps Script でこのコードを貼る
  *   2. メニュー「単元：素顔同盟・私」→「APIキーを登録」でGemini APIキーを入れる
- *      （APIキーはコードに直接書かない。スクリプト プロパティに保存される）
  *   3.「AI設定」シートのB11に、生徒の提出物が入ったDriveフォルダのIDを入れる
  */
 
 const CONFIG = {
   // ---- 生徒用ワークシートのセル位置（生徒用ワークシート.xlsx と一致）----
+  // 生徒が書きこむシートは「考えをまとめる」の1枚だけ
   STUDENT: {
-    INFO_SHEET:      '単元ガイド',
-    CLASS_CELL:      'A2',
-    NUMBER_CELL:     'B2',
-    NAME_CELL:       'D2',
-    ANSWER_SHEET:    '考えをまとめる',
-    LENS_CELL:       'C6',    // 自分で決めた観点
-    T1_CELL:         'A10',   // 論題1 仮面とデータは、同じものか
-    T2_CELL:         'A13',   // 論題2 訴えた人は、救われたか
-    T3_CELL:         'A16',   // 論題3 この社会を続けさせているのは、誰か
-    REVIEW_CELL:     'A21',   // 見直し（200字）
-    AI_EVAL_CELL:    'C25',   // ←返却（記述だけの暫定評価）
-    AI_COMMENT_CELL: 'C26',   // ←返却（コメント）
-    SELF_EVAL_CELL:  'C27',
-    DIFF_CELL:       'A30',
-    REFLECT_CELL:    'A34',
+    INFO_SHEET:   '単元ガイド',
+    CLASS_CELL:   'A2',
+    NUMBER_CELL:  'B2',
+    NAME_CELL:    'D2',
+    ANSWER_SHEET: '考えをまとめる',
+    LENS_CELL:    'B6',    // ① 選んだ観点
+    T1_CELL:      'A25',   // ③ 論題1 仮面とデータは、同じものか
+    T2_CELL:      'A27',   // ③ 論題2 訴えた人は、救われたか
+    T3_CELL:      'A29',   // ③ 論題3 この社会を続けさせているのは、誰か
+    R1_CELL:      'A35',   // ④ 論題1 ほかの観点を受けて考えたこと
+    R2_CELL:      'A37',   // ④ 論題2 ほかの観点を受けて考えたこと
+    R3_CELL:      'A39',   // ④ 論題3 ほかの観点を受けて考えたこと
+    REFLECT_CELL: 'A54',   // ⑥ ふりかえり
   },
 
-  // ---- 教員用評価シート「回答入力」の列（13列）----
+  // ---- 教員用評価シート「回答入力」の列（14列）----
   COL: {
-    CLASS: 1, NUMBER: 2, NAME: 3,
-    T1: 4, T2: 5, T3: 6, REVIEW: 7,
-    GRADE: 8, COMMENT: 9, TEACHER: 10,
-    SELF_EVAL: 11, DIFF: 12, REFLECT: 13,
+    CLASS: 1, NUMBER: 2, NAME: 3, LENS: 4,
+    T1: 5, T2: 6, T3: 7,
+    R1: 8, R2: 9, R3: 10,
+    GRADE: 11, COMMENT: 12, TEACHER: 13, REFLECT: 14,
   },
-  TOTAL_COLS: 13,
+  TOTAL_COLS: 14,
 
   CFG_SHEET:  'AI設定',
   DATA_SHEET: '回答入力',
   DATA_START: 5,
   DATA_END:   44,
-
-  FILEMAP_SHEET: '_ファイル対応',
 
   CFG_CELL: { MODEL: 'B3', TEMP: 'B4', FOLDER: 'B11' },
 
@@ -68,7 +64,6 @@ function onOpen() {
     .createMenu('単元：素顔同盟・私')
     .addItem('① 生徒の回答を集める', 'step1_collect')
     .addItem('② 記述をAIで採点する（暫定）', 'step2_grade')
-    .addItem('③ 評価を生徒に返す', 'step3_return')
     .addSeparator()
     .addItem('APIキーを登録', 'setApiKey')
     .addItem('採点結果をクリア（再採点用）', 'clearGrades')
@@ -112,8 +107,6 @@ function step1_collect() {
   }
 
   const S = CONFIG.STUDENT;
-  const map = getFileMapSheet_();
-
   const rows = [];
   const skipped = [];
   const files = folder.getFiles();
@@ -133,8 +126,6 @@ function step1_collect() {
         // xlsxのままでは読めないので、一時的にスプレッドシートへ変換して読む。
         // ※ サービス「Drive API（v2）」を有効にしておくこと（エディタ左の「サービス」から追加）
         //    v2の記法なのでキーは title。v3を追加した場合は name に読み替える。
-        // ※ 読み取りはできるが【返却（ステップ3）はできない】。返却まで行うなら
-        //    Googleスプレッドシート形式で配付・提出させること。
         temp = Drive.Files.copy(
           { title: '[一時] ' + file.getName(), mimeType: MimeType.GOOGLE_SHEETS },
           file.getId());
@@ -153,7 +144,7 @@ function step1_collect() {
       const number = info.getRange(S.NUMBER_CELL).getValue();
       const name   = info.getRange(S.NAME_CELL).getValue();
       if (!klass || !number) {
-        skipped.push(file.getName() + '（組または出席番号が未入力。返却先を特定できません）');
+        skipped.push(file.getName() + '（組または出席番号が未入力。名簿と照合できません）');
         continue;
       }
 
@@ -161,12 +152,13 @@ function step1_collect() {
       row[CONFIG.COL.CLASS - 1]     = klass;
       row[CONFIG.COL.NUMBER - 1]    = number;
       row[CONFIG.COL.NAME - 1]      = name;
+      row[CONFIG.COL.LENS - 1]      = ans.getRange(S.LENS_CELL).getDisplayValue();
       row[CONFIG.COL.T1 - 1]        = ans.getRange(S.T1_CELL).getDisplayValue();
       row[CONFIG.COL.T2 - 1]        = ans.getRange(S.T2_CELL).getDisplayValue();
       row[CONFIG.COL.T3 - 1]        = ans.getRange(S.T3_CELL).getDisplayValue();
-      row[CONFIG.COL.REVIEW - 1]    = ans.getRange(S.REVIEW_CELL).getDisplayValue();
-      row[CONFIG.COL.SELF_EVAL - 1] = ans.getRange(S.SELF_EVAL_CELL).getDisplayValue();
-      row[CONFIG.COL.DIFF - 1]      = ans.getRange(S.DIFF_CELL).getDisplayValue();
+      row[CONFIG.COL.R1 - 1]        = ans.getRange(S.R1_CELL).getDisplayValue();
+      row[CONFIG.COL.R2 - 1]        = ans.getRange(S.R2_CELL).getDisplayValue();
+      row[CONFIG.COL.R3 - 1]        = ans.getRange(S.R3_CELL).getDisplayValue();
       row[CONFIG.COL.REFLECT - 1]   = ans.getRange(S.REFLECT_CELL).getDisplayValue();
       rows.push({ row: row, klass: klass, number: number,
                   fileId: file.getId(), isSheet: isSheet });
@@ -195,9 +187,10 @@ function step1_collect() {
   const rowCount = CONFIG.DATA_END - CONFIG.DATA_START + 1;
   const n = Math.min(rows.length, rowCount);
 
-  // 生徒は返却を受け取ってから自己評価・評価差考察・ふりかえりを書くので、
-  // 教師は「収集→採点→返却→再収集」を行うことになる。その再収集で
-  // AI評価(G)・AIコメント(H)・教師最終評価(I) を消さないよう、クラス|番号 をキーに退避する。
+  // 生徒は④「聞いて考えたこと」を第5〜7時に書き足すので、収集を2回行うことがある
+  // （例：第4時のあとに③まで採点し、第7時のあとに全部そろえて再採点）。
+  // その再収集で AI評価(K)・AIコメント(L)・教師最終評価(M) を消さないよう、
+  // クラス|番号 をキーに退避して書き戻す。行の並び順が変わっても対応は崩れない。
   const keep = {};
   const prev = data.getRange(CONFIG.DATA_START, 1, rowCount, CONFIG.TOTAL_COLS).getValues();
   prev.forEach(function (r) {
@@ -211,7 +204,7 @@ function step1_collect() {
   data.getRange(CONFIG.DATA_START, 1, n, CONFIG.TOTAL_COLS)
       .setValues(rows.slice(0, n).map(function (r) { return r.row; }));
 
-  // 退避しておいた G/H/I を、行の順番ではなく クラス|番号 で書き戻す
+  // 退避しておいた K/L/M を、行の順番ではなく クラス|番号 で書き戻す
   let restored = 0;
   rows.slice(0, n).forEach(function (r, idx) {
     const key = String(r.klass) + '|' + String(r.number);
@@ -221,33 +214,17 @@ function step1_collect() {
     }
   });
 
-  map.clear();
-  map.getRange(1, 1, 1, 4).setValues([['クラス', '出席番号', 'ファイルID', '形式']]);
-  map.getRange(2, 1, n, 4).setValues(
-    rows.slice(0, n).map(function (r) {
-      return [r.klass, r.number, r.fileId, r.isSheet ? 'スプレッドシート' : 'xlsx'];
-    }));
 
   let msg = n + '人分の回答を集めました。';
   if (restored) msg += '\n※ ' + restored + '人分の採点結果・教師評価を保持しました。';
   if (rows.length > n) msg += '\n※ ' + (rows.length - n) + '人分が枠（40人）を超えたため入りませんでした。';
   const xlsxCount = rows.slice(0, n).filter(function (r) { return !r.isSheet; }).length;
   if (xlsxCount) {
-    msg += '\n※ ' + xlsxCount + '人分がxlsx形式です。採点はできますが【ステップ3の返却ができません】。'
-         + 'Googleスプレッドシート形式で再提出させてください。';
+    msg += '\n※ ' + xlsxCount + '人分がxlsx形式でした（一時変換して読み取りました）。'
+         + 'Googleスプレッドシート形式で提出させると確実です。';
   }
   if (skipped.length)  msg += '\n\nスキップしたファイル：\n' + skipped.join('\n');
   ui.alert(msg);
-}
-
-function getFileMapSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sh = ss.getSheetByName(CONFIG.FILEMAP_SHEET);
-  if (!sh) {
-    sh = ss.insertSheet(CONFIG.FILEMAP_SHEET);
-    sh.hideSheet();
-  }
-  return sh;
 }
 
 /* ============================================================
@@ -278,7 +255,10 @@ function step2_grade() {
     const t1 = String(values[i][CONFIG.COL.T1 - 1] || '').trim();
     const t2 = String(values[i][CONFIG.COL.T2 - 1] || '').trim();
     const t3 = String(values[i][CONFIG.COL.T3 - 1] || '').trim();
-    const review = String(values[i][CONFIG.COL.REVIEW - 1] || '').trim();
+    const r1 = String(values[i][CONFIG.COL.R1 - 1] || '').trim();
+    const r2 = String(values[i][CONFIG.COL.R2 - 1] || '').trim();
+    const r3 = String(values[i][CONFIG.COL.R3 - 1] || '').trim();
+    const lens = String(values[i][CONFIG.COL.LENS - 1] || '').trim();
     const grade = String(values[i][CONFIG.COL.GRADE - 1] || '').trim();
 
     if (!t1 && !t2 && !t3) { continue; }   // 何も書いていない行は飛ばす
@@ -286,7 +266,7 @@ function step2_grade() {
 
     try {
       const result = callGemini_(apiKey, model, temperature,
-                                buildPrompt_(t1, t2, t3, review));
+                                buildPrompt_(lens, t1, t2, t3, r1, r2, r3));
       data.getRange(r, CONFIG.COL.GRADE).setValue(result.grade);
       data.getRange(r, CONFIG.COL.COMMENT).setValue(result.comment);
       done++;
@@ -317,7 +297,7 @@ function clearGrades() {
 /* ------------------------------------------------------------
  *  採点プロンプト
  * ---------------------------------------------------------- */
-function buildPrompt_(t1, t2, t3, review) {
+function buildPrompt_(lens, t1, t2, t3, r1, r2, r3) {
   const na = '（未記入）';
   return [
 'あなたは中学校国語の教師です。',
@@ -379,13 +359,17 @@ function buildPrompt_(t1, t2, t3, review) {
 '1. 3つの論題すべてに、主張（批評・評価としての判断）が1文で書けているか',
 '2. 各論題に本文の引用があり、それが主張の根拠になっているか',
 '3. 各論題で【二つの作品の両方】に触れ、関係づけているか',
-'4. 「見直し」に、だれの・どの観点からの発言で考えが動いたかが具体的に書けているか',
+'4. 「ほかの観点を受けて考えたこと」に、だれの・どの観点からの発言かが具体的に書けているか。',
+'　 その観点が【生徒が選んだ観点とはちがう観点】になっているか（同じ観点の話なら未達）',
 '',
 '※ 1と2の両方がなければ、A以上にはなりません。',
 '※ 「いろいろな意見が出た」「勉強になった」だけの見直しは、その部分を未達とする。',
 '※ あらすじの要約が長く、自分の判断が書かれていない論題は未達とする。',
 '※ 論題3で「みんなのせい」「社会が悪い」だけの記述は、誰が・本文のどこでそうしているかが',
 '　 示されていなければ未達とする。',
+'',
+'【生徒が選んだ観点】',
+(lens || na),
 '',
 '【生徒の記述】',
 '―――― 論題1 仮面とデータは、同じものか ――――',
@@ -394,8 +378,12 @@ function buildPrompt_(t1, t2, t3, review) {
 (t2 || na),
 '―――― 論題3 この社会を続けさせているのは、誰か ――――',
 (t3 || na),
-'―――― 見直し（話し合いのあと） ――――',
-(review || na),
+'―――― 論題1：ほかの観点を受けて考えたこと ――――',
+(r1 || na),
+'―――― 論題2：ほかの観点を受けて考えたこと ――――',
+(r2 || na),
+'―――― 論題3：ほかの観点を受けて考えたこと ――――',
+(r3 || na),
 '',
 '以下のJSON形式のみで回答してください。前後に説明文をつけないでください。',
 '※ この5段階は指導要録のA・B・Cに読みかえる（S・A→A／B→B／C・D→C）。',
@@ -451,79 +439,4 @@ function parseJsonLoose_(text) {
   const m = String(text).match(/\{[\s\S]*\}/);   // ```json などで囲まれた場合
   if (m) { try { return JSON.parse(m[0]); } catch (e2) {} }
   throw new Error('JSONとして読めない：' + String(text).slice(0, 120));
-}
-
-/* ============================================================
- *  ステップ3：生徒に返却
- * ============================================================ */
-function step3_return() {
-  const ui = SpreadsheetApp.getUi();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const data = ss.getSheetByName(CONFIG.DATA_SHEET);
-  const map = ss.getSheetByName(CONFIG.FILEMAP_SHEET);
-  if (!map || map.getLastRow() < 2) {
-    ui.alert('返却先の情報がありません。先に「① 生徒の回答を集める」を実行してください。');
-    return;
-  }
-
-  const S = CONFIG.STUDENT;
-  const mapRows = map.getRange(2, 1, map.getLastRow() - 1, 4).getValues();
-  const idByKey = {};
-  mapRows.forEach(function (r) {
-    idByKey[String(r[0]) + '|' + String(r[1])] = { id: r[2], isSheet: (r[3] === 'スプレッドシート') };
-  });
-
-  const n = CONFIG.DATA_END - CONFIG.DATA_START + 1;
-  const values = data.getRange(CONFIG.DATA_START, 1, n, CONFIG.TOTAL_COLS).getValues();
-
-  let done = 0, fail = 0;
-  const errors = [];
-
-  for (let i = 0; i < n; i++) {
-    const klass  = values[i][CONFIG.COL.CLASS - 1];
-    const number = values[i][CONFIG.COL.NUMBER - 1];
-    // 教師が最終評価を入れていればそれを、無ければAI評価を返す
-    const aiGrade      = String(values[i][CONFIG.COL.GRADE - 1] || '').trim();
-    const teacherGrade = String(values[i][CONFIG.COL.TEACHER - 1] || '').trim();
-    const grade = teacherGrade || aiGrade;
-    if (!grade) continue;
-
-    // 採点エラーの文言は生徒に返さない
-    let comment = String(values[i][CONFIG.COL.COMMENT - 1] || '').trim();
-    if (comment.indexOf('【採点エラー】') === 0) comment = '';
-    // 先生が評価を上書きした場合、AIコメントと食い違って見えないように注記する
-    if (teacherGrade && aiGrade && teacherGrade !== aiGrade) {
-      comment = '（評価は先生が確定しています。以下はAIのコメントです）\n' + comment;
-    }
-
-    const entry = idByKey[String(klass) + '|' + String(number)];
-    if (!entry) {
-      fail++; errors.push(klass + '組' + number + '番：提出ファイルが見つかりません');
-      continue;
-    }
-    if (!entry.isSheet) {
-      fail++;
-      errors.push(klass + '組' + number + '番：xlsx形式のため返却できません。'
-                + 'Googleスプレッドシート形式で再提出させてください');
-      continue;
-    }
-
-    try {
-      const wb = SpreadsheetApp.openById(entry.id);
-      const ans = wb.getSheetByName(S.ANSWER_SHEET);
-      if (!ans) throw new Error('「' + S.ANSWER_SHEET + '」シートがありません');
-      ans.getRange(S.AI_EVAL_CELL).setValue(grade);
-      ans.getRange(S.AI_COMMENT_CELL).setValue(comment);
-      SpreadsheetApp.flush();
-      done++;
-    } catch (e) {
-      fail++;
-      errors.push(klass + '組' + number + '番：' + e.message);
-    }
-    Utilities.sleep(CONFIG.SLEEP_COLLECT);
-  }
-
-  let msg = done + '人に評価を返しました。';
-  if (fail) msg += '\n返せなかった：' + fail + '件\n' + errors.join('\n');
-  ui.alert(msg);
 }
